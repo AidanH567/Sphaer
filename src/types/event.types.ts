@@ -1,0 +1,21 @@
+import type { Database } from './supabase';
+import type { Profile } from './user.types';
+import type { Circle } from './circle.types';
+
+export type Event = Database['public']['Tables']['events']['Row'];
+export type EventInsert = Database['public']['Tables']['events']['Insert'];
+export type EventUpdate = Database['public']['Tables']['events']['Update'];
+
+export interface EventWithRelations extends Event {
+  creator: Profile | null;
+  circle: Circle | null;
+  is_saved?: boolean;
+}
+
+export interface EventFilters {
+  search?: string;
+  categories?: string[];
+  startDate?: string;
+  endDate?: string;
+  isFree?: boolean;
+}
