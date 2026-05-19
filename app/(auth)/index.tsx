@@ -34,7 +34,7 @@ export default function LandingScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.center}>
         <Animated.View style={{ opacity: logoOpacity, transform: [{ translateY: logoY }] }}>
-          <SphaerIcon size={64} />
+          <SphaerIcon size={90} />
         </Animated.View>
 
         <Animated.View style={[styles.taglineWrap, { opacity: taglineOpacity }]}>
@@ -71,10 +71,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xl,
+    gap: spacing.md,
   },
   taglineWrap: { alignItems: 'center' },
   tagline: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.regular,
     color: colors.text.primary,

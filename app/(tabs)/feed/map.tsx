@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useAppContext } from '@/context/AppContext';
 import { useEvents } from '@/hooks/useEvents';
 import { FeedHeader } from '@/components/feed/FeedHeader';
-import { FilterBar } from '@/components/feed/FilterBar';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { config } from '@/constants/config';
 import type { EventWithRelations } from '@/types/event.types';
@@ -44,9 +43,6 @@ export default function MapScreen() {
           if (v === 'list') router.push('/(tabs)/feed');
           else if (v === 'mural') router.push('/(tabs)/feed/mural');
         }}
-        onSearchPress={() => {}}
-      />
-      <FilterBar
         selectedCategories={feedFilters.categories ?? []}
         onToggleCategory={toggleCategory}
       />

@@ -39,11 +39,28 @@ export const colors = {
   overlay: 'rgba(0, 0, 0, 0.5)',
 } as const;
 
+// Font family names must match the keys used in useFonts() in app/_layout.tsx
+export const fontFamilies = {
+  // Editorial / display — Test Martina Plantijn
+  // Used for: event titles, page headings, profile names, large feature text
+  display: 'TestMartinaPlantijn-Regular',
+  displayItalic: 'TestMartinaPlantijn-Italic',
+
+  // UI / body — SF Pro (iOS system font), Roboto (Android), system-ui (web)
+  // Used for: buttons, labels, metadata, inputs, chips, captions
+  ui: Platform.select({ ios: 'System', android: 'Roboto', default: 'System' }) as string,
+} as const;
+
 export const typography = {
   fontFamily: {
-    regular: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    medium: Platform.OS === 'ios' ? 'System' : 'Roboto',
-    bold: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    // Legacy aliases kept for backwards compat — prefer fontFamilies above in new code
+    regular: fontFamilies.ui,
+    medium: fontFamilies.ui,
+    bold: fontFamilies.ui,
+    // New semantic tokens
+    display: fontFamilies.display,
+    displayItalic: fontFamilies.displayItalic,
+    ui: fontFamilies.ui,
   },
   fontWeight: {
     regular: '400' as const,

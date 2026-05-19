@@ -64,7 +64,7 @@ export default function SignUpScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.logoWrap}>
-            <SphaerIcon size={52} />
+            <SphaerIcon size={68} />
           </View>
 
           <View style={styles.heading}>

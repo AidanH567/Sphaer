@@ -47,6 +47,7 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, gap: 2 },
   name: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,

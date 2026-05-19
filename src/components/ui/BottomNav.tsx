@@ -36,7 +36,7 @@ function renderIcon(segment: string, focused: boolean, avatarUrl?: string | null
     case 'circles':
       return (
         <SphaerIcon
-          size={ICON_SIZE + 2}
+          size={ICON_SIZE + 10}
           color={focused ? colors.black : colors.text.tertiary}
         />
       );
@@ -74,7 +74,11 @@ function renderIcon(segment: string, focused: boolean, avatarUrl?: string | null
   }
 }
 
-export function BottomNav() {
+interface BottomNavProps {
+  onCreatePress: () => void;
+}
+
+export function BottomNav({ onCreatePress }: BottomNavProps) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -89,7 +93,7 @@ export function BottomNav() {
           <TouchableOpacity
             key={segment}
             style={styles.tab}
-            onPress={() => router.push(route as any)}
+            onPress={segment === 'create' ? onCreatePress : () => router.push(route as any)}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}

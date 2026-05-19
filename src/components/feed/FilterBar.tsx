@@ -5,11 +5,11 @@ import { spacing } from '@/constants/theme';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 
 interface FilterBarProps {
-  selectedCategories: string[];
+  selectedCategories?: string[];
   onToggleCategory: (category: string) => void;
 }
 
-export function FilterBar({ selectedCategories, onToggleCategory }: FilterBarProps) {
+export function FilterBar({ selectedCategories = [], onToggleCategory }: FilterBarProps) {
   return (
     <View style={styles.wrapper}>
       <ScrollView

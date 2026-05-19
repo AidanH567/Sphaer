@@ -5,7 +5,6 @@ import { useAppContext } from '@/context/AppContext';
 import { useEvents } from '@/hooks/useEvents';
 import { useAuthContext } from '@/context/AuthContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
-import { FilterBar } from '@/components/feed/FilterBar';
 import { EventCard } from '@/components/feed/EventCard';
 import { colors, spacing, typography } from '@/constants/theme';
 import { saveEvent, unsaveEvent } from '@/services/events.service';
@@ -53,15 +52,12 @@ export default function FeedScreen() {
   return (
     <View style={styles.container}>
       <FeedHeader
-        activeView="list"
+        activeView={feedView}
         onViewChange={(v) => {
           setFeedView(v);
           if (v === 'map') router.push('/(tabs)/feed/map');
           else if (v === 'mural') router.push('/(tabs)/feed/mural');
         }}
-        onSearchPress={() => {}}
-      />
-      <FilterBar
         selectedCategories={feedFilters.categories ?? []}
         onToggleCategory={toggleCategory}
       />

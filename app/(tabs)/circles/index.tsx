@@ -73,6 +73,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   title: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,

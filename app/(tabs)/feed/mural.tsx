@@ -63,7 +63,7 @@ function PosterCard({ event }: { event: EventWithRelations }) {
 
 export default function MuralScreen() {
   const router = useRouter();
-  const { setFeedView, feedFilters } = useAppContext();
+  const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
   const { events } = useEvents(feedFilters);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -85,7 +85,14 @@ export default function MuralScreen() {
             if (v === 'list') router.push('/(tabs)/feed');
             else if (v === 'map') router.push('/(tabs)/feed/map');
           }}
-          onSearchPress={() => {}}
+          selectedCategories={feedFilters.categories ?? []}
+          onToggleCategory={(cat) => {
+            const current = feedFilters.categories ?? [];
+            const next = current.includes(cat)
+              ? current.filter((c) => c !== cat)
+              : [...current, cat];
+            setFeedFilters({ ...feedFilters, categories: next.length ? next : undefined });
+          }}
         />
       </View>
 
@@ -131,6 +138,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   posterTitle: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize['2xl'],
     fontWeight: typography.fontWeight.bold,
     color: colors.white,

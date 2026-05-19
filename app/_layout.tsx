@@ -10,6 +10,25 @@ import { AppProvider } from '@/context/AppContext';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  // ─── Custom fonts ────────────────────────────────────────────────────────────
+  // Once you have the font files, place them in assets/fonts/ and uncomment:
+  //
+  // import { useFonts } from 'expo-font';
+  //
+  // const [fontsLoaded, fontError] = useFonts({
+  //   'TestMartinaPlantijn-Regular': require('../assets/fonts/TestMartinaPlantijn-Regular.otf'),
+  //   'TestMartinaPlantijn-Italic':  require('../assets/fonts/TestMartinaPlantijn-Italic.otf'),
+  // });
+  //
+  // Then replace the useEffect below with:
+  // useEffect(() => {
+  //   if (fontsLoaded || fontError) SplashScreen.hideAsync();
+  // }, [fontsLoaded, fontError]);
+  //
+  // And add before the return:
+  // if (!fontsLoaded && !fontError) return null;
+  // ─────────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);

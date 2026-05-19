@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   title: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,

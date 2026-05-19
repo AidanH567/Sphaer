@@ -134,6 +134,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   navTitle: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
@@ -147,6 +148,7 @@ const styles = StyleSheet.create({
     marginTop: -40,
   },
   name: {
+    fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
