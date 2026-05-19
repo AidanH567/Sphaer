@@ -3,7 +3,12 @@ module.exports = function (api) {
 
   return {
     presets: [
-      ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
+      ['babel-preset-expo', {
+        jsxImportSource: 'nativewind',
+        // Prevent babel-preset-expo from auto-loading reanimated plugin on web
+        // (reanimated v4 plugin needs native worklets runtime, not available on web)
+        reanimated: !isWeb,
+      }],
     ],
     plugins: [
       ...(!isWeb ? ['react-native-reanimated/plugin'] : []),

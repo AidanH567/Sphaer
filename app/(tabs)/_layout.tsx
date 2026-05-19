@@ -32,7 +32,7 @@ export default function TabsLayout() {
     );
   }
 
-  if (!session) {
+  if (!session && !__DEV__) {
     return <Redirect href="/(auth)" />;
   }
 

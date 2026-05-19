@@ -33,7 +33,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -44,7 +44,8 @@
         {
           "photosPermission": "Allow Sphaer to access your photos to upload event posters and profile images."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
