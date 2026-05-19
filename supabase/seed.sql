@@ -1,0 +1,17 @@
+-- Dev seed data (run after migrations)
+-- Note: auth users must be created via Supabase dashboard or auth API first
+
+-- Example events (replace creator UUIDs with real user IDs after auth setup)
+-- INSERT INTO events (creator_id, title, description, location_name, address, lat, lng, starts_at, categories, is_free)
+-- VALUES (
+--   'your-user-uuid-here',
+--   'Collaborating on Set Workshop with a local Film professional',
+--   'A hands-on workshop exploring set design and film production techniques.',
+--   'Maybachufer 31',
+--   '12047 Berlin',
+--   52.4875,
+--   13.4287,
+--   NOW() + INTERVAL '7 days',
+--   ARRAY['Film', 'Workshop'],
+--   TRUE
+-- );
