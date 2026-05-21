@@ -153,7 +153,7 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
                   onPress={option.onPress}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="add-circle-outline" size={22} color={colors.white} />
+                  <Ionicons name="add-circle-outline" size={20} color={colors.white} />
                 </TouchableOpacity>
               </TouchableOpacity>
               {index < OPTIONS.length - 1 && <View style={styles.divider} />}
@@ -226,10 +226,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   addButton: {
-    width: 52,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: colors.black,
+    width: 86,
+    height: 48,
+    borderRadius: 30,
+    backgroundColor: '#2B2A27',
     alignItems: 'center',
     justifyContent: 'center',
   },

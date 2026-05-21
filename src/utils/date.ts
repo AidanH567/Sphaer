@@ -24,6 +24,23 @@ export function formatEventDateShort(dateStr: string): string {
   });
 }
 
+/** "21:00-23:30" — start/end time range in 24h format. */
+export function formatEventTimeRange(startStr: string, endStr?: string | null): string {
+  const fmt = (d: string) =>
+    new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (!endStr) return fmt(startStr);
+  return `${fmt(startStr)}-${fmt(endStr)}`;
+}
+
+/** "Fri 27.May" — compact weekday + day.month used on the booking bar. */
+export function formatEventDateCompact(dateStr: string): string {
+  const date = new Date(dateStr);
+  const weekday = date.toLocaleDateString('en-GB', { weekday: 'short' });
+  const day = date.toLocaleDateString('en-GB', { day: 'numeric' });
+  const month = date.toLocaleDateString('en-GB', { month: 'short' });
+  return `${weekday} ${day}.${month}`;
+}
+
 export function formatMessageTime(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();

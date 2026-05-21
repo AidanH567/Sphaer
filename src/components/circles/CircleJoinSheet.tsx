@@ -1,0 +1,230 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Modal,
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  Animated,
+  StyleSheet,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, spacing, typography, radius } from '@/constants/theme';
+import type { MockCircle } from '@/data/mockCircles';
+
+interface CircleJoinSheetProps {
+  /** The circle to preview. `null` keeps the sheet closed. */
+  circle: MockCircle | null;
+  onClose: () => void;
+}
+
+const SHEET_HEIGHT = 460;
+const ANIMATION_DURATION = 280;
+
+/**
+ * Bottom sheet shown when a circle card is tapped. Mirrors the open/close
+ * animation pattern of CreateMenuSheet: animate out fully before unmounting
+ * so the slide-down is never cut off. Pressing "Join Circle" routes to the
+ * circle detail page.
+ */
+export function CircleJoinSheet({ circle, onClose }: CircleJoinSheetProps) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  // Modal stays mounted until the close animation finishes.
+  const [modalMounted, setModalMounted] = useState(false);
+  // Keep rendering the last circle while the sheet slides away.
+  const [shown, setShown] = useState<MockCircle | null>(null);
+
+  useEffect(() => {
+    if (circle) {
+      setShown(circle);
+      setModalMounted(true);
+      translateY.setValue(SHEET_HEIGHT);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: ANIMATION_DURATION,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (modalMounted) {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: SHEET_HEIGHT,
+          duration: ANIMATION_DURATION,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: ANIMATION_DURATION,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setModalMounted(false));
+    }
+  }, [circle]);
+
+  function handleJoin() {
+    if (!shown) return;
+    const id = shown.id;
+    onClose();
+    // Let the sheet animate down before navigating.
+    setTimeout(() => router.push(`/circles/${id}` as any), 300);
+  }
+
+  if (!shown) return null;
+
+  return (
+    <Modal
+      visible={modalMounted}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      {/* Backdrop */}
+      <TouchableWithoutFeedback onPress={onClose}>
+        <Animated.View
+          style={[
+            styles.backdrop,
+            {
+              opacity: backdropOpacity.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.45],
+              }),
+            },
+          ]}
+        />
+      </TouchableWithoutFeedback>
+
+      {/* Sheet */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          { paddingBottom: insets.bottom || spacing.lg, transform: [{ translateY }] },
+        ]}
+      >
+        <View style={styles.handle} />
+
+        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+          <Ionicons name="close" size={22} color={colors.text.primary} />
+        </TouchableOpacity>
+
+        <Image source={{ uri: shown.avatar_url }} style={styles.avatar} />
+
+        <Text style={styles.name}>{shown.name}</Text>
+        <Text style={styles.meta}>
+          {shown.members_count.toLocaleString('de-DE')} members{'  ·  '}
+          {shown.activities_count} activities
+        </Text>
+
+        <Text style={styles.description}>{shown.description}</Text>
+
+        <TouchableOpacity style={styles.joinButton} onPress={handleJoin} activeOpacity={0.85}>
+          <Text style={styles.joinButtonText}>Join Circle</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+const AVATAR_SIZE = 132;
+
+const styles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    minHeight: SHEET_HEIGHT,
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: spacing.base,
+    right: spacing.base,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  avatar: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: colors.surface,
+    marginTop: spacing.md,
+  },
+  name: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 22,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    textAlign: 'center',
+    marginTop: spacing.base,
+  },
+  meta: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  description: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginTop: spacing.md,
+  },
+  joinButton: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.black,
+    borderRadius: radius.full,
+    paddingVertical: spacing.base,
+    alignItems: 'center',
+    marginTop: spacing.xl,
+  },
+  joinButtonText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 16,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.white,
+  },
+});

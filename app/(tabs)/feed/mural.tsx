@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppContext } from '@/context/AppContext';
-import { useEvents } from '@/hooks/useEvents';
+import { MOCK_EVENTS } from '@/data/mockEvents';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateShort } from '@/utils/date';
@@ -64,7 +64,7 @@ function PosterCard({ event }: { event: EventWithRelations }) {
 export default function MuralScreen() {
   const router = useRouter();
   const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
-  const { events } = useEvents(feedFilters);
+  const events = MOCK_EVENTS;
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const onViewableItemsChanged = useRef(

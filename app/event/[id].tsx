@@ -6,76 +6,76 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Linking,
   Share,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useEvent } from '@/hooks/useEvents';
-import { useAuthContext } from '@/context/AuthContext';
-import { Tag } from '@/components/ui/Tag';
+import { Avatar } from '@/components/ui/Avatar';
+import { EventRegistrationSheet } from '@/components/ui/EventRegistrationSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
-import { formatEventDate, formatEventTime } from '@/utils/date';
+import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
-import { saveEvent, unsaveEvent } from '@/services/events.service';
+import { getMockEventById } from '@/data/mockEvents';
+
+// NOTE: this screen reads from src/data/mockEvents.ts. To use live Supabase
+// data, swap getMockEventById() for the useEvent() hook (src/hooks/useEvents.ts).
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuthContext();
-  const { event, isLoading } = useEvent(id);
+  const insets = useSafeAreaInsets();
+
+  const event = getMockEventById(id);
+
   const [isSaved, setIsSaved] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
 
-  async function toggleSave() {
-    if (!user || !event) return;
-    setIsSaved((prev) => !prev);
-    try {
-      if (isSaved) {
-        await unsaveEvent(user.id, event.id);
-      } else {
-        await saveEvent(user.id, event.id);
-      }
-    } catch {
-      setIsSaved((prev) => !prev);
-    }
-  }
-
-  async function handleShare() {
-    if (!event) return;
-    await Share.share({ message: `${event.title} — ${event.location_name ?? 'Berlin'}` });
-  }
-
-  async function handleBook() {
-    if (!event) return;
-    if (event.ticket_url) {
-      await Linking.openURL(event.ticket_url);
-    }
-  }
-
-  if (isLoading) {
+  // Graceful state for an unknown id — never throws.
+  if (!event) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.black} />
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}>
+          <Text style={styles.notFound}>Event not found</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  if (!event) return null;
+  const priceLabel = event.priceLabel ?? formatPrice(event.price, event.is_free);
+  const displayPrice = priceLabel === 'FREE' ? 'Free' : priceLabel;
+  const dateLabel = formatEventDateCompact(event.starts_at);
+  const aboutParagraphs = (event.description ?? '').split('\n\n').filter(Boolean);
 
-  const priceLabel = formatPrice(event.price, event.is_free);
+  async function handleShare() {
+    if (!event) return;
+    await Share.share({
+      message: `${event.title} — ${event.location_name ?? 'Berlin'}`,
+    });
+  }
 
-  // Compact date: "Fri 27.May"
-  const dateLabel = new Date(event.starts_at).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  }).replace(',', '');
+  function openInMaps() {
+    if (event?.lat == null || event?.lng == null) return;
+    const query = `${event.lat},${event.lng}`;
+    const url = Platform.select({
+      ios: `http://maps.apple.com/?q=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+    });
+    Linking.openURL(url);
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Minimal header — back, share, bookmark */}
+      {/* Header — back / share / bookmark */}
       <View style={styles.navBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
@@ -84,7 +84,7 @@ export default function EventDetailScreen() {
           <TouchableOpacity onPress={handleShare} style={styles.navButton}>
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={toggleSave} style={styles.navButton}>
+          <TouchableOpacity onPress={() => setIsSaved((v) => !v)} style={styles.navButton}>
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={22}
@@ -94,53 +94,136 @@ export default function EventDetailScreen() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} bounces>
-        {/* Full-bleed hero image */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
+      >
+        {/* Hero image */}
         {event.poster_url ? (
-          <Image source={{ uri: event.poster_url }} style={styles.poster} resizeMode="cover" />
+          <Image source={{ uri: event.poster_url }} style={styles.hero} resizeMode="cover" />
         ) : (
-          <View style={styles.posterPlaceholder} />
+          <View style={[styles.hero, styles.heroPlaceholder]} />
         )}
 
-        {/* Content body */}
         <View style={styles.body}>
+          {/* Title + location */}
           <Text style={styles.title}>{event.title}</Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={15} color={colors.text.tertiary} />
+            <Text style={styles.locationText}>
+              {event.location_name ?? event.address ?? 'Berlin'}
+            </Text>
+          </View>
 
-          {(event.location_name || event.address) && (
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={14} color={colors.text.tertiary} />
-              <Text style={styles.locationText}>
-                {event.location_name ?? event.address}
-              </Text>
-            </View>
-          )}
+          <View style={styles.divider} />
 
-          {event.description ? (
-            <Text style={styles.description}>{event.description}</Text>
-          ) : null}
+          {/* Artist / host row — tap the artist to open their profile */}
+          <View style={styles.artistRow}>
+            <TouchableOpacity
+              style={styles.artistTappable}
+              onPress={() => router.push(`/user/${event.creator_id}`)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.avatarWrap}>
+                <Avatar
+                  uri={event.creator?.avatar_url}
+                  name={event.creator?.display_name ?? ''}
+                  size={48}
+                />
+                {event.hostStats.verified && (
+                  <View style={styles.verifiedBadge}>
+                    <Ionicons name="checkmark-circle" size={18} color="#1DA851" />
+                  </View>
+                )}
+              </View>
 
-          {event.categories && event.categories.length > 0 && (
-            <View style={styles.tags}>
-              {event.categories.map((cat) => (
-                <Tag key={cat} label={cat} />
-              ))}
-            </View>
-          )}
+              <View style={styles.artistInfo}>
+                <Text style={styles.artistName}>
+                  {event.creator?.display_name ?? 'Host'}
+                </Text>
+                <Text style={styles.artistStats}>
+                  {event.hostStats.activities} activities{'   '}
+                  {event.hostStats.followers.toLocaleString('de-DE')} followers
+                </Text>
+              </View>
+            </TouchableOpacity>
 
-          {/* Price + date + CTA — matches Figma footer row */}
-          <View style={styles.ctaRow}>
-            <View style={styles.priceBlock}>
-              <Text style={styles.price}>{priceLabel}</Text>
-              <Text style={styles.date}>{dateLabel}</Text>
-            </View>
-            <TouchableOpacity style={styles.bookButton} onPress={handleBook} activeOpacity={0.85}>
-              <Text style={styles.bookButtonText}>
-                {event.is_free ? 'Register' : 'Get Booked'}
+            <TouchableOpacity
+              style={[styles.followButton, isFollowing && styles.followButtonActive]}
+              onPress={() => setIsFollowing((v) => !v)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[styles.followText, isFollowing && styles.followTextActive]}
+              >
+                {isFollowing ? 'Following' : 'Follow'}
               </Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.divider} />
+
+          {/* About */}
+          <Text style={styles.sectionHeading}>About</Text>
+          <View>
+            {aboutParagraphs.map((para, i) => (
+              <Text
+                key={i}
+                style={styles.aboutText}
+                numberOfLines={aboutExpanded ? undefined : i === 0 ? 6 : 4}
+              >
+                {para}
+              </Text>
+            ))}
+          </View>
+          <TouchableOpacity onPress={() => setAboutExpanded((v) => !v)} activeOpacity={0.7}>
+            <Text style={styles.readMore}>
+              {aboutExpanded ? 'Read less' : 'Read more >'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          {/* Location */}
+          <Text style={styles.sectionHeading}>Location</Text>
+          <Text style={styles.venueName}>{event.location_name}</Text>
+          {event.address && <Text style={styles.address}>{event.address}</Text>}
+
+          <TouchableOpacity
+            style={styles.mapBox}
+            onPress={openInMaps}
+            activeOpacity={0.85}
+          >
+            <View style={styles.mapPin}>
+              <Ionicons name="location" size={26} color={colors.white} />
+            </View>
+            <Text style={styles.mapHint}>Open in Maps</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Sticky bottom booking bar */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom || spacing.md }]}>
+        <View style={styles.priceBlock}>
+          <Text style={styles.price}>{displayPrice}</Text>
+          <Text style={styles.bookingDate}>{dateLabel}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.bookButton}
+          onPress={() => setRegistrationOpen(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.bookButtonText}>Get Booked</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Event registration popup */}
+      <EventRegistrationSheet
+        visible={registrationOpen}
+        event={event}
+        onClose={() => setRegistrationOpen(false)}
+        onRegister={(details) => console.log('[EventDetail] registered', details)}
+      />
     </SafeAreaView>
   );
 }
@@ -148,6 +231,7 @@ export default function EventDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  notFound: { fontSize: typography.fontSize.base, color: colors.text.tertiary },
 
   navBar: {
     flexDirection: 'row',
@@ -159,72 +243,194 @@ const styles = StyleSheet.create({
   navButton: { padding: spacing.sm },
   navRight: { flexDirection: 'row', alignItems: 'center' },
 
-  poster: {
-    width: '100%',
-    height: 340,
+  hero: {
+    height: 360,
+    marginHorizontal: spacing.base,
+    borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
-  posterPlaceholder: {
-    width: '100%',
-    height: 200,
-    backgroundColor: colors.surface,
-  },
+  heroPlaceholder: { backgroundColor: colors.surface },
 
   body: {
-    padding: spacing.base,
-    gap: spacing.md,
-    paddingBottom: spacing['3xl'],
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
   },
 
   title: {
-    fontSize: typography.fontSize['2xl'],
+    fontFamily: typography.fontFamily.display,
+    fontSize: 26,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    lineHeight: typography.fontSize['2xl'] * 1.2,
+    lineHeight: 32,
   },
-
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: spacing.sm,
   },
   locationText: {
-    fontSize: typography.fontSize.sm,
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
     color: colors.text.tertiary,
   },
 
-  description: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
-    lineHeight: 24,
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: spacing.lg,
   },
 
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-
-  ctaRow: {
+  // Artist row
+  artistRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
+    gap: spacing.md,
   },
-  priceBlock: { gap: 2 },
-  price: {
-    fontSize: typography.fontSize.xl,
+  artistTappable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  avatarWrap: { width: 48, height: 48 },
+  verifiedBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    backgroundColor: colors.white,
+    borderRadius: 10,
+  },
+  artistInfo: { flex: 1, gap: 2 },
+  artistName: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 17,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
-  date: {
-    fontSize: typography.fontSize.sm,
+  artistStats: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: colors.text.tertiary,
+  },
+  followButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.black,
+  },
+  followButtonActive: {
+    backgroundColor: colors.black,
+  },
+  followText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.black,
+  },
+  followTextActive: { color: colors.white },
+
+  // Sections
+  sectionHeading: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 20,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  aboutText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    color: colors.text.secondary,
+    lineHeight: 22,
+    marginBottom: spacing.md,
+  },
+  readMore: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+
+  venueName: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 16,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  address: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  mapBox: {
+    height: 180,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    marginTop: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapPin: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapHint: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: colors.text.tertiary,
+  },
+
+  // Sticky booking bar
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.md,
+    backgroundColor: colors.white,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  priceBlock: { gap: 2 },
+  price: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 22,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  bookingDate: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
     color: colors.text.tertiary,
   },
   bookButton: {
     backgroundColor: colors.black,
     borderRadius: radius.full,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.base,
   },
   bookButtonText: {
-    fontSize: typography.fontSize.base,
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 16,
     fontWeight: typography.fontWeight.semibold,
     color: colors.white,
   },

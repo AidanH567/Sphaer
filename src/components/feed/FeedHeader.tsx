@@ -97,7 +97,7 @@ export function FeedHeader({
             activeOpacity={0.7}
           >
             <Ionicons name="search-outline" size={22} color={colors.text.primary} />
-            <Text style={styles.searchPlaceholder}>Berlin what’s on Today?!</Text>
+            <Text style={styles.searchPlaceholder}>Berlin, what’s on today?!</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -120,7 +120,7 @@ export function FeedHeader({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.appleMail,
     borderBottomWidth: 0,
   },
 
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
 
   searchPlaceholder: {
     fontSize: 17,
-    color: colors.text.primary,
+    color: colors.text.tertiary,
     fontWeight: '400',
   },
 

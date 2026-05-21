@@ -6,6 +6,7 @@ export const colors = {
 
   background: '#FFFFFF',
   surface: '#F5F5F5',
+  appleMail: '#F1F3F6', // Figma "Neutral/appleMail" — Feed screen background
 
   text: {
     primary: '#0D0D0D',

@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, Text, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { useEvents } from '@/hooks/useEvents';
+import { MOCK_EVENTS } from '@/data/mockEvents';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { config } from '@/constants/config';
@@ -22,7 +23,15 @@ const PROVIDER_GOOGLE = Maps?.PROVIDER_GOOGLE;
 export default function MapScreen() {
   const router = useRouter();
   const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
-  const { events } = useEvents(feedFilters);
+
+  const events = useMemo(() => {
+    const selected = feedFilters.categories ?? [];
+    return MOCK_EVENTS.filter(
+      (e) =>
+        selected.length === 0 ||
+        (e.categories ?? []).some((c) => selected.includes(c))
+    );
+  }, [feedFilters.categories]);
 
   const eventsWithCoords = events.filter((e) => e.lat !== null && e.lng !== null);
 

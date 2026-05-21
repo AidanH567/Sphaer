@@ -2,97 +2,141 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   StyleSheet,
-  ActivityIndicator,
-  TextInput,
-  TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useCircles } from '@/hooks/useCircles';
 import { CircleCard } from '@/components/circles/CircleCard';
-import { colors, typography, spacing } from '@/constants/theme';
+import { CircleJoinSheet } from '@/components/circles/CircleJoinSheet';
+import { colors, typography, spacing, radius } from '@/constants/theme';
+import {
+  MOCK_CIRCLE_CATEGORIES,
+  getMockCirclesByIds,
+  type MockCircle,
+} from '@/data/mockCircles';
+
+// NOTE: this page renders mock data from src/data/mockCircles.ts. To go live,
+// replace MOCK_CIRCLE_CATEGORIES / getMockCirclesByIds with Supabase queries
+// (circles.service.ts) — CircleCard only needs the MockCircle display fields.
 
 export default function CirclesScreen() {
-  const router = useRouter();
-  const [search, setSearch] = useState('');
-  const { circles, isLoading } = useCircles(search || undefined);
+  // The tapped circle drives the join sheet; null keeps it closed.
+  const [selectedCircle, setSelectedCircle] = useState<MockCircle | null>(null);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Circles</Text>
-        <TouchableOpacity onPress={() => router.push('/create')}>
-          <Ionicons name="add-circle-outline" size={26} color={colors.black} />
-        </TouchableOpacity>
+      {/* Search bar */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={18} color={colors.text.tertiary} />
+          <Text style={styles.searchPlaceholder}>Berlin what's on Today?!</Text>
+        </View>
       </View>
 
-      <View style={styles.searchBar}>
-        <Ionicons name="search-outline" size={18} color={colors.text.tertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search circles…"
-          placeholderTextColor={colors.text.placeholder}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-        />
-      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
+        {MOCK_CIRCLE_CATEGORIES.map((category) => {
+          const circles = getMockCirclesByIds(category.circleIds);
+          return (
+            <View key={category.id} style={styles.section}>
+              {/* Category header */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderText}>
+                  <Text style={styles.sectionTitle}>{category.title}</Text>
+                  <Text style={styles.sectionSubtitle}>{category.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color={colors.text.secondary} />
+              </View>
 
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
-      ) : circles.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>No circles found</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={circles}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <CircleCard circle={item} />}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+              {/* Horizontally swipeable circle row */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.row}
+              >
+                {circles.map((circle) => (
+                  <CircleCard
+                    key={circle.id}
+                    circle={circle}
+                    onPress={() => setSelectedCircle(circle)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {/* Join popup — opens on card tap, routes to detail on Join Circle */}
+      <CircleJoinSheet
+        circle={selectedCircle}
+        onClose={() => setSelectedCircle(null)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  container: { flex: 1, backgroundColor: colors.surface },
+
+  searchRow: {
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  title: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: spacing.base,
-    paddingHorizontal: spacing.md,
-    height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 22,
+    justifyContent: 'center',
     gap: spacing.sm,
+    height: 50,
+    backgroundColor: colors.white,
+    borderRadius: 28,
+    paddingHorizontal: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 1,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.fontSize.base,
+  searchPlaceholder: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 17,
     color: colors.text.primary,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  empty: { fontSize: typography.fontSize.base, color: colors.text.tertiary },
+
+  scroll: {
+    paddingBottom: 110,
+  },
+  section: {
+    marginTop: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.md,
+  },
+  sectionHeaderText: { flex: 1 },
+  sectionTitle: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 20,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  sectionSubtitle: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  row: {
+    paddingHorizontal: spacing.base,
+    gap: spacing.sm, // Figma: 8px between cards
+    paddingVertical: spacing.sm, // room for the card shadow
+  },
 });
