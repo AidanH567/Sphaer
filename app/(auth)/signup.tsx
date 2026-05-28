@@ -22,6 +22,7 @@ import {
 } from '@/components/auth/AuthControls';
 import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { signInWithGoogle } from '@/services/auth.service';
 import { isValidEmail, isValidPassword } from '@/utils/validators';
 
 // Figma tokens — Sign Up Flow Screen 1.1 (node 5013:10790)
@@ -60,10 +61,27 @@ export default function SignUpScreen() {
     }
   }
 
-  function handleGoogle() {
-    // Google OAuth not yet wired. Tracking this in the auth backlog.
-    console.log('[SignUp] continue with google');
-    Alert.alert('Coming soon', 'Continue with Google is not wired up yet.');
+  async function handleGoogle() {
+    try {
+      await signInWithGoogle();
+      // Web: the browser navigates away to Google and returns to the app
+      // with a session already populated by Supabase — no explicit route
+      // change needed (AuthProvider's onAuthStateChange + (auth) layout
+      // redirect handle landing on /(tabs)/feed).
+      // Native: signInWithGoogle resolves once the session is set; the
+      // same listener flips us to feed.
+      // OAuth users skip onboarding (per design) — they land straight on
+      // the feed via the (auth) layout's session redirect.
+      if (Platform.OS !== 'web') {
+        router.replace('/(tabs)/feed');
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Google sign-in failed.';
+      // Don't show an alert for user-cancelled sign-in — that's not an error.
+      if (!message.toLowerCase().includes('cancelled')) {
+        Alert.alert('Google sign-in failed', message);
+      }
+    }
   }
 
   return (

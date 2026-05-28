@@ -21,6 +21,7 @@ import {
 } from '@/components/auth/AuthControls';
 import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { signInWithGoogle } from '@/services/auth.service';
 
 // Figma tokens (Sign Up Flow Screen 1.1 — login is restyled to match)
 const CHOCOLATE = '#2B2A27';
@@ -46,9 +47,21 @@ export default function LoginScreen() {
     }
   }
 
-  function handleGoogle() {
-    console.log('[Login] continue with google');
-    Alert.alert('Coming soon', 'Continue with Google is not wired up yet.');
+  async function handleGoogle() {
+    try {
+      await signInWithGoogle();
+      // Web: browser navigates away to Google and returns with a session
+      // — (auth) layout redirects to /(tabs)/feed automatically. Native:
+      // explicit replace after the in-app browser closes.
+      if (Platform.OS !== 'web') {
+        router.replace('/(tabs)/feed');
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Google sign-in failed.';
+      if (!message.toLowerCase().includes('cancelled')) {
+        Alert.alert('Google sign-in failed', message);
+      }
+    }
   }
 
   return (
