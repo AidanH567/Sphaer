@@ -99,10 +99,11 @@ export default function ProfileScreen() {
   async function performSignOut() {
     await signOut();
     setSignOutSheetVisible(false);
-    // Explicit redirect: the tabs layout's automatic redirect on !session
-    // is bypassed in __DEV__ mode, so without this the user would stay
-    // stuck on the profile screen with no session.
-    router.replace('/(auth)/login');
+    // Explicit redirect to the landing screen (app/(auth)/index.tsx — the
+    // "Welcome to Sphaer" page with Sign up / Log in buttons). The tabs
+    // layout's automatic redirect on !session is bypassed in __DEV__ mode,
+    // so without this the user would stay stuck on the profile screen.
+    router.replace('/');
   }
 
   function handleEdit() {
