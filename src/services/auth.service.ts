@@ -62,11 +62,19 @@ WebBrowser.maybeCompleteAuthSession();
  *       native: sphaer://auth/callback
  */
 export async function signInWithGoogle(): Promise<void> {
+  // Force Google to always show the account chooser, even if the user is
+  // already signed in to a single Google account in this browser session.
+  // Without `prompt=select_account`, Google silently re-authorizes the
+  // most-recent account — that's "correct" OAuth behavior, but during
+  // testing (and for users with multiple Google accounts) it's confusing.
+  const googleQueryParams = { prompt: 'select_account' };
+
   if (Platform.OS === 'web') {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+        queryParams: googleQueryParams,
       },
     });
     if (error) throw error;
@@ -93,6 +101,7 @@ export async function signInWithGoogle(): Promise<void> {
     options: {
       redirectTo: redirectUrl,
       skipBrowserRedirect: true,
+      queryParams: googleQueryParams,
     },
   });
   if (error) throw error;
