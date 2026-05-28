@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -91,10 +92,35 @@ export default function ProfileScreen() {
   );
 
   function handleSignOut() {
-    Alert.alert('Sign out', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
-    ]);
+    // Native Alert.alert with custom buttons works on iOS/Android but on web
+    // it falls back to window.alert() — a single-button dialog that silently
+    // drops Cancel/Confirm. Branch the confirm prompt per platform so the
+    // logout flow works everywhere.
+    const message = 'Are you sure you want to sign out?';
+
+    const performSignOut = async () => {
+      try {
+        await signOut();
+        // Explicit redirect: the tabs layout's automatic redirect on
+        // !session is bypassed in __DEV__ mode, so without this the user
+        // would stay on the profile screen with no session in dev/web.
+        router.replace('/(auth)/login');
+      } catch (e: unknown) {
+        Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-alert
+      if (typeof window !== 'undefined' && window.confirm(message)) {
+        performSignOut();
+      }
+    } else {
+      Alert.alert('Sign out', message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out', style: 'destructive', onPress: performSignOut },
+      ]);
+    }
   }
 
   function handleEdit() {
