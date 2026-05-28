@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { ProfileIncompleteBanner } from '@/components/profile/ProfileIncompleteBanner';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { getMockProfileById, CURRENT_USER_PROFILE_ID, type MockProfile } from '@/data/mockProfiles';
 import {
   getProfile,
@@ -52,6 +52,7 @@ export default function ProfileScreen() {
   const [extrasLoading, setExtrasLoading] = useState(true);
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
 
   // Re-fetch counts + gallery every time this screen comes into focus, so
   // saves from Edit Profile / new registrations / new circle joins all
@@ -92,35 +93,16 @@ export default function ProfileScreen() {
   );
 
   function handleSignOut() {
-    // Native Alert.alert with custom buttons works on iOS/Android but on web
-    // it falls back to window.alert() — a single-button dialog that silently
-    // drops Cancel/Confirm. Branch the confirm prompt per platform so the
-    // logout flow works everywhere.
-    const message = 'Are you sure you want to sign out?';
+    setSignOutSheetVisible(true);
+  }
 
-    const performSignOut = async () => {
-      try {
-        await signOut();
-        // Explicit redirect: the tabs layout's automatic redirect on
-        // !session is bypassed in __DEV__ mode, so without this the user
-        // would stay on the profile screen with no session in dev/web.
-        router.replace('/(auth)/login');
-      } catch (e: unknown) {
-        Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
-      }
-    };
-
-    if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-alert
-      if (typeof window !== 'undefined' && window.confirm(message)) {
-        performSignOut();
-      }
-    } else {
-      Alert.alert('Sign out', message, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign out', style: 'destructive', onPress: performSignOut },
-      ]);
-    }
+  async function performSignOut() {
+    await signOut();
+    setSignOutSheetVisible(false);
+    // Explicit redirect: the tabs layout's automatic redirect on !session
+    // is bypassed in __DEV__ mode, so without this the user would stay
+    // stuck on the profile screen with no session.
+    router.replace('/(auth)/login');
   }
 
   function handleEdit() {
@@ -141,6 +123,20 @@ export default function ProfileScreen() {
     );
   }
 
+  // Shared sign-out confirm — rendered alongside both the dev-fallback and
+  // the authed screen so the sheet is reachable from either state.
+  const signOutSheet = (
+    <ConfirmSheet
+      visible={signOutSheetVisible}
+      title="Sign out"
+      message="Are you sure you want to sign out? You'll need to log back in to use Sphaer."
+      confirmLabel="Sign out"
+      destructive
+      onConfirm={performSignOut}
+      onClose={() => setSignOutSheetVisible(false)}
+    />
+  );
+
   // ── No session (__DEV__ only — production redirects in tabs layout) ──────
   if (!user) {
     const mock = getMockProfileById(CURRENT_USER_PROFILE_ID);
@@ -152,6 +148,7 @@ export default function ProfileScreen() {
           isOwnProfile
           trailingSlot={<AvailableForWorkBar location={mock.location} />}
         />
+        {signOutSheet}
       </SafeAreaView>
     );
   }
@@ -185,6 +182,8 @@ export default function ProfileScreen() {
           trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}
         />
       )}
+
+      {signOutSheet}
     </SafeAreaView>
   );
 }
