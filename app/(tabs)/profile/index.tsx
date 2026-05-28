@@ -19,6 +19,7 @@ import {
   getProfile,
   getProfileImages,
   getFollowers,
+  getFollowing,
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
@@ -49,9 +50,10 @@ export default function ProfileScreen() {
   //     (deduplicated client-side via Set in getMyCircleIds)
   const [counts, setCounts] = useState<{
     followers: number;
+    following: number;
     circles: number;
     activities: number;
-  }>({ followers: 0, circles: 0, activities: 0 });
+  }>({ followers: 0, following: 0, circles: 0, activities: 0 });
   const [gallery, setGallery] = useState<ProfileImage[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(true);
 
@@ -59,9 +61,10 @@ export default function ProfileScreen() {
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
 
   // Stats popups — exactly one open at a time via a single discriminator
-  type OpenSheet = 'followers' | 'circles' | 'activities' | null;
+  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
+  const [following, setFollowing] = useState<Profile[]>([]);
   const [myCircles, setMyCircles] = useState<CircleWithCounts[]>([]);
   const [myActivities, setMyActivities] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
@@ -76,6 +79,8 @@ export default function ProfileScreen() {
     const fetcher =
       openSheet === 'followers'
         ? getFollowers(user.id).then((data) => active && setFollowers(data))
+        : openSheet === 'following'
+        ? getFollowing(user.id).then((data) => active && setFollowing(data))
         : openSheet === 'circles'
         ? getMyCircles(user.id).then((data) => active && setMyCircles(data))
         : getMyRegisteredEvents(user.id).then((data) => active && setMyActivities(data));
@@ -84,6 +89,7 @@ export default function ProfileScreen() {
       .catch(() => {
         if (active) {
           if (openSheet === 'followers') setFollowers([]);
+          else if (openSheet === 'following') setFollowing([]);
           else if (openSheet === 'circles') setMyCircles([]);
           else setMyActivities([]);
         }
@@ -118,6 +124,7 @@ export default function ProfileScreen() {
           if (!active) return;
           setCounts({
             followers: fullProfile?.followers_count ?? 0,
+            following: fullProfile?.following_count ?? 0,
             circles: circleIds.length,
             activities: activityCount,
           });
@@ -196,6 +203,16 @@ export default function ProfileScreen() {
         onClose={() => setOpenSheet(null)}
       />
       <EntityListSheet
+        visible={openSheet === 'following'}
+        title="Following"
+        subtitle={`${counts.following.toLocaleString('en-US')} accounts you follow`}
+        type="user"
+        items={following}
+        isLoading={sheetLoading && openSheet === 'following'}
+        emptyMessage="Not following anyone yet — tap a creator on the feed to follow them."
+        onClose={() => setOpenSheet(null)}
+      />
+      <EntityListSheet
         visible={openSheet === 'circles'}
         title="Circles"
         subtitle={`${counts.circles.toLocaleString('en-US')} circles you're in`}
@@ -262,6 +279,7 @@ export default function ProfileScreen() {
           isOwnProfile
           onEditPress={handleEdit}
           onFollowersPress={() => setOpenSheet('followers')}
+          onFollowingPress={() => setOpenSheet('following')}
           onCirclesPress={() => setOpenSheet('circles')}
           onActivitiesPress={() => setOpenSheet('activities')}
           trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}

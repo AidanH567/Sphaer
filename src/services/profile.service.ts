@@ -95,6 +95,23 @@ export async function getFollowers(userId: string): Promise<import('@/types/user
     .filter((p): p is import('@/types/user.types').Profile => p !== null);
 }
 
+/**
+ * Pull every profile that `userId` is following. Used by the Following
+ * popup on the profile page (mirror image of getFollowers).
+ */
+export async function getFollowing(userId: string): Promise<import('@/types/user.types').Profile[]> {
+  const { data, error } = await supabase
+    .from('follows')
+    .select('followed:profiles!follows_following_id_fkey(*)')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row) => (row as { followed: import('@/types/user.types').Profile | null }).followed)
+    .filter((p): p is import('@/types/user.types').Profile => p !== null);
+}
+
 /* ── Avatar (single image, profiles.avatar_url) ────────── */
 
 /**

@@ -32,9 +32,9 @@ interface ProfileViewProps {
   /** Fires when the user taps Edit Profile (only shown when isOwnProfile). */
   onEditPress?: () => void;
   /** Tappable stat callbacks. Each stat becomes pressable when its handler
-   * is provided; otherwise it renders as plain text (back-compat for
-   * /user/[id] which doesn't surface its own popups yet). */
+   * is provided; otherwise it renders as plain text. */
   onFollowersPress?: () => void;
+  onFollowingPress?: () => void;
   onCirclesPress?: () => void;
   onActivitiesPress?: () => void;
   /**
@@ -55,6 +55,7 @@ export function ProfileView({
   isOwnProfile = false,
   onEditPress,
   onFollowersPress,
+  onFollowingPress,
   onCirclesPress,
   onActivitiesPress,
   trailingSlot,
@@ -102,6 +103,8 @@ export function ProfileView({
         {/* Stats */}
         <View style={styles.stats}>
           <Stat label="Followers" value={profile.followersCount} onPress={onFollowersPress} />
+          <View style={styles.statDivider} />
+          <Stat label="Following" value={profile.followingCount} onPress={onFollowingPress} />
           <View style={styles.statDivider} />
           <Stat label="Circles" value={profile.circlesCount} onPress={onCirclesPress} />
           <View style={styles.statDivider} />
@@ -347,13 +350,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: spacing.lg,
+    // Smaller gap (was spacing.lg / 24) so 4 stats + 3 dividers fit
+    // comfortably in the content width without crowding.
+    gap: spacing.md,
     marginTop: spacing.xs,
   },
   stat: {
     alignItems: 'center',
     gap: 5,
-    minWidth: 60,
+    minWidth: 54,
   },
   statLabel: {
     fontFamily: typography.fontFamily.ui,

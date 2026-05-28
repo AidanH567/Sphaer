@@ -42,6 +42,7 @@ export interface MockProfile {
   avatarUrl: string;
   verified: boolean;
   followersCount: number;
+  followingCount: number;
   circlesCount: number;
   activitiesCount: number;
   about: string;
@@ -63,6 +64,7 @@ export const MOCK_PROFILES: MockProfile[] = [
     avatarUrl: 'https://i.pravatar.cc/300?img=47',
     verified: true,
     followersCount: 850,
+    followingCount: 217,
     circlesCount: 4,
     activitiesCount: 3,
     about:

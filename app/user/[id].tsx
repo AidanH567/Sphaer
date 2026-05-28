@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
-import { getProfile, getProfileImages, getFollowers } from '@/services/profile.service';
+import { getProfile, getProfileImages, getFollowers, getFollowing } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
@@ -38,9 +38,10 @@ export default function UserProfileScreen() {
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found'>('loading');
 
   // Stats popup state — same model as /profile
-  type OpenSheet = 'followers' | 'circles' | 'activities' | null;
+  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
+  const [following, setFollowing] = useState<Profile[]>([]);
   const [userCircles, setUserCircles] = useState<CircleWithCounts[]>([]);
   const [userActivities, setUserActivities] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
@@ -90,6 +91,8 @@ export default function UserProfileScreen() {
     const fetcher =
       openSheet === 'followers'
         ? getFollowers(id).then((data) => active && setFollowers(data))
+        : openSheet === 'following'
+        ? getFollowing(id).then((data) => active && setFollowing(data))
         : openSheet === 'circles'
         ? getMyCircles(id).then((data) => active && setUserCircles(data))
         : getMyRegisteredEvents(id).then((data) => active && setUserActivities(data));
@@ -98,6 +101,7 @@ export default function UserProfileScreen() {
       .catch(() => {
         if (active) {
           if (openSheet === 'followers') setFollowers([]);
+          else if (openSheet === 'following') setFollowing([]);
           else if (openSheet === 'circles') setUserCircles([]);
           else setUserActivities([]);
         }
@@ -140,6 +144,7 @@ export default function UserProfileScreen() {
           <ProfileView
             profile={displayProfile}
             onFollowersPress={() => setOpenSheet('followers')}
+            onFollowingPress={() => setOpenSheet('following')}
             onCirclesPress={() => setOpenSheet('circles')}
             onActivitiesPress={() => setOpenSheet('activities')}
           />
@@ -152,6 +157,16 @@ export default function UserProfileScreen() {
             items={followers}
             isLoading={sheetLoading && openSheet === 'followers'}
             emptyMessage="No followers yet."
+            onClose={() => setOpenSheet(null)}
+          />
+          <EntityListSheet
+            visible={openSheet === 'following'}
+            title="Following"
+            subtitle={`${displayProfile.followingCount.toLocaleString('en-US')} accounts`}
+            type="user"
+            items={following}
+            isLoading={sheetLoading && openSheet === 'following'}
+            emptyMessage="Not following anyone yet."
             onClose={() => setOpenSheet(null)}
           />
           <EntityListSheet
@@ -202,6 +217,7 @@ async function fetchRealProfile(id: string): Promise<MockProfile | null> {
       fullProfile,
       {
         followers: fullProfile.followers_count ?? 0,
+        following: fullProfile.following_count ?? 0,
         circles: circleIds.length,
         activities: activityCount,
       },

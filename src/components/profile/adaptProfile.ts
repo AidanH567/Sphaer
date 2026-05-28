@@ -4,6 +4,7 @@ import { getGalleryImageUrl } from '@/services/profile.service';
 
 export interface ProfileCounts {
   followers: number;
+  following: number;
   circles: number;
   activities: number;
 }
@@ -34,6 +35,7 @@ export function adaptProfileToDisplay(
     avatarUrl: profile?.avatar_url ?? '',
     verified: false, // deferred — see BACKLOG.md "Verified badge"
     followersCount: counts.followers,
+    followingCount: counts.following,
     circlesCount: counts.circles,
     activitiesCount: counts.activities,
     about: profile?.about ?? '',
