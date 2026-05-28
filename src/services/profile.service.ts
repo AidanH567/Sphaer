@@ -9,12 +9,17 @@ import type {
 /* ── Profile CRUD ──────────────────────────────────────── */
 
 export async function getProfile(userId: string): Promise<ProfileWithCounts | null> {
+  // `.maybeSingle()` returns data=null for 0 rows (the `.single()` 406
+  // pattern was breaking the profile page when a user's row hadn't been
+  // created yet — the AuthContext safety net normally creates it, but we
+  // still want this service-level call to fail soft).
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
   if (error) throw error;
+  if (!data) return null;
 
   const [followersRes, followingRes, eventsRes] = await Promise.all([
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
