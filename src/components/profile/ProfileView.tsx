@@ -31,6 +31,12 @@ interface ProfileViewProps {
   isOwnProfile?: boolean;
   /** Fires when the user taps Edit Profile (only shown when isOwnProfile). */
   onEditPress?: () => void;
+  /** Tappable stat callbacks. Each stat becomes pressable when its handler
+   * is provided; otherwise it renders as plain text (back-compat for
+   * /user/[id] which doesn't surface its own popups yet). */
+  onFollowersPress?: () => void;
+  onCirclesPress?: () => void;
+  onActivitiesPress?: () => void;
   /**
    * Trailing slot rendered after the Images section. Used to inject the
    * "Available for work" placeholder bar on the own-profile tab without
@@ -48,6 +54,9 @@ export function ProfileView({
   profile,
   isOwnProfile = false,
   onEditPress,
+  onFollowersPress,
+  onCirclesPress,
+  onActivitiesPress,
   trailingSlot,
 }: ProfileViewProps) {
   const [following, setFollowing] = useState(false);
@@ -92,11 +101,11 @@ export function ProfileView({
 
         {/* Stats */}
         <View style={styles.stats}>
-          <Stat label="Followers" value={profile.followersCount} />
+          <Stat label="Followers" value={profile.followersCount} onPress={onFollowersPress} />
           <View style={styles.statDivider} />
-          <Stat label="Circles" value={profile.circlesCount} />
+          <Stat label="Circles" value={profile.circlesCount} onPress={onCirclesPress} />
           <View style={styles.statDivider} />
-          <Stat label="Activities" value={profile.activitiesCount} />
+          <Stat label="Activities" value={profile.activitiesCount} onPress={onActivitiesPress} />
         </View>
 
         {isOwnProfile ? (
@@ -244,12 +253,26 @@ export function ProfileView({
 
 /* ── Small building blocks ──────────────────────────────── */
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
+function Stat({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  onPress?: () => void;
+}) {
+  const body = (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={styles.statValue}>{value.toLocaleString('en-US')}</Text>
     </View>
+  );
+  if (!onPress) return body;
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+      {body}
+    </TouchableOpacity>
   );
 }
 

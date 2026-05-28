@@ -73,6 +73,23 @@ export async function isFollowing(followerId: string, followingId: string): Prom
   return (count ?? 0) > 0;
 }
 
+/**
+ * Pull every profile that follows `userId`. Used by the Followers popup
+ * on the profile page.
+ */
+export async function getFollowers(userId: string): Promise<import('@/types/user.types').Profile[]> {
+  const { data, error } = await supabase
+    .from('follows')
+    .select('follower:profiles!follows_follower_id_fkey(*)')
+    .eq('following_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row) => (row as { follower: import('@/types/user.types').Profile | null }).follower)
+    .filter((p): p is import('@/types/user.types').Profile => p !== null);
+}
+
 /* ── Avatar (single image, profiles.avatar_url) ────────── */
 
 /**

@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CircleActivityCard } from '@/components/circles/CircleActivityCard';
+import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useCircle } from '@/hooks/useCircles';
 import { useAuthContext } from '@/context/AuthContext';
@@ -20,6 +21,7 @@ import {
   isMember as isCircleMember,
   joinCircle,
   leaveCircle,
+  getCircleMembers,
 } from '@/services/circles.service';
 import { supabase } from '@/lib/supabase';
 import type { EventWithRelations } from '@/types/event.types';
@@ -38,6 +40,21 @@ export default function CircleDetailScreen() {
   const [activities, setActivities] = useState<EventWithRelations[]>([]);
   const [membersPreview, setMembersPreview] = useState<Profile[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // Full Members popup state — lazy-loaded when first opened
+  const [membersSheetVisible, setMembersSheetVisible] = useState(false);
+  const [allMembers, setAllMembers] = useState<Profile[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+
+  function openMembersSheet() {
+    if (!id) return;
+    setMembersSheetVisible(true);
+    setMembersLoading(true);
+    getCircleMembers(id)
+      .then(setAllMembers)
+      .catch(() => setAllMembers([]))
+      .finally(() => setMembersLoading(false));
+  }
 
   // Check current membership + fetch upcoming activities + member preview
   useEffect(() => {
@@ -218,28 +235,43 @@ export default function CircleDetailScreen() {
 
           <View style={styles.divider} />
 
-          {/* Members preview */}
-          <Text style={styles.sectionHeading}>Members</Text>
+          {/* Members preview — heading + avatar row both open the full list */}
+          <TouchableOpacity onPress={openMembersSheet} activeOpacity={0.6}>
+            <Text style={styles.sectionHeading}>Members</Text>
+          </TouchableOpacity>
           {membersPreview.length === 0 ? (
             <Text style={styles.emptyHint}>No members yet.</Text>
           ) : (
-            <View style={styles.membersRow}>
-              {membersPreview.map((member, i) => (
-                <Image
-                  key={member.id}
-                  source={{ uri: member.avatar_url ?? '' }}
-                  style={[styles.memberAvatar, i > 0 && styles.memberAvatarOverlap]}
-                />
-              ))}
-              {hiddenMembers > 0 && (
-                <Text style={styles.memberMore}>
-                  +{hiddenMembers.toLocaleString('de-DE')}
-                </Text>
-              )}
-            </View>
+            <TouchableOpacity onPress={openMembersSheet} activeOpacity={0.7}>
+              <View style={styles.membersRow}>
+                {membersPreview.map((member, i) => (
+                  <Image
+                    key={member.id}
+                    source={{ uri: member.avatar_url ?? '' }}
+                    style={[styles.memberAvatar, i > 0 && styles.memberAvatarOverlap]}
+                  />
+                ))}
+                {hiddenMembers > 0 && (
+                  <Text style={styles.memberMore}>
+                    +{hiddenMembers.toLocaleString('de-DE')}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
+
+      <EntityListSheet
+        visible={membersSheetVisible}
+        title="Members"
+        subtitle={`${circle.members_count.toLocaleString('en-US')} in ${circle.name}`}
+        type="user"
+        items={allMembers}
+        isLoading={membersLoading}
+        emptyMessage="No members yet — be the first to join."
+        onClose={() => setMembersSheetVisible(false)}
+      />
     </SafeAreaView>
   );
 }

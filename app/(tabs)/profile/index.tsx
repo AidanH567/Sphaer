@@ -18,12 +18,16 @@ import {
   getProfile,
   getProfileImages,
   getGalleryImageUrl,
+  getFollowers,
 } from '@/services/profile.service';
-import { getMyCircleIds } from '@/services/circles.service';
-import { getRegistrationCount } from '@/services/registrations.service';
+import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
+import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { signOut } from '@/services/auth.service';
 import { useAuthContext } from '@/context/AuthContext';
 import type { Profile, ProfileImage, ProfileExperienceEntry } from '@/types/user.types';
+import type { CircleWithCounts } from '@/types/circle.types';
+import type { EventWithRelations } from '@/types/event.types';
+import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { colors, typography, spacing } from '@/constants/theme';
 
 const INK = '#1B1B18';
@@ -53,6 +57,45 @@ export default function ProfileScreen() {
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
+
+  // Stats popups — exactly one open at a time via a single discriminator
+  type OpenSheet = 'followers' | 'circles' | 'activities' | null;
+  const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
+  const [followers, setFollowers] = useState<Profile[]>([]);
+  const [myCircles, setMyCircles] = useState<CircleWithCounts[]>([]);
+  const [myActivities, setMyActivities] = useState<EventWithRelations[]>([]);
+  const [sheetLoading, setSheetLoading] = useState(false);
+
+  // Fetch data lazily when a stats popup opens. Re-runs each open so the
+  // list reflects any in-between changes (new follower, joined a circle, etc).
+  useEffect(() => {
+    if (!user || !openSheet) return;
+    let active = true;
+    setSheetLoading(true);
+
+    const fetcher =
+      openSheet === 'followers'
+        ? getFollowers(user.id).then((data) => active && setFollowers(data))
+        : openSheet === 'circles'
+        ? getMyCircles(user.id).then((data) => active && setMyCircles(data))
+        : getMyRegisteredEvents(user.id).then((data) => active && setMyActivities(data));
+
+    fetcher
+      .catch(() => {
+        if (active) {
+          if (openSheet === 'followers') setFollowers([]);
+          else if (openSheet === 'circles') setMyCircles([]);
+          else setMyActivities([]);
+        }
+      })
+      .finally(() => {
+        if (active) setSheetLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [openSheet, user]);
 
   // Re-fetch counts + gallery every time this screen comes into focus, so
   // saves from Edit Profile / new registrations / new circle joins all
@@ -138,6 +181,44 @@ export default function ProfileScreen() {
     />
   );
 
+  // Stats popups — only render the authed-user popups when we actually have
+  // a user. The dev fallback can't query Supabase for the signed-in identity.
+  const statsSheets = user ? (
+    <>
+      <EntityListSheet
+        visible={openSheet === 'followers'}
+        title="Followers"
+        subtitle={`${counts.followers.toLocaleString('en-US')} people follow you`}
+        type="user"
+        items={followers}
+        isLoading={sheetLoading && openSheet === 'followers'}
+        emptyMessage="No followers yet — share your profile to grow your scene."
+        onClose={() => setOpenSheet(null)}
+      />
+      <EntityListSheet
+        visible={openSheet === 'circles'}
+        title="Circles"
+        subtitle={`${counts.circles.toLocaleString('en-US')} circles you're in`}
+        type="circle"
+        items={myCircles}
+        isLoading={sheetLoading && openSheet === 'circles'}
+        emptyMessage="You haven't joined any circles yet — browse the Circles tab to find your community."
+        onClose={() => setOpenSheet(null)}
+      />
+      <EntityListSheet
+        visible={openSheet === 'activities'}
+        title="Activities"
+        subtitle={`${counts.activities.toLocaleString('en-US')} total — created or registered`}
+        type="activity"
+        items={myActivities}
+        withTimeTabs
+        isLoading={sheetLoading && openSheet === 'activities'}
+        emptyMessage="No activities yet — create one or register from the feed."
+        onClose={() => setOpenSheet(null)}
+      />
+    </>
+  ) : null;
+
   // ── No session (__DEV__ only — production redirects in tabs layout) ──────
   if (!user) {
     const mock = getMockProfileById(CURRENT_USER_PROFILE_ID);
@@ -180,11 +261,15 @@ export default function ProfileScreen() {
           profile={displayProfile}
           isOwnProfile
           onEditPress={handleEdit}
+          onFollowersPress={() => setOpenSheet('followers')}
+          onCirclesPress={() => setOpenSheet('circles')}
+          onActivitiesPress={() => setOpenSheet('activities')}
           trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}
         />
       )}
 
       {signOutSheet}
+      {statsSheets}
     </SafeAreaView>
   );
 }

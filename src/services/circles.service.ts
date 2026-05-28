@@ -150,6 +150,59 @@ export async function getMyCircleIds(userId: string): Promise<string[]> {
 }
 
 /**
+ * Full CircleWithCounts list for every circle the user is connected to via
+ * membership or follow. Used by the "Circles" popup on the profile page.
+ *
+ * One round trip to gather circle ids, then a single `.in()` fetch with
+ * the counts populated like getCircles().
+ */
+export async function getMyCircles(userId: string): Promise<CircleWithCounts[]> {
+  const ids = await getMyCircleIds(userId);
+  if (ids.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('circles')
+    .select(`*, creator:profiles!circles_creator_id_fkey(*)`)
+    .in('id', ids);
+  if (error) throw error;
+
+  const enriched = await Promise.all(
+    (data ?? []).map(async (circle) => {
+      const [membersRes, activitiesRes] = await Promise.all([
+        supabase.from('circle_members').select('*', { count: 'exact', head: true }).eq('circle_id', circle.id),
+        supabase.from('events').select('*', { count: 'exact', head: true }).eq('circle_id', circle.id),
+      ]);
+      return {
+        ...circle,
+        members_count: membersRes.count ?? 0,
+        activities_count: activitiesRes.count ?? 0,
+      } as CircleWithCounts;
+    }),
+  );
+
+  // Sort newest-first to roughly mirror "most recently joined" without
+  // schema changes (full join-time sort would need joined_at from members).
+  return enriched.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+}
+
+/**
+ * Full member list for a circle (Profile rows, not just IDs). Used by the
+ * Members popup on the circle detail page.
+ */
+export async function getCircleMembers(circleId: string): Promise<import('@/types/user.types').Profile[]> {
+  const { data, error } = await supabase
+    .from('circle_members')
+    .select('user:profiles!circle_members_user_id_fkey(*)')
+    .eq('circle_id', circleId)
+    .order('joined_at', { ascending: false });
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row) => (row as { user: import('@/types/user.types').Profile | null }).user)
+    .filter((p): p is import('@/types/user.types').Profile => p !== null);
+}
+
+/**
  * Upload a circle avatar / cover image to the `circle-images` storage bucket.
  *
  * Path scheme: `<userId>/<circleId>-<kind>.<ext>` — the leading folder must
