@@ -162,7 +162,21 @@ export const CURRENT_USER_PROFILE_ID = 'lea-weber';
 /**
  * Look up a profile by id. Falls back to the demo profile for unknown ids
  * so any creator / host tap resolves to a populated page.
+ *
+ * Used as the dev-mode fallback on /profile when there's no auth session.
+ * For routing to OTHER users (where a wrong fallback is misleading), use
+ * `getMockProfileByExactId()` instead.
  */
 export function getMockProfileById(id?: string): MockProfile {
   return MOCK_PROFILES.find((p) => p.id === id) ?? MOCK_PROFILES[0];
+}
+
+/**
+ * Exact-match lookup with no silent fallback. Returns `null` when nothing
+ * matches — the /user/[id] route uses this so an unknown id surfaces a
+ * "Profile not found" state instead of opening the wrong person's page.
+ */
+export function getMockProfileByExactId(id: string | undefined | null): MockProfile | null {
+  if (!id) return null;
+  return MOCK_PROFILES.find((p) => p.id === id) ?? null;
 }

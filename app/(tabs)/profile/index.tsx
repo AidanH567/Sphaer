@@ -13,18 +13,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { ProfileIncompleteBanner } from '@/components/profile/ProfileIncompleteBanner';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
-import { getMockProfileById, CURRENT_USER_PROFILE_ID, type MockProfile } from '@/data/mockProfiles';
+import { getMockProfileById, CURRENT_USER_PROFILE_ID } from '@/data/mockProfiles';
+import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
 import {
   getProfile,
   getProfileImages,
-  getGalleryImageUrl,
   getFollowers,
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { signOut } from '@/services/auth.service';
 import { useAuthContext } from '@/context/AuthContext';
-import type { Profile, ProfileImage, ProfileExperienceEntry } from '@/types/user.types';
+import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
@@ -316,61 +316,6 @@ function AvailableForWorkBar({ location }: { location: string }) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Map a real `Profile` (+ counts + gallery rows) onto the `MockProfile` shape
- * that ProfileView still consumes. Keeping the adapter local means ProfileView
- * doesn't need to know whether its data came from Supabase or mock files.
- */
-function adaptProfileToDisplay(
-  userId: string,
-  profile: Profile | null,
-  counts: { followers: number; circles: number; activities: number },
-  gallery: ProfileImage[]
-): MockProfile {
-  const locationLine = combineLocation(profile?.location ?? null, profile?.neighborhood ?? null);
-
-  return {
-    id: userId,
-    displayName: profile?.display_name?.trim() || 'New member',
-    role: (profile?.bio ?? '').trim(),
-    location: locationLine,
-    website: profile?.website ?? '',
-    avatarUrl: profile?.avatar_url ?? '',
-    verified: false, // deferred — see BACKLOG.md "Verified badge"
-    followersCount: counts.followers,
-    circlesCount: counts.circles,
-    activitiesCount: counts.activities,
-    about: profile?.about ?? '',
-    activities: [], // events-by-creator not wired in the activity *list* yet
-    experience: (profile?.experiences ?? []).map(experienceToDisplay),
-    testimonials: [], // testimonials feature deferred — see BACKLOG.md
-    images: gallery.map((g) => getGalleryImageUrl(g.path)),
-  };
-}
-
-function experienceToDisplay(exp: ProfileExperienceEntry) {
-  const parts = [exp.title, exp.organisation, formatDateRange(exp.start_date, exp.end_date)]
-    .filter(Boolean)
-    .join(' • ');
-  return {
-    id: exp.id,
-    title: parts || exp.title || 'Experience',
-    description: exp.description ?? '',
-  };
-}
-
-function formatDateRange(start: string | null, end: string | null | undefined): string {
-  if (!start && end === null) return 'Present';
-  if (!start) return '';
-  if (end === null || end === undefined || end === '') return `${start}–Present`;
-  return `${start}–${end}`;
-}
-
-function combineLocation(location: string | null, neighborhood: string | null): string {
-  if (location && neighborhood) return `${neighborhood}, ${location}`;
-  return neighborhood || location || '';
-}
 
 /**
  * What's missing from the profile for the soft-gate banner. The banner only

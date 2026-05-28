@@ -73,29 +73,395 @@ const supabase = createClient<Database>(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 // ─── Ghost user provisioning ─────────────────────────────────────────────────
 
-interface GhostSpec {
-  mockId: string;       // e.g. 'host-tarkovsky'
-  email: string;        // e.g. 'tarkovsky@sphaer.demo'
-  displayName: string;  // e.g. 'Camille Laurent'
-  avatarUrl: string;
-  username: string;     // e.g. 'camille.laurent'
+interface ExperienceSpec {
+  title: string;
+  organisation: string;
+  start_date: string;
+  end_date: string | null; // null = Present
+  description: string;
 }
 
+interface GhostSpec {
+  mockId: string;       // e.g. 'host-tarkovsky' — matches MOCK_EVENTS creator_id
+  email: string;        // e.g. 'tarkovsky@sphaer.demo'
+  displayName: string;
+  username: string;
+  avatarUrl: string;
+  bio: string;          // short tagline
+  about: string;        // longer paragraph
+  disciplines: string[];
+  neighborhood: string;
+  experiences: ExperienceSpec[];
+}
+
+/**
+ * Hand-curated ghost profiles for the demo. Each mockId matches a creator_id
+ * in src/data/mockEvents.ts so seeding events later can map creators by id.
+ * Bios are deliberately specific so /user/<ghost> pages feel real, not
+ * template-filled.
+ */
+const GHOST_SPECS: GhostSpec[] = [
+  {
+    mockId: 'host-tarkovsky',
+    email: 'tarkovsky@sphaer.demo',
+    displayName: 'Camille Laurent',
+    username: 'camille.laurent',
+    avatarUrl: 'https://i.pravatar.cc/300?img=32',
+    bio: 'Film theory, slow cinema, and the long shot',
+    about:
+      "I teach and write about post-war European cinema, with a special focus on Tarkovsky, Antonioni, and the slow cinema movement. Online lectures and reading groups are open to anyone who'd rather watch four films in twelve hours than scroll for the same time.",
+    disciplines: ['Film', 'Education', 'Talk'],
+    neighborhood: 'Friedrichshain',
+    experiences: [
+      {
+        title: 'Visiting Lecturer',
+        organisation: 'Deutsche Film- und Fernsehakademie',
+        start_date: '2021-09',
+        end_date: null,
+        description: 'Seminars on long-take aesthetics and post-war European cinema.',
+      },
+      {
+        title: 'Programme Editor',
+        organisation: 'Arsenal Institute for Film',
+        start_date: '2018-01',
+        end_date: '2021-08',
+        description: 'Curated repertory series and wrote programme notes.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-ceramic',
+    email: 'ceramic@sphaer.demo',
+    displayName: 'Lena Hoffmann',
+    username: 'lena.ceramics',
+    avatarUrl: 'https://i.pravatar.cc/300?img=45',
+    bio: 'Ceramics, slowness, and the texture of clay',
+    about:
+      'I work in stoneware out of a shared studio in Wedding. My workshops are about the unhurried part — wedging, throwing, the listening kind of attention you need to feel when a wall is ready. Beginners welcome.',
+    disciplines: ['Art', 'Workshop'],
+    neighborhood: 'Wedding',
+    experiences: [
+      {
+        title: 'Studio Ceramicist',
+        organisation: 'Lehmwerk Berlin',
+        start_date: '2020-03',
+        end_date: null,
+        description: 'Wheel-throwing, hand-building workshops, small-batch tableware.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-eurorack',
+    email: 'eurorack@sphaer.demo',
+    displayName: 'Eric Abraham',
+    username: 'eric.abraham',
+    avatarUrl: 'https://i.pravatar.cc/300?img=12',
+    bio: 'Modular synthesis, soldering, and patch as conversation',
+    about:
+      "I run modular synth meetups across Berlin and occasionally teach intro classes. Currently building a hardware oscillator that I'll probably never finish.",
+    disciplines: ['Music', 'Workshop', 'Concert'],
+    neighborhood: 'Neukölln',
+    experiences: [
+      {
+        title: 'Instructor',
+        organisation: 'Modular Berlin Collective',
+        start_date: '2019-06',
+        end_date: null,
+        description: 'Intro workshops on Eurorack patching and modular voice design.',
+      },
+      {
+        title: 'Live Performer',
+        organisation: 'Various venues',
+        start_date: '2017-01',
+        end_date: null,
+        description: 'Improvised modular sets at OHM, Hopscotch, and Watergate.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-jassmom',
+    email: 'jassmom@sphaer.demo',
+    displayName: 'Marcus Veil',
+    username: 'marcus.veil',
+    avatarUrl: 'https://i.pravatar.cc/300?img=60',
+    bio: 'Free jazz pianist, improviser, listener',
+    about:
+      "I run the JASSMOM nights — quiet, attentive evenings for improvisers who'd rather listen than be heard. Trio bookings welcome through the website.",
+    disciplines: ['Music', 'Concert'],
+    neighborhood: 'Kreuzberg',
+    experiences: [
+      {
+        title: 'Co-curator, JASSMOM',
+        organisation: 'Au Topsi Pohl',
+        start_date: '2022-09',
+        end_date: null,
+        description: 'Monthly improvised music night.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-poetry',
+    email: 'poetry@sphaer.demo',
+    displayName: 'Yara Nouri',
+    username: 'yara.nouri',
+    avatarUrl: 'https://i.pravatar.cc/300?img=47',
+    bio: 'Spoken word, multilingual poetics, slam organising',
+    about:
+      'Berlin-based poet writing in Farsi, German, and English. I host the open mic at Brunnen70 and run an irregular workshop on writing under censorship.',
+    disciplines: ['Art', 'Talk', 'Workshop'],
+    neighborhood: 'Mitte',
+    experiences: [
+      {
+        title: 'Host, Berlin Poetry Slam',
+        organisation: 'Brunnen70',
+        start_date: '2020-04',
+        end_date: null,
+        description: 'Monthly open mic + featured-poet readings.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-techno',
+    email: 'techno@sphaer.demo',
+    displayName: 'Nils Brandt',
+    username: 'nils.brandt',
+    avatarUrl: 'https://i.pravatar.cc/300?img=15',
+    bio: 'DJ, modular techno, ear-first listening culture',
+    about:
+      'I make long-form modular techno and host listening evenings in Wedding for people who think club volumes wreck nuance. Recent residencies at OHM and ://about blank.',
+    disciplines: ['Music', 'Concert'],
+    neighborhood: 'Wedding',
+    experiences: [
+      {
+        title: 'Resident DJ',
+        organisation: 'OHM Berlin',
+        start_date: '2021-11',
+        end_date: null,
+        description: 'Monthly slot.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-yoga',
+    email: 'yoga@sphaer.demo',
+    displayName: 'Sofia Reyes',
+    username: 'sofia.reyes',
+    avatarUrl: 'https://i.pravatar.cc/300?img=20',
+    bio: 'Yoga teacher, breathwork facilitator, Treptower regular',
+    about:
+      'I teach Hatha and breathwork in parks across Berlin from late spring through early autumn. Studio classes at Yogibar Kreuzberg through the winter. Everyone-welcome pace.',
+    disciplines: ['Wellness', 'Coach', 'Workshop'],
+    neighborhood: 'Treptow',
+    experiences: [
+      {
+        title: 'Yoga Teacher',
+        organisation: 'Yogibar Berlin',
+        start_date: '2019-01',
+        end_date: null,
+        description: 'Hatha, breathwork, occasional workshops.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-photo',
+    email: 'photo@sphaer.demo',
+    displayName: 'Greta Wolf',
+    username: 'greta.wolf',
+    avatarUrl: 'https://i.pravatar.cc/300?img=38',
+    bio: 'Analog photography, street walks, darkroom prints',
+    about:
+      'I shoot mostly on a Leica M6 and run beginner-friendly photo walks through Kreuzberg and Mitte. Darkroom workshops every other Sunday at Spinnerei.',
+    disciplines: ['Art', 'Workshop'],
+    neighborhood: 'Kreuzberg',
+    experiences: [
+      {
+        title: 'Darkroom Instructor',
+        organisation: 'Spinnerei Berlin',
+        start_date: '2020-09',
+        end_date: null,
+        description: 'B&W developing and printing for beginners.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-jobfair',
+    email: 'jobfair@sphaer.demo',
+    displayName: 'Berlin Creative Network',
+    username: 'berlin.creative',
+    avatarUrl: 'https://i.pravatar.cc/300?img=51',
+    bio: 'Hiring + showcasing the Berlin creative industry',
+    about:
+      'We connect studios, agencies, and independent creatives with the people who want to work with them. Job fair every spring + autumn, plus year-round portfolio reviews.',
+    disciplines: ['Job', 'Meet'],
+    neighborhood: 'Mitte',
+    experiences: [
+      {
+        title: 'Organising Collective',
+        organisation: 'Berlin Creative Network',
+        start_date: '2018-04',
+        end_date: null,
+        description: 'Job fairs, portfolio reviews, mentorship.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-painting',
+    email: 'painting@sphaer.demo',
+    displayName: 'Paul Adler',
+    username: 'paul.adler',
+    avatarUrl: 'https://i.pravatar.cc/300?img=13',
+    bio: 'Oil painter, life drawing, slow looking',
+    about:
+      "I paint figuratively out of an atelier in Schöneberg. Run an evening life drawing class for anyone who hasn't held charcoal since school.",
+    disciplines: ['Art', 'Workshop', 'Education'],
+    neighborhood: 'Schöneberg',
+    experiences: [
+      {
+        title: 'Studio Painter & Tutor',
+        organisation: 'Atelier Adler',
+        start_date: '2016-02',
+        end_date: null,
+        description: 'Life drawing classes and private commissions.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-startup',
+    email: 'startup@sphaer.demo',
+    displayName: 'Sara Lindqvist',
+    username: 'sara.lindqvist',
+    avatarUrl: 'https://i.pravatar.cc/300?img=5',
+    bio: 'Solo founder, build-in-public advocate, mentor',
+    about:
+      'Building a small SaaS in Berlin. Run a monthly meetup for early founders who want frank conversation, not pitch decks. Also mentor through Female Founders.',
+    disciplines: ['Job', 'Meet', 'Talk'],
+    neighborhood: 'Prenzlauer Berg',
+    experiences: [
+      {
+        title: 'Founder',
+        organisation: 'Stealth (early stage)',
+        start_date: '2023-06',
+        end_date: null,
+        description: 'Solo SaaS, building publicly.',
+      },
+      {
+        title: 'Product Lead',
+        organisation: 'N26',
+        start_date: '2020-01',
+        end_date: '2023-05',
+        description: 'Onboarding and identity squad.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-dance',
+    email: 'dance@sphaer.demo',
+    displayName: 'Mara Conti',
+    username: 'mara.conti',
+    avatarUrl: 'https://i.pravatar.cc/300?img=24',
+    bio: 'Contemporary dancer, release-based teacher',
+    about:
+      'Trained in Florence, based in Berlin since 2019. Teach an open class on Saturdays at Acker Stadt Palast — release technique, improvisation, slow warm-ups.',
+    disciplines: ['Art', 'Workshop', 'Wellness'],
+    neighborhood: 'Mitte',
+    experiences: [
+      {
+        title: 'Open Class Teacher',
+        organisation: 'Acker Stadt Palast',
+        start_date: '2021-09',
+        end_date: null,
+        description: 'Weekly contemporary dance class.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-film2',
+    email: 'film2@sphaer.demo',
+    displayName: 'Theo Marchand',
+    username: 'theo.marchand',
+    avatarUrl: 'https://i.pravatar.cc/300?img=33',
+    bio: 'Programmer, short film evangelist, projectionist',
+    about:
+      'I curate the Berlin Shorts open-air programme every August at Mauerpark and write occasionally for Sight & Sound. Always looking for short film submissions.',
+    disciplines: ['Film', 'Talk', 'Concert'],
+    neighborhood: 'Prenzlauer Berg',
+    experiences: [
+      {
+        title: 'Programmer',
+        organisation: 'Berlin Shorts Festival',
+        start_date: '2019-08',
+        end_date: null,
+        description: 'Annual outdoor short film festival.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-cooking',
+    email: 'cooking@sphaer.demo',
+    displayName: 'Deniz Yilmaz',
+    username: 'deniz.yilmaz',
+    avatarUrl: 'https://i.pravatar.cc/300?img=52',
+    bio: 'Chef, Anatolian home cooking, supper clubs',
+    about:
+      "I host monthly supper clubs cooking through the recipes my mother taught me and the regional ones I'm still learning. Eight seats per dinner. Vegetarian options always.",
+    disciplines: ['Workshop', 'Meet'],
+    neighborhood: 'Neukölln',
+    experiences: [
+      {
+        title: 'Chef & Host',
+        organisation: 'Sofra Supper Club',
+        start_date: '2022-04',
+        end_date: null,
+        description: 'Monthly Anatolian-themed dinners.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-soundbath',
+    email: 'soundbath@sphaer.demo',
+    displayName: 'Anke Peters',
+    username: 'anke.peters',
+    avatarUrl: 'https://i.pravatar.cc/300?img=44',
+    bio: 'Sound bath facilitator, gong, singing bowls',
+    about:
+      'I run weekly sound bath evenings in Kreuzberg with a small ensemble of singing bowls, gongs, and koshi chimes. 90 minutes, low light, no spiritual sales pitch.',
+    disciplines: ['Wellness', 'Therapy', 'Workshop'],
+    neighborhood: 'Kreuzberg',
+    experiences: [
+      {
+        title: 'Facilitator',
+        organisation: 'Klang Kollektiv Berlin',
+        start_date: '2020-11',
+        end_date: null,
+        description: 'Weekly sound baths and breathwork sessions.',
+      },
+    ],
+  },
+  {
+    mockId: 'host-coding',
+    email: 'coding@sphaer.demo',
+    displayName: 'Robin Aldous',
+    username: 'robin.aldous',
+    avatarUrl: 'https://i.pravatar.cc/300?img=68',
+    bio: 'Creative coder, p5.js teacher, generative art',
+    about:
+      'I teach intro creative coding workshops with p5.js and Processing — for designers and artists who want to make tools instead of buy them. Also work on data-driven art commissions.',
+    disciplines: ['Art', 'Workshop', 'Education'],
+    neighborhood: 'Friedrichshain',
+    experiences: [
+      {
+        title: 'Workshop Lead',
+        organisation: 'Codestream Berlin',
+        start_date: '2021-03',
+        end_date: null,
+        description: 'Creative coding intro classes for artists & designers.',
+      },
+    ],
+  },
+];
+
 function buildGhostSpecs(): GhostSpec[] {
-  const seen = new Map<string, GhostSpec>();
-  for (const event of MOCK_EVENTS) {
-    if (!event.creator || !event.creator_id) continue;
-    if (seen.has(event.creator_id)) continue;
-    const handle = event.creator_id.replace(/^host-/, '');
-    seen.set(event.creator_id, {
-      mockId: event.creator_id,
-      email: `${handle}@sphaer.demo`,
-      displayName: event.creator.display_name ?? 'Sphaer Demo',
-      avatarUrl: event.creator.avatar_url ?? '',
-      username: event.creator.username ?? handle,
-    });
-  }
-  return Array.from(seen.values());
+  return GHOST_SPECS;
 }
 
 /**
@@ -172,16 +538,34 @@ async function main() {
     process.stdout.write(`  ✓ ${spec.displayName.padEnd(28)} (${spec.email})\n`);
   }
 
-  // 2. Upsert profile rows (display_name set by trigger; we fill the rest)
+  // 2. Upsert profile rows (display_name set by trigger; we fill the rest).
+  //    Includes the rich bio/about/disciplines/experiences/neighborhood so
+  //    /user/<ghost-id> pages render full content instead of empty sections.
   console.log('▶ Updating ghost profiles…');
   for (const spec of ghostSpecs) {
     const uuid = ghostUuidByMockId.get(spec.mockId)!;
+    // Experiences need stable ids — generate one per entry, deterministic per
+    // ghost so re-runs don't duplicate.
+    const experiences = spec.experiences.map((exp, i) => ({
+      id: mockIdToUuid(`${spec.mockId}-exp-${i}`),
+      title: exp.title,
+      organisation: exp.organisation,
+      start_date: exp.start_date,
+      end_date: exp.end_date,
+      description: exp.description,
+    }));
+
     const { error } = await supabase
       .from('profiles')
       .update({
         display_name: spec.displayName,
         username: spec.username,
         avatar_url: spec.avatarUrl,
+        bio: spec.bio,
+        about: spec.about,
+        disciplines: spec.disciplines,
+        neighborhood: spec.neighborhood,
+        experiences,
         location: 'Berlin',
       })
       .eq('id', uuid);
