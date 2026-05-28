@@ -8,17 +8,23 @@ import {
   TouchableWithoutFeedback,
   Animated,
   StyleSheet,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, radius } from '@/constants/theme';
-import type { MockCircle } from '@/data/mockCircles';
+import { useAuthContext } from '@/context/AuthContext';
+import { joinCircle, isMember } from '@/services/circles.service';
+import type { CircleWithCounts } from '@/types/circle.types';
 
 interface CircleJoinSheetProps {
   /** The circle to preview. `null` keeps the sheet closed. */
-  circle: MockCircle | null;
+  circle: CircleWithCounts | null;
   onClose: () => void;
+  /** Optional: fires after a successful join so the parent can refetch. */
+  onJoined?: () => void;
 }
 
 const SHEET_HEIGHT = 460;
@@ -27,24 +33,31 @@ const ANIMATION_DURATION = 280;
 /**
  * Bottom sheet shown when a circle card is tapped. Mirrors the open/close
  * animation pattern of CreateMenuSheet: animate out fully before unmounting
- * so the slide-down is never cut off. Pressing "Join Circle" routes to the
- * circle detail page.
+ * so the slide-down is never cut off.
+ *
+ * Pressing "Join Circle" inserts the membership row via Supabase, then
+ * routes to the circle detail page. If the user is already a member, the
+ * button label flips to "View circle" and just navigates.
  */
-export function CircleJoinSheet({ circle, onClose }: CircleJoinSheetProps) {
+export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuthContext();
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   // Modal stays mounted until the close animation finishes.
   const [modalMounted, setModalMounted] = useState(false);
   // Keep rendering the last circle while the sheet slides away.
-  const [shown, setShown] = useState<MockCircle | null>(null);
+  const [shown, setShown] = useState<CircleWithCounts | null>(null);
+  const [alreadyMember, setAlreadyMember] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (circle) {
       setShown(circle);
       setModalMounted(true);
+      setAlreadyMember(false);
       translateY.setValue(SHEET_HEIGHT);
       backdropOpacity.setValue(0);
       Animated.parallel([
@@ -60,6 +73,13 @@ export function CircleJoinSheet({ circle, onClose }: CircleJoinSheetProps) {
           useNativeDriver: true,
         }),
       ]).start();
+
+      // Check membership in the background — flips the CTA label if needed.
+      if (user) {
+        isMember(user.id, circle.id)
+          .then(setAlreadyMember)
+          .catch(() => setAlreadyMember(false));
+      }
     } else if (modalMounted) {
       Animated.parallel([
         Animated.timing(translateY, {
@@ -74,14 +94,35 @@ export function CircleJoinSheet({ circle, onClose }: CircleJoinSheetProps) {
         }),
       ]).start(() => setModalMounted(false));
     }
-  }, [circle]);
+  }, [circle, user]);
 
-  function handleJoin() {
-    if (!shown) return;
+  async function handleJoin() {
+    if (!shown || busy) return;
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in to join circles.');
+      return;
+    }
+
     const id = shown.id;
-    onClose();
-    // Let the sheet animate down before navigating.
-    setTimeout(() => router.push(`/circles/${id}` as any), 300);
+
+    // If already a member, just navigate
+    if (alreadyMember) {
+      onClose();
+      setTimeout(() => router.push(`/circles/${id}` as any), 300);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await joinCircle(user.id, id);
+      onJoined?.();
+      onClose();
+      setTimeout(() => router.push(`/circles/${id}` as any), 300);
+    } catch (e: unknown) {
+      Alert.alert('Could not join', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!shown) return null;
@@ -122,7 +163,13 @@ export function CircleJoinSheet({ circle, onClose }: CircleJoinSheetProps) {
           <Ionicons name="close" size={22} color={colors.text.primary} />
         </TouchableOpacity>
 
-        <Image source={{ uri: shown.avatar_url }} style={styles.avatar} />
+        {shown.avatar_url ? (
+          <Image source={{ uri: shown.avatar_url }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Ionicons name="people" size={40} color={colors.text.tertiary} />
+          </View>
+        )}
 
         <Text style={styles.name}>{shown.name}</Text>
         <Text style={styles.meta}>
@@ -130,10 +177,23 @@ export function CircleJoinSheet({ circle, onClose }: CircleJoinSheetProps) {
           {shown.activities_count} activities
         </Text>
 
-        <Text style={styles.description}>{shown.description}</Text>
+        {shown.description && (
+          <Text style={styles.description}>{shown.description}</Text>
+        )}
 
-        <TouchableOpacity style={styles.joinButton} onPress={handleJoin} activeOpacity={0.85}>
-          <Text style={styles.joinButtonText}>Join Circle</Text>
+        <TouchableOpacity
+          style={[styles.joinButton, busy && { opacity: 0.6 }]}
+          onPress={handleJoin}
+          activeOpacity={0.85}
+          disabled={busy}
+        >
+          {busy ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={styles.joinButtonText}>
+              {alreadyMember ? 'View circle' : 'Join Circle'}
+            </Text>
+          )}
         </TouchableOpacity>
       </Animated.View>
     </Modal>
@@ -189,6 +249,10 @@ const styles = StyleSheet.create({
     borderRadius: AVATAR_SIZE / 2,
     backgroundColor: colors.surface,
     marginTop: spacing.md,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   name: {
     fontFamily: typography.fontFamily.display,

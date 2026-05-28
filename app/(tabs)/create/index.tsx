@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,26 +16,40 @@ import * as ImagePicker from 'expo-image-picker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Tag } from '@/components/ui/Tag';
-import { colors, typography, spacing } from '@/constants/theme';
+import { DateTimeField } from '@/components/ui/DateTimeField';
+import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { createEvent, uploadEventPoster } from '@/services/events.service';
+import { getAdminCircles } from '@/services/circles.service';
 import { EVENT_CATEGORIES } from '@/constants/categories';
+import type { CircleWithCounts } from '@/types/circle.types';
 
 export default function CreateScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
 
   const [title, setTitle] = useState('');
-  const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
   const [locationName, setLocationName] = useState('');
   const [address, setAddress] = useState('');
-  const [startsAt, setStartsAt] = useState('');
+  const [startsAt, setStartsAt] = useState<Date | null>(null);
+  const [endsAt, setEndsAt] = useState<Date | null>(null);
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [posterUri, setPosterUri] = useState<string | null>(null);
+  const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
+  const [adminCircles, setAdminCircles] = useState<CircleWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Load circles the user can host as (admin role). Trigger guarantees every
+  // circle they created lands here.
+  useEffect(() => {
+    if (!user) return;
+    getAdminCircles(user.id)
+      .then(setAdminCircles)
+      .catch(() => setAdminCircles([]));
+  }, [user]);
 
   function toggleCategory(cat: string) {
     setCategories((prev) =>
@@ -44,6 +58,11 @@ export default function CreateScreen() {
   }
 
   async function pickPoster() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to add a poster.');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -62,41 +81,46 @@ export default function CreateScreen() {
       return;
     }
     if (!startsAt) {
-      Alert.alert('Date required', 'Please add a date for your activity.');
+      Alert.alert('Start time required', 'Please pick a start date and time.');
+      return;
+    }
+    if (endsAt && endsAt <= startsAt) {
+      Alert.alert('End must be after start', 'Please pick an end time later than the start.');
       return;
     }
 
     setIsLoading(true);
     try {
       const eventId = crypto.randomUUID();
-      let posterUrl: string | undefined;
+      let posterUrl: string | null = null;
 
       if (posterUri) {
-        posterUrl = await uploadEventPoster(eventId, posterUri);
+        posterUrl = await uploadEventPoster(user.id, eventId, posterUri);
       }
 
       await createEvent({
         id: eventId,
         creator_id: user.id,
-        circle_id: null,
+        circle_id: selectedCircleId,
         title: title.trim(),
         description: description.trim() || null,
         location_name: locationName.trim() || null,
         address: address.trim() || null,
         lat: null,
         lng: null,
-        starts_at: new Date(startsAt).toISOString(),
-        ends_at: null,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt ? endsAt.toISOString() : null,
         categories,
-        poster_url: posterUrl ?? null,
+        poster_url: posterUrl,
         ticket_url: null,
         is_free: isFree,
         price: !isFree && price ? parseFloat(price) : null,
       });
 
-      Alert.alert('Created!', 'Your activity is live.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/feed') },
-      ]);
+      // Trigger has already auto-registered the creator. Navigate
+      // straight to the feed — useFocusEffect there will refetch and the
+      // new activity appears on top (sorted by created_at desc).
+      router.replace('/(tabs)/feed');
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create activity.');
     } finally {
@@ -117,7 +141,7 @@ export default function CreateScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>Choose topics?</Text>
+        <Text style={styles.sectionLabel}>Choose topics</Text>
         <View style={styles.tags}>
           {EVENT_CATEGORIES.map((cat) => (
             <Tag
@@ -135,12 +159,6 @@ export default function CreateScreen() {
             placeholder=""
             value={title}
             onChangeText={setTitle}
-          />
-          <Input
-            label="Sub Title"
-            placeholder=""
-            value={subtitle}
-            onChangeText={setSubtitle}
           />
           <View>
             <Text style={styles.inputLabel}>Describe</Text>
@@ -168,12 +186,20 @@ export default function CreateScreen() {
             value={address}
             onChangeText={setAddress}
           />
-          <Input
-            label="Date & Time"
-            icon="calendar-outline"
-            placeholder="e.g. 2025-06-15T19:00"
+          <DateTimeField
+            label="Starts"
             value={startsAt}
-            onChangeText={setStartsAt}
+            onChange={setStartsAt}
+            placeholder="Pick a start time"
+            minimumDate={new Date()}
+          />
+          <DateTimeField
+            label="Ends (optional)"
+            value={endsAt}
+            onChange={setEndsAt}
+            placeholder="Pick an end time"
+            clearable
+            minimumDate={startsAt ?? new Date()}
           />
 
           <View style={styles.priceRow}>
@@ -204,6 +230,59 @@ export default function CreateScreen() {
               onChangeText={setPrice}
               keyboardType="decimal-pad"
             />
+          )}
+
+          {/* Circle association — only render if user admins any circles */}
+          {adminCircles.length > 0 && (
+            <View>
+              <Text style={styles.inputLabel}>Host as</Text>
+              <View style={styles.circlePicker}>
+                <TouchableOpacity
+                  style={[styles.circlePill, !selectedCircleId && styles.circlePillActive]}
+                  onPress={() => setSelectedCircleId(null)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={14}
+                    color={!selectedCircleId ? colors.white : colors.text.secondary}
+                  />
+                  <Text
+                    style={[
+                      styles.circlePillText,
+                      !selectedCircleId && styles.circlePillTextActive,
+                    ]}
+                  >
+                    Just me
+                  </Text>
+                </TouchableOpacity>
+                {adminCircles.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[
+                      styles.circlePill,
+                      selectedCircleId === c.id && styles.circlePillActive,
+                    ]}
+                    onPress={() => setSelectedCircleId(c.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="people-outline"
+                      size={14}
+                      color={selectedCircleId === c.id ? colors.white : colors.text.secondary}
+                    />
+                    <Text
+                      style={[
+                        styles.circlePillText,
+                        selectedCircleId === c.id && styles.circlePillTextActive,
+                      ]}
+                    >
+                      {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           )}
         </View>
 
@@ -288,6 +367,32 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   priceToggleTextActive: { color: colors.white },
+  circlePicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  circlePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  circlePillActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  circlePillText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  circlePillTextActive: { color: colors.white },
   posterPicker: { borderRadius: 12, overflow: 'hidden' },
   posterPreview: { width: '100%', height: 240 },
   posterPlaceholder: {

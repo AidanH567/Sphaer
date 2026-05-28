@@ -1,18 +1,6 @@
-import React, { useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Keyboard,
-  Pressable,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography } from '@/constants/theme';
+import React, { useState } from 'react';
 import { ViewToggle } from './ViewToggle';
-import { FilterBar } from './FilterBar';
+import { SearchFilterBar } from './SearchFilterBar';
 
 type FeedView = 'list' | 'map' | 'mural';
 
@@ -21,154 +9,39 @@ interface FeedHeaderProps {
   onViewChange: (view: FeedView) => void;
   selectedCategories?: string[];
   onToggleCategory: (category: string) => void;
+  /** Optional: emit each keystroke of the search bar to the parent. */
+  onSearchChange?: (text: string) => void;
 }
 
+/**
+ * Activity feed header: search bar, view toggle (Feed/Map/Mural), category
+ * filter chips. Thin wrapper around the shared SearchFilterBar component;
+ * map.tsx and mural.tsx use this component too, so its public API is
+ * deliberately stable — the search text state stays internal here unless
+ * the parent provides an `onSearchChange` callback.
+ */
 export function FeedHeader({
   activeView,
   onViewChange,
   selectedCategories,
   onToggleCategory,
+  onSearchChange,
 }: FeedHeaderProps) {
-  const insets = useSafeAreaInsets();
-  const [searchActive, setSearchActive] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const [searchText, setSearchTextLocal] = useState('');
 
-  const prevView = useRef(activeView);
-  if (prevView.current !== activeView) {
-    prevView.current = activeView;
-    if (searchActive) setSearchActive(false);
-    if (searchText) setSearchText('');
-  }
-
-  const hasSelectedCategories = (selectedCategories?.length ?? 0) > 0;
-  const showCategories = searchActive || hasSelectedCategories;
-
-  function activateSearch() {
-    setSearchActive(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  }
-
-  function deactivateSearch() {
-    setSearchActive(false);
-    setSearchText('');
-    Keyboard.dismiss();
+  function handleSearchChange(next: string) {
+    setSearchTextLocal(next);
+    onSearchChange?.(next);
   }
 
   return (
-    <Pressable
-      style={[styles.container, { paddingTop: insets.top + 26 }]}
-      onPress={deactivateSearch}
-    >
-      <View style={styles.searchRow}>
-        {searchActive ? (
-          <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={22} color={colors.text.primary} />
-
-            <TextInput
-              ref={inputRef}
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search events..."
-              placeholderTextColor={colors.text.placeholder}
-              autoCapitalize="none"
-              returnKeyType="search"
-              onBlur={() => {
-                if (!hasSelectedCategories) {
-                  setSearchActive(false);
-                }
-              }}
-            />
-
-            {searchText.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchText('')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.searchBar}
-            onPress={activateSearch}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="search-outline" size={22} color={colors.text.primary} />
-            <Text style={styles.searchPlaceholder}>Berlin, what’s on today?!</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.viewToggleRow}>
-        <ViewToggle activeView={activeView} onViewChange={onViewChange} />
-      </View>
-
-      {showCategories && (
-        <View style={styles.filterWrapper}>
-          <FilterBar
-            selectedCategories={selectedCategories ?? []}
-            onToggleCategory={onToggleCategory}
-          />
-        </View>
-      )}
-    </Pressable>
+    <SearchFilterBar
+      searchText={searchText}
+      onSearchChange={handleSearchChange}
+      searchPlaceholder="Berlin, what’s on today?!"
+      selectedCategories={selectedCategories ?? []}
+      onToggleCategory={onToggleCategory}
+      middleSlot={<ViewToggle activeView={activeView} onViewChange={onViewChange} />}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.appleMail,
-    borderBottomWidth: 0,
-  },
-
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-    paddingBottom: 24,
-  },
-
-  searchBar: {
-    flex: 1,
-    height: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: colors.white,
-    borderRadius: 28,
-    paddingHorizontal: 20,
-
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 1,
-  },
-
-  searchPlaceholder: {
-    fontSize: 17,
-    color: colors.text.tertiary,
-    fontWeight: '400',
-  },
-
-  searchInput: {
-    flex: 1,
-    fontSize: 17,
-    color: colors.text.primary,
-    paddingVertical: 0,
-    minWidth: 0,
-  },
-
-  viewToggleRow: {
-    paddingHorizontal: 30,
-    paddingBottom: 20,
-  },
-
-  filterWrapper: {
-    paddingBottom: 12,
-  },
-});

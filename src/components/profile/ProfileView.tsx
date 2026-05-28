@@ -27,8 +27,16 @@ const BORDER = '#CCD0D7';
 
 interface ProfileViewProps {
   profile: MockProfile;
-  /** When true the Follow button is hidden (you can't follow yourself). */
+  /** When true the Follow button is replaced by an Edit Profile button. */
   isOwnProfile?: boolean;
+  /** Fires when the user taps Edit Profile (only shown when isOwnProfile). */
+  onEditPress?: () => void;
+  /**
+   * Trailing slot rendered after the Images section. Used to inject the
+   * "Available for work" placeholder bar on the own-profile tab without
+   * coupling that placeholder to this shared component.
+   */
+  trailingSlot?: React.ReactNode;
 }
 
 /**
@@ -36,9 +44,22 @@ interface ProfileViewProps {
  * (own profile) and the /user/[id] route (other artists). Matches the Figma
  * "Profile" frame: hero, about, activity, experience, testimonials, images.
  */
-export function ProfileView({ profile, isOwnProfile = false }: ProfileViewProps) {
+export function ProfileView({
+  profile,
+  isOwnProfile = false,
+  onEditPress,
+  trailingSlot,
+}: ProfileViewProps) {
   const [following, setFollowing] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
+
+  // Empty-state helpers — for a real, just-signed-up user most arrays will be
+  // empty. We hide whole sections when there's nothing to render rather than
+  // leaving lonely section headers floating in space.
+  const hasAbout = Boolean(profile.about && profile.about.trim().length > 0);
+  const hasActivities = profile.activities.length > 0;
+  const hasExperience = profile.experience.length > 0;
+  const hasImages = profile.images.length > 0;
 
   return (
     <ScrollView
@@ -78,7 +99,16 @@ export function ProfileView({ profile, isOwnProfile = false }: ProfileViewProps)
           <Stat label="Activities" value={profile.activitiesCount} />
         </View>
 
-        {!isOwnProfile && (
+        {isOwnProfile ? (
+          <TouchableOpacity
+            style={[styles.followButton, styles.editButton]}
+            onPress={onEditPress}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
+            <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
+          </TouchableOpacity>
+        ) : (
           <TouchableOpacity
             style={[styles.followButton, following && styles.followButtonActive]}
             onPress={() => {
@@ -95,87 +125,119 @@ export function ProfileView({ profile, isOwnProfile = false }: ProfileViewProps)
       </View>
 
       {/* ── About ────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader title="About" />
-        <Text style={styles.bodyText} numberOfLines={aboutExpanded ? undefined : 5}>
-          {profile.about}
-        </Text>
-        <TouchableOpacity onPress={() => setAboutExpanded((v) => !v)} activeOpacity={0.7}>
-          <Text style={styles.readMore}>
-            {aboutExpanded ? 'Read less' : 'Read more >'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <Divider />
+      {hasAbout ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="About" />
+            <Text style={styles.bodyText} numberOfLines={aboutExpanded ? undefined : 5}>
+              {profile.about}
+            </Text>
+            {profile.about.length > 200 && (
+              <TouchableOpacity onPress={() => setAboutExpanded((v) => !v)} activeOpacity={0.7}>
+                <Text style={styles.readMore}>
+                  {aboutExpanded ? 'Read less' : 'Read more >'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Divider />
+        </>
+      ) : isOwnProfile ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="About" />
+            <TouchableOpacity onPress={onEditPress} activeOpacity={0.7}>
+              <Text style={styles.emptyHint}>
+                Tell people about your work — tap Edit Profile to add an About section.
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Divider />
+        </>
+      ) : null}
 
       {/* ── Activity ─────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader title="Activity" />
-        <View style={styles.activityList}>
-          {profile.activities.map((activity) => (
-            <ProfileActivityCard key={activity.id} activity={activity} />
-          ))}
-        </View>
-      </View>
-
-      <Divider />
+      {hasActivities && (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Activity" />
+            <View style={styles.activityList}>
+              {profile.activities.map((activity) => (
+                <ProfileActivityCard key={activity.id} activity={activity} />
+              ))}
+            </View>
+          </View>
+          <Divider />
+        </>
+      )}
 
       {/* ── Experience ───────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader title="Experience" />
-        <View style={styles.experienceList}>
-          {profile.experience.map((item) => (
-            <View key={item.id} style={styles.experienceItem}>
-              <Text style={styles.experienceTitle}>{item.title}</Text>
-              <Text style={styles.bodyText}>{item.description}</Text>
+      {hasExperience ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Experience" />
+            <View style={styles.experienceList}>
+              {profile.experience.map((item) => (
+                <View key={item.id} style={styles.experienceItem}>
+                  <Text style={styles.experienceTitle}>{item.title}</Text>
+                  {item.description ? (
+                    <Text style={styles.bodyText}>{item.description}</Text>
+                  ) : null}
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-      </View>
-
-      <Divider />
+          </View>
+          <Divider />
+        </>
+      ) : isOwnProfile ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Experience" />
+            <TouchableOpacity onPress={onEditPress} activeOpacity={0.7}>
+              <Text style={styles.emptyHint}>
+                Add roles, residencies, and projects from Edit Profile.
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Divider />
+        </>
+      ) : null}
 
       {/* ── Testimonials ─────────────────────────────────── */}
       <View style={styles.section}>
-        <SectionHeader
-          title="Testimonials"
-          action={
-            <TouchableOpacity
-              onPress={() => console.log('[Profile] add testimonial')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="add-circle-outline" size={26} color={CHOCOLATE} />
-            </TouchableOpacity>
-          }
-        />
-        <View style={styles.testimonialList}>
-          {profile.testimonials.map((item) => (
-            <View key={item.id} style={styles.testimonialCard}>
-              <Text style={styles.testimonialAuthor}>{item.author}</Text>
-              <Text style={styles.testimonialQuote}>{`“${item.quote}”`}</Text>
-            </View>
-          ))}
-        </View>
+        <SectionHeader title="Testimonials" />
+        {profile.testimonials.length > 0 ? (
+          <View style={styles.testimonialList}>
+            {profile.testimonials.map((item) => (
+              <View key={item.id} style={styles.testimonialCard}>
+                <Text style={styles.testimonialAuthor}>{item.author}</Text>
+                <Text style={styles.testimonialQuote}>{`“${item.quote}”`}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.emptyHint}>No testimonials yet</Text>
+        )}
       </View>
 
       {/* ── Images ───────────────────────────────────────── */}
-      <View style={styles.section}>
-        <SectionHeader
-          title="Images"
-          action={
-            <TouchableOpacity
-              onPress={() => console.log('[Profile] view all images')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="chevron-forward" size={22} color={CHOCOLATE} />
-            </TouchableOpacity>
-          }
-        />
-        {profile.images[0] && (
-          <Image source={{ uri: profile.images[0] }} style={styles.image} resizeMode="cover" />
-        )}
-      </View>
+      {hasImages && (
+        <View style={styles.section}>
+          <SectionHeader title="Images" />
+          <View style={styles.imageGrid}>
+            {profile.images.slice(0, 6).map((src, i) => (
+              <Image
+                key={`${src}-${i}`}
+                source={{ uri: src }}
+                style={styles.imageTile}
+                resizeMode="cover"
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
+      {trailingSlot}
     </ScrollView>
   );
 }
@@ -312,6 +374,22 @@ const styles = StyleSheet.create({
   followTextActive: {
     color: CHOCOLATE,
   },
+  editButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editText: {
+    color: CHOCOLATE,
+  },
+  emptyHint: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: META,
+    fontStyle: 'italic',
+  },
 
   // Sections
   section: {
@@ -392,10 +470,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Images
-  image: {
-    width: '100%',
-    height: 238,
+  // Images — grid of up to 6 thumbnails
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  imageTile: {
+    width: '31.5%',
+    aspectRatio: 1,
     borderRadius: 7,
     backgroundColor: colors.surface,
   },

@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 import type { EventInsert, EventUpdate, EventWithRelations, EventFilters } from '@/types/event.types';
 
 export async function getEvents(filters?: EventFilters): Promise<EventWithRelations[]> {
+  // Newest-first: the feed shows freshly published activities at the top.
+  // (Future "upcoming events" view will re-sort by starts_at separately.)
   let query = supabase
     .from('events')
     .select(`
@@ -9,7 +11,7 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
       creator:profiles!events_creator_id_fkey(*),
       circle:circles(*)
     `)
-    .order('starts_at', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (filters?.search) {
     query = query.ilike('title', `%${filters.search}%`);
@@ -101,15 +103,30 @@ export async function getSavedEvents(userId: string): Promise<EventWithRelations
   return (data?.map((d) => d.event).filter(Boolean) as EventWithRelations[]) ?? [];
 }
 
-export async function uploadEventPoster(eventId: string, uri: string): Promise<string> {
-  const ext = uri.split('.').pop() ?? 'jpg';
-  const path = `${eventId}/poster.${ext}`;
+/**
+ * Upload an event poster to the `event-posters` storage bucket.
+ *
+ * Path scheme: `<userId>/<eventId>.<ext>` — the leading folder must be the
+ * authed user's ID to satisfy the bucket's RLS insert policy (owner-write).
+ * Bucket was created in 20260527000000_profile_v2.sql.
+ */
+export async function uploadEventPoster(
+  userId: string,
+  eventId: string,
+  uri: string
+): Promise<string> {
+  const extMatch = uri.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+  const rawExt = extMatch?.[1]?.toLowerCase();
+  const ext = !rawExt || rawExt.length > 5 ? 'jpg' : rawExt === 'jpeg' ? 'jpg' : rawExt;
+  const path = `${userId}/${eventId}.${ext}`;
   const response = await fetch(uri);
   const blob = await response.blob();
 
-  const { error } = await supabase.storage.from('posters').upload(path, blob, { upsert: true });
+  const { error } = await supabase.storage
+    .from('event-posters')
+    .upload(path, blob, { upsert: true, contentType: blob.type || `image/${ext}` });
   if (error) throw error;
 
-  const { data } = supabase.storage.from('posters').getPublicUrl(path);
-  return data.publicUrl;
+  const { data } = supabase.storage.from('event-posters').getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
 }

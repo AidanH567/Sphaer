@@ -1,32 +1,62 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { FlatList, View, Text, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { EventCard } from '@/components/feed/EventCard';
+import { useEvents } from '@/hooks/useEvents';
 import { colors, spacing, typography } from '@/constants/theme';
-import { MOCK_EVENTS } from '@/data/mockEvents';
 
-// NOTE: the Feed currently renders mock data from src/data/mockEvents.ts.
-// To switch to live Supabase data, replace MOCK_EVENTS with the useEvents()
-// hook (src/hooks/useEvents.ts) — the EventCard props are already compatible.
-
+/**
+ * Activity feed. Pulls real `events` rows from Supabase via useEvents().
+ * Mock data was retired when we moved to the seeded-demo strategy (see
+ * scripts/seed-demo-data.ts) — the database always has content.
+ *
+ * Filtering: category multi-select is sent to the service query (overlaps
+ * on `events.categories[]`). Search is client-side across title/description/
+ * location_name/address/categories — small data set, see grilling Q6c.
+ */
 export default function FeedScreen() {
   const router = useRouter();
   const { feedView, setFeedView, feedFilters, setFeedFilters } = useAppContext();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [searchText, setSearchText] = useState('');
 
-  // Feed is always chronological — sort by start date, then filter by category.
-  const events = useMemo(() => {
-    const selected = feedFilters.categories ?? [];
-    return [...MOCK_EVENTS]
-      .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))
-      .filter(
-        (e) =>
-          selected.length === 0 ||
-          (e.categories ?? []).some((c) => selected.includes(c))
-      );
-  }, [feedFilters.categories]);
+  const { events, isLoading, refetch } = useEvents({
+    categories: feedFilters.categories,
+  });
+
+  // Refetch whenever the feed comes back into focus — covers the
+  // "just created an activity, come back to feed" case.
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  // Newest first so freshly published activities land on top. Service query
+  // already orders by created_at desc; the client sort is defensive in case
+  // upcoming server changes shift ordering. Then apply client-side search.
+  const visibleEvents = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    const base = [...events].sort(
+      (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
+    );
+    if (q.length === 0) return base;
+    return base.filter((e) => {
+      const haystack = [
+        e.title,
+        e.description ?? '',
+        e.location_name ?? '',
+        e.address ?? '',
+        (e.categories ?? []).join(' '),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [events, searchText]);
 
   function toggleCategory(cat: string) {
     const current = feedFilters.categories ?? [];
@@ -55,15 +85,22 @@ export default function FeedScreen() {
         }}
         selectedCategories={feedFilters.categories ?? []}
         onToggleCategory={toggleCategory}
+        onSearchChange={setSearchText}
       />
 
-      {events.length === 0 ? (
+      {isLoading && events.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.empty}>No events found</Text>
+          <ActivityIndicator color={colors.black} />
+        </View>
+      ) : visibleEvents.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.empty}>
+            {searchText ? `No activities match "${searchText}"` : 'No activities yet'}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={events}
+          data={visibleEvents}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <EventCard
@@ -74,6 +111,9 @@ export default function FeedScreen() {
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.black} />
+          }
         />
       )}
     </View>
@@ -87,9 +127,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing.xl,
   },
   empty: {
+    fontFamily: typography.fontFamily.ui,
     fontSize: typography.fontSize.base,
     color: colors.text.tertiary,
+    textAlign: 'center',
   },
 });

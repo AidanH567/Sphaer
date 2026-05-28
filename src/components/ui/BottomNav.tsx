@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SphaerIcon } from '@/components/SphaerLogo';
 import { useAuthContext } from '@/context/AuthContext';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
 
 const ICON_SIZE = 24;
 const AVATAR_SIZE = 28;
@@ -23,7 +23,13 @@ const NAV_ITEMS: NavItem[] = [
   { route: '/(tabs)/profile',  segment: 'profile'  },
 ];
 
-function renderIcon(segment: string, focused: boolean, avatarUrl?: string | null) {
+interface ProfileBits {
+  avatarUrl?: string | null;
+  displayName?: string | null;
+  email?: string | null;
+}
+
+function renderIcon(segment: string, focused: boolean, profileBits: ProfileBits) {
   switch (segment) {
     case 'feed':
       return (
@@ -52,11 +58,22 @@ function renderIcon(segment: string, focused: boolean, avatarUrl?: string | null
           color={focused ? colors.black : colors.text.tertiary}
         />
       );
-    case 'profile':
+    case 'profile': {
+      const { avatarUrl, displayName, email } = profileBits;
       if (avatarUrl) {
         return (
           <View style={[styles.avatarRing, focused && styles.avatarRingActive]}>
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          </View>
+        );
+      }
+      const initials = getInitials(displayName, email);
+      if (initials) {
+        return (
+          <View style={[styles.avatarPlaceholder, focused && styles.avatarPlaceholderActive]}>
+            <Text style={[styles.initialsText, focused && styles.initialsTextActive]}>
+              {initials}
+            </Text>
           </View>
         );
       }
@@ -69,9 +86,29 @@ function renderIcon(segment: string, focused: boolean, avatarUrl?: string | null
           />
         </View>
       );
+    }
     default:
       return null;
   }
+}
+
+/**
+ * Derive 1–2 character initials from a display name; fall back to the email
+ * local-part. Returns '' if nothing usable — caller falls back to a person icon.
+ */
+function getInitials(displayName?: string | null, email?: string | null): string {
+  const name = displayName?.trim();
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    if (parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+    return parts[0][0].toUpperCase();
+  }
+  const local = email?.split('@')[0]?.trim();
+  if (local && local.length > 0) {
+    return local.slice(0, Math.min(2, local.length)).toUpperCase();
+  }
+  return '';
 }
 
 interface BottomNavProps {
@@ -82,7 +119,13 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { profile } = useAuthContext();
+  const { profile, user } = useAuthContext();
+
+  const profileBits: ProfileBits = {
+    avatarUrl: profile?.avatar_url,
+    displayName: profile?.display_name,
+    email: user?.email,
+  };
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom || spacing.sm }]}>
@@ -98,7 +141,7 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
           >
-            {renderIcon(segment, focused, profile?.avatar_url)}
+            {renderIcon(segment, focused, profileBits)}
           </TouchableOpacity>
         );
       })}
@@ -153,5 +196,14 @@ const styles = StyleSheet.create({
   avatarPlaceholderActive: {
     backgroundColor: colors.black,
     borderColor: colors.black,
+  },
+  initialsText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 11,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.tertiary,
+  },
+  initialsTextActive: {
+    color: colors.white,
   },
 });

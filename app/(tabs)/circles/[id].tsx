@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,26 +6,99 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CircleActivityCard } from '@/components/circles/CircleActivityCard';
 import { colors, typography, spacing, radius } from '@/constants/theme';
-import { getMockCircleById } from '@/data/mockCircles';
+import { useCircle } from '@/hooks/useCircles';
+import { useAuthContext } from '@/context/AuthContext';
+import {
+  isMember as isCircleMember,
+  joinCircle,
+  leaveCircle,
+} from '@/services/circles.service';
+import { supabase } from '@/lib/supabase';
+import type { EventWithRelations } from '@/types/event.types';
+import type { Profile } from '@/types/user.types';
 
-// NOTE: reads mock data from src/data/mockCircles.ts. To go live, swap
-// getMockCircleById() for the useCircle() hook (src/hooks/useCircles.ts).
+const MEMBERS_PREVIEW_LIMIT = 6;
 
 export default function CircleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const circle = getMockCircleById(id);
+  const { user } = useAuthContext();
 
-  // The user reaches this screen by pressing "Join Circle", so they are a member.
-  const [isMember, setIsMember] = useState(true);
+  const { circle, isLoading } = useCircle(id);
 
-  // Graceful state for an unknown id — never throws.
+  const [memberStatus, setMemberStatus] = useState<'unknown' | 'in' | 'out'>('unknown');
+  const [activities, setActivities] = useState<EventWithRelations[]>([]);
+  const [membersPreview, setMembersPreview] = useState<Profile[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  // Check current membership + fetch upcoming activities + member preview
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+
+    Promise.all([
+      user ? isCircleMember(user.id, id).catch(() => false) : Promise.resolve(false),
+      fetchCircleActivities(id),
+      fetchCircleMembersPreview(id, MEMBERS_PREVIEW_LIMIT),
+    ]).then(([memberFlag, acts, members]) => {
+      if (!active) return;
+      setMemberStatus(memberFlag ? 'in' : 'out');
+      setActivities(acts);
+      setMembersPreview(members);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [id, user]);
+
+  const handleMembership = useCallback(async () => {
+    if (!user || !circle) {
+      Alert.alert('Sign in required', 'Please sign in to join circles.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (memberStatus === 'in') {
+        await leaveCircle(user.id, circle.id);
+        setMemberStatus('out');
+      } else {
+        await joinCircle(user.id, circle.id);
+        setMemberStatus('in');
+      }
+      // Refresh members preview
+      const next = await fetchCircleMembersPreview(circle.id, MEMBERS_PREVIEW_LIMIT);
+      setMembersPreview(next);
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }, [user, circle, memberStatus]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.black} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!circle) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -41,11 +114,11 @@ export default function CircleDetailScreen() {
     );
   }
 
-  const hiddenMembers = Math.max(0, circle.members_count - circle.membersPreview.length);
+  const isMemberFlag = memberStatus === 'in';
+  const hiddenMembers = Math.max(0, circle.members_count - membersPreview.length);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.navBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
@@ -58,8 +131,18 @@ export default function CircleDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Banner + overlapping avatar */}
         <View style={styles.bannerWrap}>
-          <Image source={{ uri: circle.cover_url }} style={styles.cover} resizeMode="cover" />
-          <Image source={{ uri: circle.avatar_url }} style={styles.avatar} />
+          {circle.cover_url ? (
+            <Image source={{ uri: circle.cover_url }} style={styles.cover} resizeMode="cover" />
+          ) : (
+            <View style={[styles.cover, styles.coverPlaceholder]} />
+          )}
+          {circle.avatar_url ? (
+            <Image source={{ uri: circle.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Ionicons name="people" size={32} color={colors.text.tertiary} />
+            </View>
+          )}
         </View>
 
         <View style={styles.body}>
@@ -68,74 +151,123 @@ export default function CircleDetailScreen() {
             {circle.members_count.toLocaleString('de-DE')} members{'  ·  '}
             {circle.activities_count} activities
           </Text>
-          <Text style={styles.description}>{circle.description}</Text>
+          {circle.description && (
+            <Text style={styles.description}>{circle.description}</Text>
+          )}
 
-          {/* Membership button */}
           <TouchableOpacity
-            style={[styles.membershipButton, !isMember && styles.membershipButtonJoin]}
-            onPress={() => setIsMember((v) => !v)}
+            style={[styles.membershipButton, !isMemberFlag && styles.membershipButtonJoin]}
+            onPress={handleMembership}
             activeOpacity={0.85}
+            disabled={busy || memberStatus === 'unknown'}
           >
-            <Ionicons
-              name={isMember ? 'person' : 'person-add-outline'}
-              size={18}
-              color={isMember ? colors.text.primary : colors.white}
-            />
-            <Text style={[styles.membershipText, !isMember && styles.membershipTextJoin]}>
-              {isMember ? "You're a member" : 'Join circle'}
-            </Text>
+            {busy ? (
+              <ActivityIndicator color={isMemberFlag ? colors.black : colors.white} />
+            ) : (
+              <>
+                <Ionicons
+                  name={isMemberFlag ? 'person' : 'person-add-outline'}
+                  size={18}
+                  color={isMemberFlag ? colors.text.primary : colors.white}
+                />
+                <Text
+                  style={[styles.membershipText, !isMemberFlag && styles.membershipTextJoin]}
+                >
+                  {isMemberFlag ? "You're a member" : 'Join circle'}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          {/* Join conversation */}
-          <TouchableOpacity style={styles.conversationButton} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.conversationButton}
+            activeOpacity={0.85}
+            onPress={() => Alert.alert('Coming soon', 'Circle conversations are not wired up yet.')}
+          >
             <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
             <Text style={styles.conversationText}>Join conversation</Text>
           </TouchableOpacity>
 
           <View style={styles.divider} />
 
-          {/* Upcoming Activities */}
+          {/* Upcoming Activities — real events with circle_id == this circle */}
           <Text style={styles.sectionHeading}>Upcoming Activities</Text>
-          {circle.upcomingActivities.map((activity) => (
-            <CircleActivityCard key={activity.id} activity={activity} />
-          ))}
+          {activities.length === 0 ? (
+            <Text style={styles.emptyHint}>No upcoming activities yet.</Text>
+          ) : (
+            activities.map((activity) => (
+              <CircleActivityCard
+                key={activity.id}
+                activity={{
+                  id: activity.id,
+                  title: activity.title,
+                  dateLabel: new Date(activity.starts_at).toLocaleDateString('en-GB', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  }),
+                  timeLabel: new Date(activity.starts_at).toLocaleTimeString(undefined, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                  image: activity.poster_url ?? '',
+                }}
+              />
+            ))
+          )}
 
           <View style={styles.divider} />
 
-          {/* Members */}
+          {/* Members preview */}
           <Text style={styles.sectionHeading}>Members</Text>
-          <View style={styles.membersRow}>
-            {circle.membersPreview.map((member, i) => (
-              <Image
-                key={member.id}
-                source={{ uri: member.avatar }}
-                style={[styles.memberAvatar, i > 0 && styles.memberAvatarOverlap]}
-              />
-            ))}
-            {hiddenMembers > 0 && (
-              <Text style={styles.memberMore}>
-                +{hiddenMembers.toLocaleString('de-DE')}
-              </Text>
-            )}
-          </View>
-
-          {/* From the community */}
-          {circle.communityPosts.length > 0 && (
-            <>
-              <View style={styles.divider} />
-              <Text style={styles.sectionHeading}>From the community</Text>
-              {circle.communityPosts.map((post) => (
-                <View key={post.id} style={styles.postCard}>
-                  <Text style={styles.postTitle}>{post.title}</Text>
-                  <Text style={styles.postAuthor}>by {post.author}</Text>
-                </View>
+          {membersPreview.length === 0 ? (
+            <Text style={styles.emptyHint}>No members yet.</Text>
+          ) : (
+            <View style={styles.membersRow}>
+              {membersPreview.map((member, i) => (
+                <Image
+                  key={member.id}
+                  source={{ uri: member.avatar_url ?? '' }}
+                  style={[styles.memberAvatar, i > 0 && styles.memberAvatarOverlap]}
+                />
               ))}
-            </>
+              {hiddenMembers > 0 && (
+                <Text style={styles.memberMore}>
+                  +{hiddenMembers.toLocaleString('de-DE')}
+                </Text>
+              )}
+            </View>
           )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/* ── Helpers (could live in circles.service later) ────────── */
+
+async function fetchCircleActivities(circleId: string): Promise<EventWithRelations[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(`*, creator:profiles!events_creator_id_fkey(*), circle:circles(*)`)
+    .eq('circle_id', circleId)
+    .gte('starts_at', new Date().toISOString())
+    .order('starts_at', { ascending: true })
+    .limit(5);
+  if (error) return [];
+  return (data as EventWithRelations[]) ?? [];
+}
+
+async function fetchCircleMembersPreview(circleId: string, limit: number): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('circle_members')
+    .select('user:profiles!circle_members_user_id_fkey(*)')
+    .eq('circle_id', circleId)
+    .limit(limit);
+  if (error) return [];
+  return (data ?? [])
+    .map((row) => (row as { user: Profile | null }).user)
+    .filter((p): p is Profile => p !== null);
 }
 
 const AVATAR_SIZE = 88;
@@ -157,14 +289,9 @@ const styles = StyleSheet.create({
 
   scroll: { paddingBottom: 110 },
 
-  bannerWrap: {
-    marginBottom: AVATAR_SIZE / 2,
-  },
-  cover: {
-    width: '100%',
-    height: COVER_HEIGHT,
-    backgroundColor: colors.surface,
-  },
+  bannerWrap: { marginBottom: AVATAR_SIZE / 2 },
+  cover: { width: '100%', height: COVER_HEIGHT, backgroundColor: colors.surface },
+  coverPlaceholder: { backgroundColor: '#E7E2D5' },
   avatar: {
     position: 'absolute',
     left: spacing.base,
@@ -176,11 +303,12 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
     backgroundColor: colors.surface,
   },
-
-  body: {
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.md,
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+
+  body: { paddingHorizontal: spacing.base, paddingTop: spacing.md },
 
   name: {
     fontFamily: typography.fontFamily.display,
@@ -202,7 +330,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
 
-  // Membership button — outlined when member, dark when not
   membershipButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -214,10 +341,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginTop: spacing.lg,
   },
-  membershipButtonJoin: {
-    backgroundColor: colors.black,
-    borderColor: colors.black,
-  },
+  membershipButtonJoin: { backgroundColor: colors.black, borderColor: colors.black },
   membershipText: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 16,
@@ -257,11 +381,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
-  // Members preview
-  membersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  emptyHint: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 14,
+    color: colors.text.tertiary,
+    fontStyle: 'italic',
   },
+
+  membersRow: { flexDirection: 'row', alignItems: 'center' },
   memberAvatar: {
     width: 40,
     height: 40,
@@ -270,34 +397,12 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
     backgroundColor: colors.surface,
   },
-  memberAvatarOverlap: {
-    marginLeft: -12,
-  },
+  memberAvatarOverlap: { marginLeft: -12 },
   memberMore: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 15,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.secondary,
     marginLeft: spacing.md,
-  },
-
-  // Community posts
-  postCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.base,
-    marginBottom: spacing.sm,
-    gap: 2,
-  },
-  postTitle: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 15,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  postAuthor: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
-    color: colors.text.tertiary,
   },
 });

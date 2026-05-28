@@ -9,11 +9,12 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '@/constants/theme';
-import type { MockEvent } from '@/data/mockEvents';
+import type { EventWithRelations } from '@/types/event.types';
 
 // Exact colours from the Figma SVG export.
 const CHOCOLATE = '#2B2A27';
@@ -36,9 +37,12 @@ export interface RegistrationDetails {
 
 interface EventRegistrationSheetProps {
   visible: boolean;
-  event: MockEvent | null;
+  event: EventWithRelations | null;
   onClose: () => void;
-  onRegister?: (details: RegistrationDetails) => void;
+  /** Async — called when the user taps Register. The sheet awaits the
+   * promise, disables the button while in-flight, and shows success or
+   * error alerts based on the resolution. */
+  onRegister?: (details: RegistrationDetails) => Promise<void> | void;
 }
 
 /** "Fri. 03. April" — weekday + 2-digit day + full month. */
@@ -126,22 +130,38 @@ export function EventRegistrationSheet({
   const streetLine = addressParts[0]?.trim() || event.location_name || 'Berlin';
   const cityLine = addressParts.slice(1).join(',').trim();
 
-  function handleRegister() {
-    if (!event) return;
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  async function handleRegister() {
+    if (!event || isRegistering) return;
     const details: RegistrationDetails = {
       eventId: event.id,
       eventTitle: event.title,
       quantity,
       total,
     };
-    // No payment / Supabase yet — log the intent and confirm.
-    console.log('[EventRegistration] register', details);
-    onRegister?.(details);
-    Alert.alert(
-      "You're registered",
-      `${quantity} x Admission for "${event.title}".`,
-    );
-    onClose();
+
+    if (!onRegister) {
+      // No handler wired — surface a friendly message instead of a silent no-op
+      Alert.alert('Coming soon', 'Registration is not yet wired up for this event.');
+      return;
+    }
+
+    setIsRegistering(true);
+    try {
+      await onRegister(details);
+      Alert.alert(
+        "You're going",
+        quantity === 1
+          ? `You've registered for "${event.title}".`
+          : `${quantity} tickets booked for "${event.title}".`,
+      );
+      onClose();
+    } catch (e: unknown) {
+      Alert.alert('Registration failed', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setIsRegistering(false);
+    }
   }
 
   return (
@@ -259,11 +279,16 @@ export function EventRegistrationSheet({
             </View>
 
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[styles.registerButton, isRegistering && { opacity: 0.6 }]}
               onPress={handleRegister}
               activeOpacity={0.85}
+              disabled={isRegistering}
             >
-              <Text style={styles.registerText}>Register</Text>
+              {isRegistering ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.registerText}>Register</Text>
+              )}
             </TouchableOpacity>
           </View>
         </Animated.View>

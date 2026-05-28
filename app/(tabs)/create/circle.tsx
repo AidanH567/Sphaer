@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Tag } from '@/components/ui/Tag';
 import { colors, typography, spacing } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { createCircle, updateCircle, uploadCircleImage } from '@/services/circles.service';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 
 export default function CreateCircleScreen() {
@@ -37,6 +37,11 @@ export default function CreateCircleScreen() {
   }
 
   async function pickAvatar() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to add a circle photo.');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -57,22 +62,33 @@ export default function CreateCircleScreen() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.from('circles').insert({
-        id: crypto.randomUUID(),
+      const circleId = crypto.randomUUID();
+
+      // Upload avatar BEFORE the circle insert so we have a URL to store.
+      // We can't reuse the upload-then-update pattern cleanly because the
+      // storage path needs the user id (RLS), not the circle id alone.
+      let avatarUrl: string | null = null;
+      if (avatarUri) {
+        avatarUrl = await uploadCircleImage(user.id, circleId, avatarUri, 'avatar');
+      }
+
+      // Create the circle row. Trigger `on_circle_created` will add the
+      // creator to circle_members with role='admin' atomically.
+      await createCircle({
+        id: circleId,
         creator_id: user.id,
         name: name.trim(),
         description: description.trim() || null,
         tags,
         is_public: true,
-        avatar_url: null,
+        avatar_url: avatarUrl,
         cover_url: null,
       });
 
-      if (error) throw error;
-
-      Alert.alert('Circle created!', `${name} is live.`, [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/circles') },
-      ]);
+      // Trigger has already added the creator as admin. Navigate straight
+      // to the circles page — useFocusEffect there will refetch and the
+      // new circle appears in the appropriate tag group.
+      router.replace('/(tabs)/circles');
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create circle.');
     } finally {

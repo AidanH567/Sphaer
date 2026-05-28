@@ -7,11 +7,11 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function signUp(email: string, password: string, username: string) {
+  async function signUp(email: string, password: string, displayName: string) {
     setIsLoading(true);
     setError(null);
     try {
-      await authService.signUpWithEmail(email, password, username);
+      await authService.signUpWithEmail(email, password, displayName);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Sign up failed');
       throw e;

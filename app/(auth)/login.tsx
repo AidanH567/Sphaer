@@ -6,17 +6,26 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SphaerIcon } from '@/components/SphaerLogo';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { colors, typography, spacing } from '@/constants/theme';
+import {
+  AuthField,
+  AuthPrimaryButton,
+  GoogleButton,
+  OrDivider,
+} from '@/components/auth/AuthControls';
+import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+
+// Figma tokens (Sign Up Flow Screen 1.1 — login is restyled to match)
+const CHOCOLATE = '#2B2A27';
+const META = '#5A5A5A';
+const LINK_BLUE = '#367AFF';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -24,7 +33,6 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -38,11 +46,23 @@ export default function LoginScreen() {
     }
   }
 
+  function handleGoogle() {
+    console.log('[Login] continue with google');
+    Alert.alert('Coming soon', 'Continue with Google is not wired up yet.');
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-        <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
-      </TouchableOpacity>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Close (X) — top right */}
+      <View style={styles.navBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.closeButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="close" size={24} color={CHOCOLATE} />
+        </TouchableOpacity>
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -53,88 +73,140 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.logoWrap}>
-            <SphaerIcon size={68} />
+          <View style={styles.main}>
+            <View style={styles.hero}>
+              <SphaerIcon size={78} />
+              <Text style={styles.title}>Welcome Back</Text>
+              <Text style={styles.subtitle}>Log in to your account</Text>
+            </View>
+
+            <View style={styles.form}>
+              <AuthField
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="your@email.com"
+                keyboardType="email-address"
+                autoComplete="email"
+              />
+              <AuthField
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Your password"
+                secureTextEntry
+                autoComplete="password"
+              />
+
+              <TouchableOpacity
+                style={styles.forgotWrap}
+                onPress={() => Alert.alert('Coming soon', 'Password reset is not wired up yet.')}
+              >
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+
+              <AuthPrimaryButton label="Log in" onPress={handleLogin} isLoading={isLoading} />
+            </View>
+
+            <View style={styles.social}>
+              <OrDivider />
+              <GoogleButton onPress={handleGoogle} />
+              <Text style={styles.signupPrompt}>
+                Don’t have an account?{' '}
+                <Text style={styles.signupLink} onPress={() => router.replace('/(auth)/signup')}>
+                  Sign up
+                </Text>
+              </Text>
+            </View>
           </View>
-
-          <View style={styles.heading}>
-            <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Log in to your account.</Text>
-          </View>
-
-          <View style={styles.form}>
-            <Input
-              label="Email"
-              icon="mail-outline"
-              placeholder="your@email.com"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <Input
-              label="Password"
-              icon="lock-closed-outline"
-              placeholder="Your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-              onRightIconPress={() => setShowPassword((v) => !v)}
-            />
-          </View>
-
-          <Button
-            label="Log in"
-            onPress={handleLogin}
-            isLoading={isLoading}
-            style={styles.submitButton}
-          />
-
-          <Text style={styles.signupPrompt}>
-            Don't have an account?{' '}
-            <Text style={styles.signupLink} onPress={() => router.replace('/(auth)/signup')}>
-              Sign up
-            </Text>
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+const MAX_CONTENT_WIDTH = 358;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  back: { padding: spacing.base },
+
+  navBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   keyboardView: { flex: 1 },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing['3xl'],
+    paddingHorizontal: 16,
+    paddingBottom: 32,
   },
-  logoWrap: { alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.xl },
-  heading: { alignItems: 'center', marginBottom: spacing['2xl'], gap: spacing.xs },
+
+  main: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+  },
+
+  hero: {
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignItems: 'center',
+    gap: 8,
+  },
   title: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 26,
+    lineHeight: 28,
+    color: CHOCOLATE,
     textAlign: 'center',
+    marginTop: 4,
   },
   subtitle: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 14,
+    color: META,
     textAlign: 'center',
   },
-  form: { gap: spacing.base, marginBottom: spacing.xl },
-  submitButton: { marginBottom: spacing.lg },
+
+  form: {
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    gap: 16,
+  },
+  forgotWrap: {
+    alignSelf: 'flex-end',
+    marginTop: -4,
+  },
+  forgotText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: CHOCOLATE,
+    textDecorationLine: 'underline',
+  },
+
+  social: {
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignItems: 'center',
+    gap: 20,
+  },
   signupPrompt: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 14,
+    color: META,
     textAlign: 'center',
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
   },
   signupLink: {
-    color: colors.text.primary,
-    fontWeight: typography.fontWeight.semibold,
-    textDecorationLine: 'underline',
+    color: LINK_BLUE,
   },
 });

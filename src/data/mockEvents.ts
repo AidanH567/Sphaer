@@ -44,6 +44,9 @@ function makeHost(
     disciplines: [],
     location: 'Berlin',
     website: null,
+    about: null,
+    neighborhood: null,
+    experiences: [],
     created_at: '2025-01-01T00:00:00',
   };
 }

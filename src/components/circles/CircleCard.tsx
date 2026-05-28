@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
-import type { MockCircle } from '@/data/mockCircles';
+import type { CircleWithCounts } from '@/types/circle.types';
 
 interface CircleCardProps {
-  circle: MockCircle;
+  circle: CircleWithCounts;
   /** Tapping the card opens the join sheet — the explore page owns that state. */
   onPress: () => void;
 }
@@ -25,7 +26,13 @@ const META = '#9E9D94'; // neutral/neutral-400 — activity / member counts
 export function CircleCard({ circle, onPress }: CircleCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
-      <Image source={{ uri: circle.avatar_url }} style={styles.image} />
+      {circle.avatar_url ? (
+        <Image source={{ uri: circle.avatar_url }} style={styles.image} />
+      ) : (
+        <View style={[styles.image, styles.imagePlaceholder]}>
+          <Ionicons name="people" size={48} color={colors.text.tertiary} />
+        </View>
+      )}
 
       <View style={styles.content}>
         <Text style={styles.title} numberOfLines={3}>
@@ -67,6 +74,10 @@ const styles = StyleSheet.create({
     height: IMAGE_SIZE,
     borderRadius: IMAGE_SIZE / 2,
     backgroundColor: colors.surface,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     width: '100%',

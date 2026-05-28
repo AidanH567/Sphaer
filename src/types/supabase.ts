@@ -1,5 +1,19 @@
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
+/**
+ * One experience entry stored inside `profiles.experiences` (JSONB array).
+ * Shape is enforced in the app — the column is JSONB, the validation lives in
+ * `ProfileForm`. Keep this in sync with the form's local types.
+ */
+export interface ProfileExperienceEntry {
+  id: string; // client-generated UUID
+  title: string;
+  organisation: string | null;
+  start_date: string | null; // ISO yyyy-mm or yyyy-mm-dd
+  end_date: string | null;   // null = "Present"
+  description: string | null;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -14,12 +28,34 @@ export interface Database {
           disciplines: string[] | null;
           location: string | null;
           website: string | null;
+          // Added in 20260527000000_profile_v2.sql
+          about: string | null;
+          neighborhood: string | null;
+          experiences: ProfileExperienceEntry[];
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at'> & {
+        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'experiences'> & {
           created_at?: string;
+          experiences?: ProfileExperienceEntry[];
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
+      };
+      profile_images: {
+        Row: {
+          id: string;
+          profile_id: string;
+          path: string;            // storage path in the `profile-gallery` bucket
+          caption: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['profile_images']['Row'], 'id' | 'created_at' | 'caption' | 'sort_order'> & {
+          id?: string;
+          caption?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['profile_images']['Insert']>;
       };
       events: {
         Row: {
@@ -109,6 +145,19 @@ export interface Database {
           saved_at?: string;
         };
         Update: Partial<Database['public']['Tables']['saved_events']['Insert']>;
+      };
+      event_registrations: {
+        Row: {
+          event_id: string;
+          user_id: string;
+          quantity: number;
+          registered_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['event_registrations']['Row'], 'registered_at' | 'quantity'> & {
+          quantity?: number;
+          registered_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['event_registrations']['Insert']>;
       };
       messages: {
         Row: {

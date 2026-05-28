@@ -1,80 +1,107 @@
 import React from 'react';
-import { View, FlatList, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthContext } from '@/context/AuthContext';
-import { useProfile } from '@/hooks/useProfile';
-import { useMessages } from '@/hooks/useMessages';
-import { ChatBubble } from '@/components/messaging/ChatBubble';
-import { MessageInput } from '@/components/messaging/MessageInput';
-import { Avatar } from '@/components/ui/Avatar';
-import { colors, typography, spacing } from '@/constants/theme';
+import { getConversationById } from '@/data/mockMessages';
+import { typography } from '@/constants/theme';
 
-export default function ConversationScreen() {
-  const { id: partnerId } = useLocalSearchParams<{ id: string }>();
+// NOTE: placeholder chat detail. To go live, query the `messages` table
+// scoped to (sender_id, recipient_id) or `circle_id`, subscribe via Supabase
+// Realtime, and render a message bubble list.
+
+const CREAM = '#FCFCF9';
+const INK = '#1B1B18';
+const META = '#767779';
+
+export default function ChatDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuthContext();
-  const { profile: partner } = useProfile(partnerId);
-  const { messages, isLoading, sendMessage } = useMessages(user?.id, partnerId);
+  const conversation = getConversationById(id);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <Ionicons name="chevron-back" size={24} color={INK} />
         </TouchableOpacity>
-        {partner && (
-          <TouchableOpacity
-            style={styles.partnerInfo}
-            onPress={() => router.push(`/user/${partnerId}`)}
-          >
-            <Avatar uri={partner.avatar_url} name={partner.display_name ?? ''} size={32} />
-            <Text style={styles.partnerName}>{partner.display_name ?? partner.username}</Text>
-          </TouchableOpacity>
+
+        {conversation && (
+          <View style={styles.headerCenter}>
+            <Image source={{ uri: conversation.avatar }} style={styles.avatar} />
+            <Text style={styles.name} numberOfLines={1}>
+              {conversation.name}
+            </Text>
+          </View>
         )}
-        <View style={{ width: 40 }} />
+
+        <View style={styles.navButton} />
       </View>
 
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
-      ) : (
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ChatBubble message={item} isOwn={item.sender_id === user?.id} />
-          )}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-
-      <MessageInput onSend={sendMessage} />
+      <View style={styles.body}>
+        <Ionicons name="chatbubbles-outline" size={40} color={META} />
+        <Text style={styles.title}>Chat coming soon</Text>
+        <Text style={styles.subtitle}>
+          {conversation
+            ? `Real-time messages with ${conversation.name} will live here.`
+            : 'This conversation will live here.'}
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
+  container: { flex: 1, backgroundColor: CREAM },
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backButton: { padding: spacing.sm },
-  partnerInfo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  partnerName: {
-    fontSize: typography.fontSize.base,
+  navButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EEE',
+  },
+  name: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 16,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    color: INK,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { paddingVertical: spacing.base, gap: spacing.xs },
+  body: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  title: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 20,
+    fontWeight: typography.fontWeight.semibold,
+    color: INK,
+  },
+  subtitle: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 14,
+    color: META,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
 });

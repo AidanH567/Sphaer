@@ -9,6 +9,7 @@ import {
   Linking,
   Share,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,22 +19,38 @@ import { EventRegistrationSheet } from '@/components/ui/EventRegistrationSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
-import { getMockEventById } from '@/data/mockEvents';
-
-// NOTE: this screen reads from src/data/mockEvents.ts. To use live Supabase
-// data, swap getMockEventById() for the useEvent() hook (src/hooks/useEvents.ts).
+import { useEvent } from '@/hooks/useEvents';
+import { useAuthContext } from '@/context/AuthContext';
+import { register as registerForEvent } from '@/services/registrations.service';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const event = getMockEventById(id);
+  const { event, isLoading } = useEvent(id);
+  const { user } = useAuthContext();
 
   const [isSaved, setIsSaved] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+
+  // Loading state — covers initial fetch
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.black} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // Graceful state for an unknown id — never throws.
   if (!event) {
@@ -51,7 +68,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const priceLabel = event.priceLabel ?? formatPrice(event.price, event.is_free);
+  const priceLabel = formatPrice(event.price, event.is_free);
   const displayPrice = priceLabel === 'FREE' ? 'Free' : priceLabel;
   const dateLabel = formatEventDateCompact(event.starts_at);
   const aboutParagraphs = (event.description ?? '').split('\n\n').filter(Boolean);
@@ -130,11 +147,7 @@ export default function EventDetailScreen() {
                   name={event.creator?.display_name ?? ''}
                   size={48}
                 />
-                {event.hostStats.verified && (
-                  <View style={styles.verifiedBadge}>
-                    <Ionicons name="checkmark-circle" size={18} color="#1DA851" />
-                  </View>
-                )}
+                {/* Verified badge — deferred (see BACKLOG.md), no real column yet */}
               </View>
 
               <View style={styles.artistInfo}>
@@ -142,8 +155,7 @@ export default function EventDetailScreen() {
                   {event.creator?.display_name ?? 'Host'}
                 </Text>
                 <Text style={styles.artistStats}>
-                  {event.hostStats.activities} activities{'   '}
-                  {event.hostStats.followers.toLocaleString('de-DE')} followers
+                  {(event.creator?.disciplines ?? []).slice(0, 2).join(' · ') || 'Berlin'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -222,7 +234,12 @@ export default function EventDetailScreen() {
         visible={registrationOpen}
         event={event}
         onClose={() => setRegistrationOpen(false)}
-        onRegister={(details) => console.log('[EventDetail] registered', details)}
+        onRegister={async (details) => {
+          if (!user) {
+            throw new Error('Please sign in to register.');
+          }
+          await registerForEvent(details.eventId, user.id, details.quantity);
+        }}
       />
     </SafeAreaView>
   );
