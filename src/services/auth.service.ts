@@ -71,8 +71,12 @@ export async function signInWithGoogle(): Promise<void> {
     });
     if (error) throw error;
     // The browser is now navigating to Google. When it returns to
-    // redirectTo, supabase-js detects the URL hash and populates the
-    // session via onAuthStateChange. Nothing else for us to do here.
+    // redirectTo with `#access_token=...&refresh_token=...` in the URL,
+    // supabase-js (with `detectSessionInUrl: true` in src/lib/supabase.ts)
+    // parses the hash, stores the session, fires SIGNED_IN through
+    // onAuthStateChange, and clears the hash from the URL. The
+    // app/(auth)/_layout.tsx redirect then sends the user to /(tabs)/feed.
+    // Nothing else for us to do here.
     return;
   }
 

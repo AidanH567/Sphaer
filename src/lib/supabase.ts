@@ -32,6 +32,13 @@ export const supabase = createClient<Database>(config.supabaseUrl, config.supaba
     storage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // On web, this tells supabase-js to look at window.location for OAuth
+    // tokens after a provider redirect, store them via `storage`, fire
+    // SIGNED_IN through onAuthStateChange, and clean the hash out of the
+    // URL. Without it (i.e. set to false), Google's #access_token=... hash
+    // would just sit there and the user would never appear signed-in.
+    // On native this flag is effectively a no-op (no URL to parse) — the
+    // signInWithGoogle service uses WebBrowser + setSession() directly.
+    detectSessionInUrl: true,
   },
 });
