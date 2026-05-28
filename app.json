@@ -45,7 +45,8 @@
           "photosPermission": "Allow Sphaer to access your photos to upload event posters and profile images."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
