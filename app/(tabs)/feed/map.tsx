@@ -57,8 +57,12 @@ export default function MapScreen() {
         if (!haystack.includes(q)) return false;
       }
       if (hood.length > 0) {
-        const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
-        if (!locHaystack.includes(hood)) return false;
+        if (e.neighbourhood) {
+          if (e.neighbourhood.toLowerCase() !== hood) return false;
+        } else {
+          const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
+          if (!locHaystack.includes(hood)) return false;
+        }
       }
       return true;
     });

@@ -75,10 +75,15 @@ export interface Database {
           ticket_url: string | null;
           is_free: boolean;
           price: number | null;
+          // Added in 20260529000000_events_neighbourhood.sql — canonical
+          // Berlin Ortsteil for filtering, populated by Places autocomplete
+          // on Create Activity. Nullable for events without an address.
+          neighbourhood: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['events']['Row'], 'id' | 'created_at'> & {
+        Insert: Omit<Database['public']['Tables']['events']['Row'], 'id' | 'created_at' | 'neighbourhood'> & {
           id?: string;
+          neighbourhood?: string | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['events']['Insert']>;

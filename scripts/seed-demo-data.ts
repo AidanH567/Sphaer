@@ -509,6 +509,65 @@ function cryptoRandomString(length: number): string {
 }
 
 /**
+ * Map a mock event's free-text address to a canonical Berlin neighbourhood.
+ * Uses the postcode prefix (which is reliable for Berlin) — falls back to
+ * matching neighbourhood substrings, then null if neither hits.
+ *
+ * This is only used during seeding. Live events created via the app go
+ * through Places Autocomplete + address_components extraction (see
+ * src/lib/places.ts), which gives us the neighbourhood as structured data.
+ */
+function neighbourhoodForAddress(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const plzMatch = address.match(/\b(\d{5})\b/);
+  if (plzMatch) {
+    const plz = plzMatch[1];
+    const fromPlz = BERLIN_PLZ_NEIGHBOURHOOD[plz];
+    if (fromPlz) return fromPlz;
+  }
+  // Fallback: any of our 26 names appearing in the address text
+  const haystack = address.toLowerCase();
+  const names = [
+    'Mitte', 'Tiergarten', 'Hansaviertel', 'Kreuzberg', 'Friedrichshain',
+    'Neukölln', 'Prenzlauer Berg', 'Wedding', 'Charlottenburg', 'Schöneberg',
+    'Moabit', 'Gesundbrunnen', 'Pankow', 'Weißensee', 'Lichtenberg',
+    'Rummelsburg', 'Treptow', 'Köpenick', 'Wilmersdorf', 'Steglitz',
+    'Zehlendorf', 'Tempelhof', 'Reinickendorf', 'Spandau', 'Marzahn',
+    'Hellersdorf',
+  ];
+  for (const n of names) {
+    if (haystack.includes(n.toLowerCase())) return n;
+  }
+  return null;
+}
+
+// Berlin postcode → Ortsteil mapping. Covers the postcodes in our
+// hand-coded MOCK_EVENTS addresses. Not exhaustive — production
+// would consume the live Places API instead.
+const BERLIN_PLZ_NEIGHBOURHOOD: Record<string, string> = {
+  '10115': 'Mitte',        '10119': 'Mitte',        '10179': 'Mitte',
+  '10435': 'Prenzlauer Berg',
+  '10551': 'Moabit',       '10553': 'Moabit',       '10555': 'Moabit',
+  '10623': 'Charlottenburg','10625': 'Charlottenburg','10627': 'Charlottenburg',
+  '10629': 'Charlottenburg','10707': 'Charlottenburg','10709': 'Charlottenburg',
+  '10711': 'Charlottenburg','10719': 'Charlottenburg',
+  '10781': 'Schöneberg',   '10783': 'Schöneberg',   '10785': 'Tiergarten',
+  '10787': 'Tiergarten',   '10789': 'Schöneberg',
+  '10827': 'Schöneberg',   '10829': 'Schöneberg',
+  '10961': 'Kreuzberg',    '10963': 'Kreuzberg',    '10965': 'Kreuzberg',
+  '10967': 'Kreuzberg',    '10969': 'Kreuzberg',    '10997': 'Kreuzberg',
+  '10999': 'Kreuzberg',
+  '12043': 'Neukölln',     '12045': 'Neukölln',     '12047': 'Neukölln',
+  '12049': 'Neukölln',     '12051': 'Neukölln',     '12053': 'Neukölln',
+  '12055': 'Neukölln',     '12057': 'Neukölln',
+  '12435': 'Treptow',      '12437': 'Treptow',      '12439': 'Treptow',
+  '12459': 'Treptow',
+  '13347': 'Wedding',      '13349': 'Wedding',      '13351': 'Wedding',
+  '13353': 'Wedding',      '13355': 'Gesundbrunnen','13357': 'Gesundbrunnen',
+  '13359': 'Gesundbrunnen',
+};
+
+/**
  * Deterministically map a friendly mock ID like 'evt-tarkovsky' to a stable
  * UUID-formatted string. Postgres accepts any 36-char hex-formatted string
  * for the UUID type; this is not a true RFC 4122 v5 UUID but it's stable,
@@ -594,6 +653,11 @@ async function main() {
         address: mock.address ?? null,
         lat: mock.lat ?? null,
         lng: mock.lng ?? null,
+        // Backfill neighbourhood from the postcode in the mock address.
+        // Live user-created events get this set from Places autocomplete
+        // on Create Activity; the mocks predate that flow so we map by
+        // postcode here. See neighbourhoodForAddress() below.
+        neighbourhood: neighbourhoodForAddress(mock.address),
         starts_at: mock.starts_at,
         ends_at: mock.ends_at ?? null,
         categories: mock.categories ?? [],

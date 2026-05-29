@@ -62,8 +62,16 @@ export default function FeedScreen() {
         if (!haystack.includes(q)) return false;
       }
       if (hood.length > 0) {
-        const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
-        if (!locHaystack.includes(hood)) return false;
+        // Prefer the structured `neighbourhood` column when present
+        // (set by Places autocomplete on Create Activity). Fall back
+        // to substring match on address/location for older events
+        // that don't have it yet.
+        if (e.neighbourhood) {
+          if (e.neighbourhood.toLowerCase() !== hood) return false;
+        } else {
+          const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
+          if (!locHaystack.includes(hood)) return false;
+        }
       }
       return true;
     });

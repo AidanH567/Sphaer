@@ -37,3 +37,25 @@ export const BERLIN_NEIGHBORHOODS = [
 ] as const;
 
 export type BerlinNeighborhood = (typeof BERLIN_NEIGHBORHOODS)[number];
+
+/**
+ * Normalise a free-text neighbourhood candidate (typically from Google's
+ * `address_components`) to one of our 26 canonical names — or null if
+ * we can't map it.
+ *
+ * Handles common Google quirks:
+ *   "Berlin Kreuzberg" → "Kreuzberg"
+ *   "Prenzlauer Berg, Pankow" → "Prenzlauer Berg"
+ *   case differences, trailing whitespace, etc.
+ */
+export function matchBerlinNeighborhood(input: string | null | undefined): BerlinNeighborhood | null {
+  if (!input) return null;
+  const normalized = input.trim().toLowerCase();
+  if (normalized.length === 0) return null;
+
+  // Direct: try each canonical name as a substring of the input
+  for (const n of BERLIN_NEIGHBORHOODS) {
+    if (normalized.includes(n.toLowerCase())) return n;
+  }
+  return null;
+}

@@ -23,6 +23,7 @@ import { createEvent, uploadEventPoster } from '@/services/events.service';
 import { getAdminCircles } from '@/services/circles.service';
 import { geocodeAddress } from '@/lib/geocoding';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
+import { AddressAutocompleteInput, type SelectedAddress } from '@/components/ui/AddressAutocompleteInput';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 import type { CircleWithCounts } from '@/types/circle.types';
 
@@ -46,6 +47,10 @@ export default function CreateScreen() {
   // Confirm sheet asking the user if they want to publish without an address.
   // If yes, we call doPublish() — which is the real publish path.
   const [noAddressWarningVisible, setNoAddressWarningVisible] = useState(false);
+  // Structured place data captured when the user picks an autocomplete
+  // suggestion. Cleared when they keep typing afterward — then we fall
+  // back to live geocoding on submit.
+  const [selectedPlace, setSelectedPlace] = useState<SelectedAddress | null>(null);
 
   // Load circles the user can host as (admin role). Trigger guarantees every
   // circle they created lands here.
@@ -115,14 +120,30 @@ export default function CreateScreen() {
         posterUrl = await uploadEventPoster(user.id, eventId, posterUri);
       }
 
-      // Geocode the address if provided so the event can appear on the
-      // map. Fail-soft: if Google can't resolve, we save lat/lng=null
-      // and the event still gets created — it just won't appear on the
-      // map view.
+      // Prefer the structured place data from the autocomplete pick.
+      // If the user typed an address without picking a suggestion, fall
+      // back to a one-shot live geocode on submit. If geocoding fails or
+      // address is empty, save with lat/lng/neighbourhood = null — event
+      // still creates, just won't appear on the map.
       let lat: number | null = null;
       let lng: number | null = null;
+      let neighbourhood: string | null = null;
+      let finalAddress: string | null = null;
+      let finalLocationName: string | null = locationName.trim() || null;
+
       const trimmedAddress = address.trim();
-      if (trimmedAddress) {
+      if (selectedPlace) {
+        lat = selectedPlace.lat;
+        lng = selectedPlace.lng;
+        neighbourhood = selectedPlace.neighbourhood;
+        finalAddress = selectedPlace.formatted_address;
+        // If the user didn't type a venue name and Google returned one
+        // (e.g. "Berghain"), use that for `location_name`.
+        if (!finalLocationName && selectedPlace.name) {
+          finalLocationName = selectedPlace.name;
+        }
+      } else if (trimmedAddress) {
+        finalAddress = trimmedAddress;
         const geo = await geocodeAddress(trimmedAddress);
         if (geo) {
           lat = geo.lat;
@@ -136,10 +157,11 @@ export default function CreateScreen() {
         circle_id: selectedCircleId,
         title: title.trim(),
         description: description.trim() || null,
-        location_name: locationName.trim() || null,
-        address: trimmedAddress || null,
+        location_name: finalLocationName,
+        address: finalAddress,
         lat,
         lng,
+        neighbourhood,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt ? endsAt.toISOString() : null,
         categories,
@@ -211,12 +233,21 @@ export default function CreateScreen() {
             value={locationName}
             onChangeText={setLocationName}
           />
-          <Input
+          <AddressAutocompleteInput
             label="Address"
-            icon="map-outline"
-            placeholder="Street, Berlin"
+            placeholder="Search for a Berlin address…"
+            helper="Type to search. Pick a suggestion to pin your activity on the map."
             value={address}
             onChangeText={setAddress}
+            onSelect={(place) => {
+              setSelectedPlace(place);
+              // Pre-fill venue name only if the user hasn't typed one yet
+              // and Google returned a real venue (not just the street name).
+              if (!locationName.trim() && place.name) {
+                setLocationName(place.name);
+              }
+            }}
+            onClearSelection={() => setSelectedPlace(null)}
           />
           <DateTimeField
             label="Starts"
