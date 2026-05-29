@@ -1,19 +1,21 @@
 /**
- * Wrappers around the Google Places (legacy v3) Autocomplete + Details
- * REST APIs. Used by AddressAutocompleteInput to power typeahead address
- * search on Create Activity.
+ * Wrappers around the **Google Places API (New)** — the v1 endpoints at
+ * places.googleapis.com. The new API supports CORS for browser requests,
+ * which the legacy maps.googleapis.com endpoints do not, so this works
+ * uniformly on web + native via the same fetch implementation.
  *
- * Uses the same EXPO_PUBLIC_GOOGLE_MAPS_API_KEY that Maps + Geocoding
- * already consume. Places API is a *separate* product enablement:
- *   Google Cloud → APIs & Services → Library → search "Places API"
- *   → Enable.  (If you see REQUEST_DENIED on the first autocomplete
- *    call, that's the missing enable.)
+ * IMPORTANT — different product from the legacy Places API:
+ *   Google Cloud → APIs & Services → Library → search "Places API (New)"
+ *     → Enable.
+ *   The legacy "Places API" (no "New") will not work here.
  *
- * Berlin viewport-biased so partial inputs like "Okerstraße" surface
- * the Neukölln street before similarly-named places elsewhere.
+ * Auth: passed in the X-Goog-Api-Key header rather than as a query param.
+ *
+ * Berlin-biased so partial queries like "Okerstraße" surface the Neukölln
+ * street before similarly-named places elsewhere.
  *
  * Fail-soft: every function returns null / [] on any error so the
- * caller (autocomplete UI) degrades gracefully — no crashing dropdowns.
+ * autocomplete UI degrades gracefully.
  */
 
 import { config } from '@/constants/config';
@@ -32,27 +34,25 @@ export interface PlaceDetails {
   /** Google's canonical formatted address. */
   formatted_address: string;
   /** Name of the place if it has one (e.g. "Berghain"). Useful for
-   *  filling `location_name`. */
+   *  filling `location_name`. Null when the result is a plain address. */
   name: string | null;
   lat: number;
   lng: number;
-  /** Best Berlin Ortsteil match from our 26-neighborhood list, or null
-   *  if the API result didn't yield anything mappable. */
+  /** Best Berlin Ortsteil match from our 26-neighborhood list, or null. */
   neighbourhood: string | null;
 }
 
-const BERLIN_BIAS_LOCATION = '52.52,13.405';
-const BERLIN_BIAS_RADIUS = 20000; // metres
+const BERLIN_CENTER = { latitude: 52.52, longitude: 13.405 };
+const BERLIN_RADIUS = 20000; // metres
 
 // ─── Autocomplete (typeahead) ────────────────────────────────────────────────
 
 /**
- * Live address suggestions for a partial query. Caller is responsible
- * for debouncing input changes — typically 250–300ms.
+ * Live address suggestions for a partial query. Caller debounces input
+ * changes (~280ms is standard).
  *
- * Returns up to 5 suggestions, biased to Berlin / Germany. Caller renders
- * `main_text` + `secondary_text` and uses `place_id` to fetch full
- * details on tap (see getPlaceDetails).
+ * Uses POST + JSON body — the New API doesn't accept query-string params
+ * for autocomplete. CORS-safe from web.
  */
 export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
   const key = config.googleMapsApiKey;
@@ -63,37 +63,43 @@ export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
   const q = query.trim();
   if (q.length < 2) return [];
 
-  const url =
-    `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-    `?input=${encodeURIComponent(q)}` +
-    `&types=geocode` +
-    `&components=country:de` +
-    `&location=${BERLIN_BIAS_LOCATION}` +
-    `&radius=${BERLIN_BIAS_RADIUS}` +
-    `&language=en` +
-    `&key=${key}`;
-
   try {
-    const res = await fetch(url);
+    const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': key,
+      },
+      body: JSON.stringify({
+        input: q,
+        languageCode: 'en',
+        includedRegionCodes: ['de'],
+        locationBias: {
+          circle: {
+            center: BERLIN_CENTER,
+            radius: BERLIN_RADIUS,
+          },
+        },
+      }),
+    });
+
     if (!res.ok) {
-      console.warn(`[places] autocomplete HTTP ${res.status}`);
+      const errBody = await res.text().catch(() => '');
+      console.warn(`[places] autocomplete HTTP ${res.status}`, errBody.slice(0, 200));
       return [];
     }
+
     const json = (await res.json()) as AutocompleteResponse;
+    const suggestions = json.suggestions ?? [];
 
-    if (json.status === 'ZERO_RESULTS') return [];
-
-    if (json.status !== 'OK') {
-      const errMsg = (json as { error_message?: string }).error_message;
-      console.warn(`[places] autocomplete status ${json.status}`, errMsg ?? '');
-      return [];
-    }
-
-    return (json.predictions ?? []).slice(0, 5).map((p) => ({
-      place_id: p.place_id,
-      main_text: p.structured_formatting?.main_text ?? p.description,
-      secondary_text: p.structured_formatting?.secondary_text ?? '',
-    }));
+    return suggestions.slice(0, 5).map((s) => {
+      const p = s.placePrediction;
+      return {
+        place_id: p.placeId,
+        main_text: p.structuredFormat?.mainText?.text ?? p.text?.text ?? '',
+        secondary_text: p.structuredFormat?.secondaryText?.text ?? '',
+      };
+    });
   } catch (e) {
     console.warn('[places] autocomplete fetch failed', e);
     return [];
@@ -103,13 +109,9 @@ export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
 // ─── Place Details ───────────────────────────────────────────────────────────
 
 /**
- * Fetch the full details for a place_id chosen from suggestions. Returns
- * lat/lng + formatted_address + a normalised Berlin neighbourhood.
- *
- * Neighbourhood extraction tries the Google address_components in order:
- *   sublocality_level_1 → neighborhood → political → administrative_area_level_3
- * Then runs the candidate through matchBerlinNeighborhood() to canonicalise
- * to our 26-name list (handles "Berlin Kreuzberg" → "Kreuzberg", etc.).
+ * Fetch full details for a placeId chosen from suggestions. Uses GET +
+ * X-Goog-FieldMask to control billing — only request the fields we
+ * actually need.
  */
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
   const key = config.googleMapsApiKey;
@@ -118,42 +120,42 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     return null;
   }
 
-  const url =
-    `https://maps.googleapis.com/maps/api/place/details/json` +
-    `?place_id=${encodeURIComponent(placeId)}` +
-    `&fields=formatted_address,geometry,address_components,name` +
-    `&language=en` +
-    `&key=${key}`;
-
   try {
-    const res = await fetch(url);
+    const res = await fetch(
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+      {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': key,
+          // FieldMask is mandatory — these are the fields we actually use.
+          'X-Goog-FieldMask':
+            'id,formattedAddress,location,addressComponents,displayName',
+        },
+      },
+    );
+
     if (!res.ok) {
-      console.warn(`[places] details HTTP ${res.status}`);
+      const errBody = await res.text().catch(() => '');
+      console.warn(`[places] details HTTP ${res.status}`, errBody.slice(0, 200));
       return null;
     }
+
     const json = (await res.json()) as DetailsResponse;
-
-    if (json.status !== 'OK' || !json.result) {
-      const errMsg = (json as { error_message?: string }).error_message;
-      console.warn(`[places] details status ${json.status}`, errMsg ?? '');
-      return null;
-    }
-
-    const r = json.result;
-    const loc = r.geometry?.location;
+    const loc = json.location;
     if (!loc) return null;
 
-    const neighbourhood = extractNeighbourhood(r.address_components ?? []);
+    const formatted = json.formattedAddress ?? '';
+    const displayName = json.displayName?.text ?? null;
+    // Strip "name" when Google just echoes the address (plain street results).
+    const venueName = displayName && !formatted.startsWith(displayName) ? displayName : null;
 
     return {
-      place_id: placeId,
-      formatted_address: r.formatted_address ?? '',
-      // Only treat `name` as a venue name if it isn't just the street
-      // (Google echoes the address as the name for plain street results).
-      name: r.name && !r.formatted_address?.startsWith(r.name) ? r.name : null,
-      lat: loc.lat,
-      lng: loc.lng,
-      neighbourhood,
+      place_id: json.id ?? placeId,
+      formatted_address: formatted,
+      name: venueName,
+      lat: loc.latitude,
+      lng: loc.longitude,
+      neighbourhood: extractNeighbourhood(json.addressComponents ?? []),
     };
   } catch (e) {
     console.warn('[places] details fetch failed', e);
@@ -161,20 +163,15 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
   }
 }
 
-// ─── Internal helpers ────────────────────────────────────────────────────────
+// ─── Internal ────────────────────────────────────────────────────────────────
 
-interface AddressComponent {
-  long_name: string;
-  short_name: string;
+interface AddressComponentNew {
+  longText: string;
+  shortText: string;
   types: string[];
 }
 
-/**
- * Walk Google's address_components looking for the most specific Berlin
- * Ortsteil. Tries the most-specific component types first, then runs
- * each candidate through our canonicalisation map.
- */
-function extractNeighbourhood(components: AddressComponent[]): string | null {
+function extractNeighbourhood(components: AddressComponentNew[]): string | null {
   const candidateTypes = [
     'sublocality_level_1',
     'sublocality',
@@ -182,47 +179,32 @@ function extractNeighbourhood(components: AddressComponent[]): string | null {
     'political',
     'administrative_area_level_3',
   ];
-
   for (const t of candidateTypes) {
     const match = components.find((c) => c.types.includes(t));
     if (!match) continue;
-    const canonical = matchBerlinNeighborhood(match.long_name);
+    const canonical = matchBerlinNeighborhood(match.longText);
     if (canonical) return canonical;
   }
   return null;
 }
 
 interface AutocompleteResponse {
-  status:
-    | 'OK'
-    | 'ZERO_RESULTS'
-    | 'OVER_QUERY_LIMIT'
-    | 'REQUEST_DENIED'
-    | 'INVALID_REQUEST'
-    | 'UNKNOWN_ERROR';
-  predictions?: Array<{
-    place_id: string;
-    description: string;
-    structured_formatting?: {
-      main_text: string;
-      secondary_text: string;
+  suggestions?: Array<{
+    placePrediction: {
+      placeId: string;
+      text?: { text: string };
+      structuredFormat?: {
+        mainText?: { text: string };
+        secondaryText?: { text: string };
+      };
     };
   }>;
 }
 
 interface DetailsResponse {
-  status:
-    | 'OK'
-    | 'ZERO_RESULTS'
-    | 'NOT_FOUND'
-    | 'OVER_QUERY_LIMIT'
-    | 'REQUEST_DENIED'
-    | 'INVALID_REQUEST'
-    | 'UNKNOWN_ERROR';
-  result?: {
-    formatted_address?: string;
-    name?: string;
-    geometry?: { location: { lat: number; lng: number } };
-    address_components?: AddressComponent[];
-  };
+  id?: string;
+  formattedAddress?: string;
+  displayName?: { text: string; languageCode?: string };
+  location?: { latitude: number; longitude: number };
+  addressComponents?: AddressComponentNew[];
 }
