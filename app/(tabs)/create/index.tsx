@@ -21,6 +21,8 @@ import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { createEvent, uploadEventPoster } from '@/services/events.service';
 import { getAdminCircles } from '@/services/circles.service';
+import { geocodeAddress } from '@/lib/geocoding';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 import type { CircleWithCounts } from '@/types/circle.types';
 
@@ -41,6 +43,9 @@ export default function CreateScreen() {
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const [adminCircles, setAdminCircles] = useState<CircleWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Confirm sheet asking the user if they want to publish without an address.
+  // If yes, we call doPublish() — which is the real publish path.
+  const [noAddressWarningVisible, setNoAddressWarningVisible] = useState(false);
 
   // Load circles the user can host as (admin role). Trigger guarantees every
   // circle they created lands here.
@@ -89,6 +94,18 @@ export default function CreateScreen() {
       return;
     }
 
+    // No address → warn the user the event won't appear on the map.
+    // Address isn't required (per spec) — they can proceed anyway.
+    if (!address.trim()) {
+      setNoAddressWarningVisible(true);
+      return;
+    }
+
+    await doPublish();
+  }
+
+  async function doPublish() {
+    if (!user || !startsAt) return; // already validated above
     setIsLoading(true);
     try {
       const eventId = crypto.randomUUID();
@@ -98,6 +115,21 @@ export default function CreateScreen() {
         posterUrl = await uploadEventPoster(user.id, eventId, posterUri);
       }
 
+      // Geocode the address if provided so the event can appear on the
+      // map. Fail-soft: if Google can't resolve, we save lat/lng=null
+      // and the event still gets created — it just won't appear on the
+      // map view.
+      let lat: number | null = null;
+      let lng: number | null = null;
+      const trimmedAddress = address.trim();
+      if (trimmedAddress) {
+        const geo = await geocodeAddress(trimmedAddress);
+        if (geo) {
+          lat = geo.lat;
+          lng = geo.lng;
+        }
+      }
+
       await createEvent({
         id: eventId,
         creator_id: user.id,
@@ -105,9 +137,9 @@ export default function CreateScreen() {
         title: title.trim(),
         description: description.trim() || null,
         location_name: locationName.trim() || null,
-        address: address.trim() || null,
-        lat: null,
-        lng: null,
+        address: trimmedAddress || null,
+        lat,
+        lng,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt ? endsAt.toISOString() : null,
         categories,
@@ -304,6 +336,19 @@ export default function CreateScreen() {
           style={styles.cta}
         />
       </ScrollView>
+
+      <ConfirmSheet
+        visible={noAddressWarningVisible}
+        title="Publish without an address?"
+        message="You haven't added an address, so this activity won't appear on the map. People can still find it in the feed."
+        confirmLabel="Publish anyway"
+        cancelLabel="Add an address"
+        onConfirm={async () => {
+          setNoAddressWarningVisible(false);
+          await doPublish();
+        }}
+        onClose={() => setNoAddressWarningVisible(false)}
+      />
     </SafeAreaView>
   );
 }

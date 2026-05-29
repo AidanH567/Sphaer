@@ -15,6 +15,9 @@ export interface EventWithRelations extends Event {
 export interface EventFilters {
   search?: string;
   categories?: string[];
+  /** Berlin neighbourhood name — matched client-side against `address`
+   *  / `location_name` substring. Single-value for now. */
+  neighborhood?: string;
   startDate?: string;
   endDate?: string;
   isFree?: boolean;

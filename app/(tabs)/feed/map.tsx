@@ -1,9 +1,8 @@
-import React from 'react';
-import { View, StyleSheet, Text, Platform } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, StyleSheet, Text, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { MOCK_EVENTS } from '@/data/mockEvents';
+import { useEvents } from '@/hooks/useEvents';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { config } from '@/constants/config';
@@ -11,7 +10,8 @@ import type { EventWithRelations } from '@/types/event.types';
 import { formatEventDateShort } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
 
-// react-native-maps does not support web — lazy-require on native only
+// react-native-maps is iOS/Android only — lazy-require so the web bundle
+// doesn't choke. (The web build is provided by map.web.tsx alongside this.)
 const isNative = Platform.OS !== 'web';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Maps = isNative ? require('react-native-maps') : null;
@@ -20,20 +20,54 @@ const Marker = Maps?.Marker ?? View;
 const Callout = Maps?.Callout ?? View;
 const PROVIDER_GOOGLE = Maps?.PROVIDER_GOOGLE;
 
+/**
+ * Native Map view. Renders activities with valid lat/lng on a Google Map,
+ * using the event poster as the marker. Filters (categories, search,
+ * neighbourhood) are pulled from AppContext so Feed + Map + Mural share
+ * the same lens on the data.
+ *
+ * Events without coordinates are silently dropped from the map — they
+ * still appear in Feed. Users get a non-blocking warning at creation time
+ * if they don't supply an address.
+ */
 export default function MapScreen() {
   const router = useRouter();
   const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
 
-  const events = useMemo(() => {
-    const selected = feedFilters.categories ?? [];
-    return MOCK_EVENTS.filter(
-      (e) =>
-        selected.length === 0 ||
-        (e.categories ?? []).some((c) => selected.includes(c))
-    );
-  }, [feedFilters.categories]);
+  const { events } = useEvents({ categories: feedFilters.categories });
 
-  const eventsWithCoords = events.filter((e) => e.lat !== null && e.lng !== null);
+  // Apply search + neighbourhood + category filters client-side. Matches
+  // the same logic feed/index.tsx uses, so both views always show the same
+  // filtered set (just with different render layers).
+  const filteredEvents = useMemo(() => {
+    const q = (feedFilters.search ?? '').trim().toLowerCase();
+    const hood = (feedFilters.neighborhood ?? '').toLowerCase();
+
+    return events.filter((e) => {
+      if (q.length > 0) {
+        const haystack = [
+          e.title,
+          e.description ?? '',
+          e.location_name ?? '',
+          e.address ?? '',
+          (e.categories ?? []).join(' '),
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (hood.length > 0) {
+        const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
+        if (!locHaystack.includes(hood)) return false;
+      }
+      return true;
+    });
+  }, [events, feedFilters.search, feedFilters.neighborhood]);
+
+  // Only mappable events
+  const eventsWithCoords = filteredEvents.filter(
+    (e) => e.lat !== null && e.lng !== null,
+  );
 
   function toggleCategory(cat: string) {
     const current = feedFilters.categories ?? [];
@@ -41,6 +75,14 @@ export default function MapScreen() {
       ? current.filter((c) => c !== cat)
       : [...current, cat];
     setFeedFilters({ ...feedFilters, categories: next.length ? next : undefined });
+  }
+
+  function setNeighborhood(n: string | null) {
+    setFeedFilters({ ...feedFilters, neighborhood: n ?? undefined });
+  }
+
+  function setSearch(text: string) {
+    setFeedFilters({ ...feedFilters, search: text || undefined });
   }
 
   return (
@@ -54,11 +96,14 @@ export default function MapScreen() {
         }}
         selectedCategories={feedFilters.categories ?? []}
         onToggleCategory={toggleCategory}
+        onSearchChange={setSearch}
+        selectedNeighborhood={feedFilters.neighborhood ?? null}
+        onNeighborhoodChange={setNeighborhood}
       />
 
       {Platform.OS === 'web' ? (
         <View style={styles.webFallback}>
-          <Text style={styles.webFallbackText}>Map view available on mobile</Text>
+          <Text style={styles.webFallbackText}>Loading map…</Text>
         </View>
       ) : (
         <MapView
@@ -77,11 +122,20 @@ export default function MapScreen() {
               coordinate={{ latitude: event.lat!, longitude: event.lng! }}
               onCalloutPress={() => router.push(`/event/${event.id}`)}
             >
-              <View style={styles.pin}>
-                <Text style={styles.pinText}>●</Text>
-              </View>
+              {/* Poster-as-marker. Falls back to a small pin if no poster. */}
+              {event.poster_url ? (
+                <View style={styles.posterMarker}>
+                  <Image source={{ uri: event.poster_url }} style={styles.posterImage} />
+                </View>
+              ) : (
+                <View style={styles.pin}>
+                  <Text style={styles.pinText}>●</Text>
+                </View>
+              )}
               <Callout style={styles.callout}>
-                <Text style={styles.calloutTitle} numberOfLines={2}>{event.title}</Text>
+                <Text style={styles.calloutTitle} numberOfLines={2}>
+                  {event.title}
+                </Text>
                 <Text style={styles.calloutMeta}>{formatEventDateShort(event.starts_at)}</Text>
                 <Text style={styles.calloutPrice}>{formatPrice(event.price, event.is_free)}</Text>
               </Callout>
@@ -115,6 +169,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pinText: { color: colors.white, fontSize: 8 },
+  posterMarker: {
+    width: 52,
+    height: 60,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  posterImage: { width: '100%', height: '100%' },
   callout: {
     width: 180,
     padding: spacing.sm,

@@ -21,7 +21,10 @@ export default function FeedScreen() {
   const router = useRouter();
   const { feedView, setFeedView, feedFilters, setFeedFilters } = useAppContext();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [searchText, setSearchText] = useState('');
+
+  // Search + neighbourhood now live in AppContext so Feed / Map / Mural
+  // share filter state. Mural can opt in later — Feed and Map opt in now.
+  const searchText = feedFilters.search ?? '';
 
   const { events, isLoading, refetch } = useEvents({
     categories: feedFilters.categories,
@@ -37,26 +40,34 @@ export default function FeedScreen() {
 
   // Newest first so freshly published activities land on top. Service query
   // already orders by created_at desc; the client sort is defensive in case
-  // upcoming server changes shift ordering. Then apply client-side search.
+  // upcoming server changes shift ordering. Then apply search + neighbourhood
+  // filters client-side.
   const visibleEvents = useMemo(() => {
     const q = searchText.trim().toLowerCase();
+    const hood = (feedFilters.neighborhood ?? '').toLowerCase();
     const base = [...events].sort(
       (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
     );
-    if (q.length === 0) return base;
     return base.filter((e) => {
-      const haystack = [
-        e.title,
-        e.description ?? '',
-        e.location_name ?? '',
-        e.address ?? '',
-        (e.categories ?? []).join(' '),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(q);
+      if (q.length > 0) {
+        const haystack = [
+          e.title,
+          e.description ?? '',
+          e.location_name ?? '',
+          e.address ?? '',
+          (e.categories ?? []).join(' '),
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (hood.length > 0) {
+        const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
+        if (!locHaystack.includes(hood)) return false;
+      }
+      return true;
     });
-  }, [events, searchText]);
+  }, [events, searchText, feedFilters.neighborhood]);
 
   function toggleCategory(cat: string) {
     const current = feedFilters.categories ?? [];
@@ -64,6 +75,14 @@ export default function FeedScreen() {
       ? current.filter((c) => c !== cat)
       : [...current, cat];
     setFeedFilters({ ...feedFilters, categories: next.length ? next : undefined });
+  }
+
+  function setSearch(text: string) {
+    setFeedFilters({ ...feedFilters, search: text || undefined });
+  }
+
+  function setNeighborhood(n: string | null) {
+    setFeedFilters({ ...feedFilters, neighborhood: n ?? undefined });
   }
 
   function toggleSave(eventId: string) {
@@ -85,7 +104,9 @@ export default function FeedScreen() {
         }}
         selectedCategories={feedFilters.categories ?? []}
         onToggleCategory={toggleCategory}
-        onSearchChange={setSearchText}
+        onSearchChange={setSearch}
+        selectedNeighborhood={feedFilters.neighborhood ?? null}
+        onNeighborhoodChange={setNeighborhood}
       />
 
       {isLoading && events.length === 0 ? (

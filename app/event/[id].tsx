@@ -196,10 +196,20 @@ export default function EventDetailScreen() {
 
           <View style={styles.divider} />
 
-          {/* Location */}
+          {/* Location — fall back to "Location TBA" when the host didn't
+              provide an address. Event still appears in the feed; it just
+              isn't on the map. */}
           <Text style={styles.sectionHeading}>Location</Text>
-          <Text style={styles.venueName}>{event.location_name}</Text>
-          {event.address && <Text style={styles.address}>{event.address}</Text>}
+          {event.location_name || event.address ? (
+            <>
+              {event.location_name && (
+                <Text style={styles.venueName}>{event.location_name}</Text>
+              )}
+              {event.address && <Text style={styles.address}>{event.address}</Text>}
+            </>
+          ) : (
+            <Text style={styles.address}>Location TBA</Text>
+          )}
 
           <TouchableOpacity
             style={styles.mapBox}

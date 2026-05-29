@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography } from '@/constants/theme';
 import { FilterBar } from './FilterBar';
+import { NeighborhoodFilter } from './NeighborhoodFilter';
 
 interface SearchFilterBarProps {
   /** Current search text — owned by the parent so it can run the filter. */
@@ -21,6 +22,12 @@ interface SearchFilterBarProps {
   /** Selected category chips — owned by the parent. */
   selectedCategories: string[];
   onToggleCategory: (category: string) => void;
+
+  /** Optional neighbourhood filter — shown under the categories when both
+   *  the neighbourhood props are wired (Feed + Map pass these, Mural
+   *  doesn't need to). */
+  selectedNeighborhood?: string | null;
+  onNeighborhoodChange?: (next: string | null) => void;
 
   /**
    * Optional content rendered between the search row and the categories row.
@@ -66,6 +73,8 @@ export function SearchFilterBar({
   searchPlaceholder = 'Search…',
   selectedCategories,
   onToggleCategory,
+  selectedNeighborhood,
+  onNeighborhoodChange,
   middleSlot,
   style,
 }: SearchFilterBarProps) {
@@ -75,7 +84,10 @@ export function SearchFilterBar({
 
   const hasSearchText = searchText.length > 0;
   const hasSelectedCategories = selectedCategories.length > 0;
-  const showCategories = searchActive || hasSearchText || hasSelectedCategories;
+  const hasNeighborhood = Boolean(selectedNeighborhood);
+  const showCategories =
+    searchActive || hasSearchText || hasSelectedCategories || hasNeighborhood;
+  const showNeighborhoodFilter = showCategories && Boolean(onNeighborhoodChange);
 
   function activateSearch() {
     setSearchActive(true);
@@ -152,6 +164,15 @@ export function SearchFilterBar({
           />
         </View>
       )}
+
+      {showNeighborhoodFilter && onNeighborhoodChange && (
+        <View style={styles.neighborhoodWrapper}>
+          <NeighborhoodFilter
+            value={selectedNeighborhood ?? null}
+            onChange={onNeighborhoodChange}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -218,6 +239,9 @@ const styles = StyleSheet.create({
   },
 
   filterWrapper: {
+    paddingBottom: 12,
+  },
+  neighborhoodWrapper: {
     paddingBottom: 12,
   },
 });

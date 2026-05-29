@@ -11,14 +11,19 @@ interface FeedHeaderProps {
   onToggleCategory: (category: string) => void;
   /** Optional: emit each keystroke of the search bar to the parent. */
   onSearchChange?: (text: string) => void;
+  /** Optional neighbourhood filter — when both are passed, the row renders
+   *  under the categories. Feed + Map opt in; Mural can leave it off. */
+  selectedNeighborhood?: string | null;
+  onNeighborhoodChange?: (next: string | null) => void;
 }
 
 /**
  * Activity feed header: search bar, view toggle (Feed/Map/Mural), category
- * filter chips. Thin wrapper around the shared SearchFilterBar component;
- * map.tsx and mural.tsx use this component too, so its public API is
- * deliberately stable — the search text state stays internal here unless
- * the parent provides an `onSearchChange` callback.
+ * filter chips, optional neighbourhood filter. Thin wrapper around the
+ * shared SearchFilterBar — map.tsx and mural.tsx use this component too,
+ * so its public API stays stable. Search text + neighbourhood are owned
+ * by the parent when callbacks are provided; otherwise FeedHeader keeps
+ * search text in local state for back-compat.
  */
 export function FeedHeader({
   activeView,
@@ -26,6 +31,8 @@ export function FeedHeader({
   selectedCategories,
   onToggleCategory,
   onSearchChange,
+  selectedNeighborhood,
+  onNeighborhoodChange,
 }: FeedHeaderProps) {
   const [searchText, setSearchTextLocal] = useState('');
 
@@ -41,6 +48,8 @@ export function FeedHeader({
       searchPlaceholder="Berlin, what’s on today?!"
       selectedCategories={selectedCategories ?? []}
       onToggleCategory={onToggleCategory}
+      selectedNeighborhood={selectedNeighborhood}
+      onNeighborhoodChange={onNeighborhoodChange}
       middleSlot={<ViewToggle activeView={activeView} onViewChange={onViewChange} />}
     />
   );
