@@ -196,14 +196,16 @@ export default function CircleDetailScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.conversationButton}
-            activeOpacity={0.85}
-            onPress={() => Alert.alert('Coming soon', 'Circle conversations are not wired up yet.')}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
-            <Text style={styles.conversationText}>Join conversation</Text>
-          </TouchableOpacity>
+          {isMemberFlag && (
+            <TouchableOpacity
+              style={styles.conversationButton}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/messages/circle/${id}`)}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
+              <Text style={styles.conversationText}>Join conversation</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.divider} />
 

@@ -416,6 +416,39 @@ export type Database = {
           },
         ]
       }
+      circle_message_reads: {
+        Row: {
+          circle_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          circle_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          circle_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_message_reads_circle_id_fkey"
+            columns: ["circle_id"]
+            isOneToOne: false
+            referencedRelation: "circles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_message_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string | null
@@ -579,7 +612,7 @@ export type Database = {
       get_conversations: {
         Args: { p_user_id: string }
         Returns: {
-          kind: 'dm' | 'event'
+          kind: 'dm' | 'event' | 'circle'
           partner_id: string
           partner: Json
           last_message: Json | null

@@ -14,6 +14,7 @@ import type {
   Conversation,
   DMConversation,
   EventConversation,
+  CircleConversation,
   Message,
 } from '@/types/message.types';
 import type { Profile } from '@/types/user.types';
@@ -21,11 +22,12 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 /**
  * Discriminated target for marking a conversation as read. DMs key by the
- * other user's profile id; event chats key by the event id.
+ * other user's profile id; event/circle chats key by their entity id.
  */
 export type MarkReadTarget =
   | { kind: 'dm'; partnerId: string }
-  | { kind: 'event'; eventId: string };
+  | { kind: 'event'; eventId: string }
+  | { kind: 'circle'; circleId: string };
 
 interface MessagesContextValue {
   conversations: Conversation[];
@@ -66,6 +68,9 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
   // Map<eventId, RealtimeChannel>. Reconciled against `conversations` so that
   // every event chat the user can see has exactly one open subscription.
   const eventChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
+
+  // Same shape, but for circle chats.
+  const circleChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
 
   const refresh = useCallback(async () => {
     if (!userId) {
@@ -158,15 +163,49 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     [userId, refresh]
   );
 
-  // Keep a ref to the event handler so each per-event channel callback (created
-  // once when the channel opens) always invokes the latest closure.
+  // Same shape as the event handler — fired from per-circle channels filtered
+  // by circle_id=eq.<circleId>.
+  const handleIncomingCircleMessage = useCallback(
+    (msg: Message) => {
+      if (!userId || !msg.circle_id) return;
+      const circleId = msg.circle_id;
+
+      setConversations((prev) => {
+        const existing = prev.find(
+          (c): c is CircleConversation => c.kind === 'circle' && c.circle.id === circleId
+        );
+        if (!existing) {
+          refresh();
+          return prev;
+        }
+        const isIncoming = msg.sender_id !== userId;
+        const updated: CircleConversation = {
+          kind: 'circle',
+          circle: existing.circle,
+          last_message: msg,
+          unread_count: isIncoming ? existing.unread_count + 1 : existing.unread_count,
+        };
+        const rest = prev.filter(
+          (c) => !(c.kind === 'circle' && c.circle.id === circleId)
+        );
+        return [updated, ...rest];
+      });
+    },
+    [userId, refresh]
+  );
+
+  // Refs to keep the per-channel callbacks invoking the latest closures.
   const handleEventMessageRef = useRef(handleIncomingEventMessage);
   useEffect(() => {
     handleEventMessageRef.current = handleIncomingEventMessage;
   }, [handleIncomingEventMessage]);
 
-  // Reconcile per-event channels: every event in `conversations` should have
-  // one open channel; events that left the list get their channel closed.
+  const handleCircleMessageRef = useRef(handleIncomingCircleMessage);
+  useEffect(() => {
+    handleCircleMessageRef.current = handleIncomingCircleMessage;
+  }, [handleIncomingCircleMessage]);
+
+  // Reconcile per-event channels.
   useEffect(() => {
     const wantedIds = new Set(
       conversations
@@ -175,15 +214,12 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     );
     const channels = eventChannelsRef.current;
 
-    // Close channels for events no longer in scope.
     for (const [id, ch] of Array.from(channels.entries())) {
       if (!wantedIds.has(id)) {
         ch.unsubscribe();
         channels.delete(id);
       }
     }
-
-    // Open channels for new events.
     for (const id of wantedIds) {
       if (channels.has(id)) continue;
       const ch = supabase
@@ -197,6 +233,40 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
             filter: `event_id=eq.${id}`,
           },
           (payload) => handleEventMessageRef.current(payload.new as Message)
+        )
+        .subscribe();
+      channels.set(id, ch);
+    }
+  }, [conversations]);
+
+  // Reconcile per-circle channels (same pattern as events).
+  useEffect(() => {
+    const wantedIds = new Set(
+      conversations
+        .filter((c): c is CircleConversation => c.kind === 'circle')
+        .map((c) => c.circle.id)
+    );
+    const channels = circleChannelsRef.current;
+
+    for (const [id, ch] of Array.from(channels.entries())) {
+      if (!wantedIds.has(id)) {
+        ch.unsubscribe();
+        channels.delete(id);
+      }
+    }
+    for (const id of wantedIds) {
+      if (channels.has(id)) continue;
+      const ch = supabase
+        .channel(`circle-chat:${id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `circle_id=eq.${id}`,
+          },
+          (payload) => handleCircleMessageRef.current(payload.new as Message)
         )
         .subscribe();
       channels.set(id, ch);
@@ -219,7 +289,7 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           console.error('[MessagesContext] markRead (dm) failed:', err);
         }
-      } else {
+      } else if (target.kind === 'event') {
         setConversations((prev) =>
           prev.map((c) =>
             c.kind === 'event' && c.event.id === target.eventId
@@ -231,6 +301,19 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
           await messagesService.markEventRead(userId, target.eventId);
         } catch (err) {
           console.error('[MessagesContext] markRead (event) failed:', err);
+        }
+      } else {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.kind === 'circle' && c.circle.id === target.circleId
+              ? { ...c, unread_count: 0 }
+              : c
+          )
+        );
+        try {
+          await messagesService.markCircleRead(userId, target.circleId);
+        } catch (err) {
+          console.error('[MessagesContext] markRead (circle) failed:', err);
         }
       }
     },
@@ -332,6 +415,40 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
           refresh();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'circle_message_reads',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { circle_id?: string } | null;
+          if (!row?.circle_id) return;
+          const cid = row.circle_id;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.kind === 'circle' && c.circle.id === cid
+                ? { ...c, unread_count: 0 }
+                : c
+            )
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'circle_members',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // Joined/left a circle → refresh to pick up new/removed circle chats.
+          refresh();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -340,6 +457,10 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         ch.unsubscribe();
       }
       eventChannelsRef.current.clear();
+      for (const ch of circleChannelsRef.current.values()) {
+        ch.unsubscribe();
+      }
+      circleChannelsRef.current.clear();
     };
   }, [userId, refresh, handleIncomingDM]);
 

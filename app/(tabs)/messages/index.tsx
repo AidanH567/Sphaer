@@ -69,6 +69,27 @@ function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute 
       route: `/messages/event/${e.id}`,
     };
   }
+  if (conv.kind === 'circle') {
+    const c = conv.circle;
+    return {
+      row: {
+        id: c.id,
+        name: c.name,
+        avatar: c.avatar_url ?? `https://picsum.photos/seed/${c.id}/150/150`,
+        type: 'circle',
+        preview: lastMsg?.content ?? 'No messages yet',
+        previewKind: 'text',
+        isOwn: lastMsg?.sender_id === ownUserId,
+        status: 'delivered',
+        timestamp: formatMessageTime(lastMsg?.created_at),
+        isPinned: false,
+        hasMention: false,
+        unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+        hasStoryRing: false,
+      },
+      route: `/messages/circle/${c.id}`,
+    };
+  }
   const partner = conv.partner;
   return {
     row: {
@@ -106,7 +127,7 @@ export default function MessagesScreen() {
         case 'activities':
           return conversations.filter((c) => c.kind === 'event');
         case 'circles':
-          return []; // circle group chats deferred to a later iteration
+          return conversations.filter((c) => c.kind === 'circle');
         default:
           return conversations;
       }
