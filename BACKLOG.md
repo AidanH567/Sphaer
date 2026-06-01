@@ -6,6 +6,60 @@ the work when we come back to it.
 
 ---
 
+## ▶ UP NEXT — Messaging v1 (decisions locked, ready to build)
+
+Architectural calls already made (don't re-grill these next session, just build):
+
+| Decision | Locked answer |
+|---|---|
+| Scope | **1:1 DMs first.** Circle group chat follows in a separate session. |
+| Realtime | **Supabase Realtime subscription** on the `messages` table. Polling rejected. |
+| Read state | **Full read receipts** (iMessage-style: "Read 2m ago" visible to sender). Unread count badge on inbox + Messages tab. |
+| Mock data | Existing `src/data/mockMessages.ts` retired during build — replaced by real Supabase reads. |
+| Entry points | Profile "Get in touch" button (currently shows Alert) → routes to `/messages/[id]` with that user. Plus a "+" on inbox to start a new chat (later). |
+
+### Schema work needed (one migration)
+`messages` table exists with `(id, sender_id, recipient_id, circle_id, content, created_at)`. For 1:1 read receipts add:
+```sql
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS messages_recipient_unread_idx
+  ON public.messages (recipient_id, read_at);
+```
+RLS for messages already exists (participants-only read, sender-only insert) — `read_at` UPDATE needs a new policy:
+```sql
+CREATE POLICY "messages_read_recipient_update" ON public.messages
+  FOR UPDATE USING (auth.uid() = recipient_id)
+  WITH CHECK (auth.uid() = recipient_id);
+```
+
+### Files that already exist (placeholder — to be replaced)
+- `app/(tabs)/messages/index.tsx` — inbox with hand-curated mock list
+- `app/(tabs)/messages/[id].tsx` — placeholder chat screen ("Chat coming soon")
+- `src/components/messages/ConversationRow.tsx` — list row (visual, reusable)
+- `src/data/mockMessages.ts` — mock conversations
+
+### Files to build
+- `src/services/messages.service.ts` — already exists for some helpers; add `getInbox(userId)`, `getThread(userId, otherUserId)`, `sendMessage`, `markAsRead(messageIds)`
+- `src/hooks/useMessages.ts` — already exists; rewrite to subscribe to Realtime
+- `src/components/messages/MessageBubble.tsx` — NEW. Tail-pointing bubble (Figma-matching)
+- `src/components/messages/ChatComposer.tsx` — NEW. Text input + send button at the bottom of the chat screen, KeyboardAvoidingView
+
+### Build order (one session each)
+1. Migration + service helpers + types
+2. Inbox real data + Realtime subscription for new-message badges
+3. Chat detail screen with bubble list + composer + Realtime + mark-as-read
+4. Wire profile "Get in touch" to route to chat. Add unread badge to Messages tab in BottomNav
+
+### Out of scope for v1
+- Circle group chat (follows in v2 — schema already supports `circle_id`)
+- Search within messages
+- Media attachments
+- Voice notes / reactions
+- Push notifications (separate feature)
+
+---
+
 ## Profile v2 — Deferred items
 
 These were considered during the profile/auth real-data build (May 2026) and
