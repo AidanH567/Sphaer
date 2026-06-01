@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SphaerIcon } from '@/components/SphaerLogo';
 import { useAuthContext } from '@/context/AuthContext';
+import { useMessagesContext } from '@/context/MessagesContext';
 import { colors, spacing, typography } from '@/constants/theme';
 
 const ICON_SIZE = 24;
@@ -29,7 +30,12 @@ interface ProfileBits {
   email?: string | null;
 }
 
-function renderIcon(segment: string, focused: boolean, profileBits: ProfileBits) {
+function renderIcon(
+  segment: string,
+  focused: boolean,
+  profileBits: ProfileBits,
+  messagesUnread: number,
+) {
   switch (segment) {
     case 'feed':
       return (
@@ -52,11 +58,23 @@ function renderIcon(segment: string, focused: boolean, profileBits: ProfileBits)
       );
     case 'messages':
       return (
-        <Ionicons
-          name={focused ? 'chatbubble' : 'chatbubble-outline'}
-          size={ICON_SIZE}
-          color={focused ? colors.black : colors.text.tertiary}
-        />
+        <View style={styles.iconWithBadge}>
+          <Ionicons
+            name={focused ? 'chatbubble' : 'chatbubble-outline'}
+            size={ICON_SIZE}
+            color={focused ? colors.black : colors.text.tertiary}
+          />
+          {messagesUnread > 0 && (
+            <View
+              style={styles.badge}
+              accessibilityLabel={`${messagesUnread} unread message${messagesUnread === 1 ? '' : 's'}`}
+            >
+              <Text style={styles.badgeText}>
+                {messagesUnread > 9 ? '9+' : String(messagesUnread)}
+              </Text>
+            </View>
+          )}
+        </View>
       );
     case 'profile': {
       const { avatarUrl, displayName, email } = profileBits;
@@ -120,6 +138,7 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { profile, user } = useAuthContext();
+  const { totalUnread } = useMessagesContext();
 
   const profileBits: ProfileBits = {
     avatarUrl: profile?.avatar_url,
@@ -141,7 +160,7 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
           >
-            {renderIcon(segment, focused, profileBits)}
+            {renderIcon(segment, focused, profileBits, totalUnread)}
           </TouchableOpacity>
         );
       })}
@@ -205,5 +224,32 @@ const styles = StyleSheet.create({
   },
   initialsTextActive: {
     color: colors.white,
+  },
+
+  // Messages tab unread badge — Instagram-style coral pill positioned at
+  // the top-right of the chat icon. Caps at "9+" to keep the pill compact.
+  iconWithBadge: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: colors.badge.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.white,
+  },
+  badgeText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 11,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.badge.redText,
+    lineHeight: 13,
   },
 });
