@@ -41,7 +41,8 @@ export function formatEventDateCompact(dateStr: string): string {
   return `${weekday} ${day}.${month}`;
 }
 
-export function formatMessageTime(dateStr: string): string {
+export function formatMessageTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
@@ -58,4 +59,20 @@ export function formatMessageTime(dateStr: string): string {
 
 export function isUpcoming(dateStr: string): boolean {
   return new Date(dateStr) > new Date();
+}
+
+export function formatSeenTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Seen';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return 'Seen just now';
+  if (minutes < 60) return `Seen ${minutes}m ago`;
+  if (hours < 24) return `Seen ${hours}h ago`;
+  if (days < 7) return `Seen ${days}d ago`;
+  return `Seen ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
 }

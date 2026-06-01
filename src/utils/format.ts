@@ -1,5 +1,5 @@
-export function formatPrice(price: number | null, isFree: boolean): string {
-  if (isFree || price === 0) return 'FREE';
+export function formatPrice(price: number | null, isFree: boolean | null): string {
+  if (isFree !== false || price === 0) return 'FREE';
   if (price === null) return '';
   const rounded = Number.isInteger(price) ? price : price.toFixed(2);
   return `${rounded}€`;

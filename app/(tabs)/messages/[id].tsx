@@ -1,107 +1,162 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { getConversationById } from '@/data/mockMessages';
-import { typography } from '@/constants/theme';
+import { useAuthContext } from '@/context/AuthContext';
+import { useMessagesContext } from '@/context/MessagesContext';
+import { useProfile } from '@/hooks/useProfile';
+import { useMessages } from '@/hooks/useMessages';
+import { ChatBubble } from '@/components/messaging/ChatBubble';
+import { MessageInput } from '@/components/messaging/MessageInput';
+import { Avatar } from '@/components/ui/Avatar';
+import { colors, typography, spacing } from '@/constants/theme';
+import { formatSeenTime } from '@/utils/date';
+import type { OptimisticMessage } from '@/types/message.types';
 
-// NOTE: placeholder chat detail. To go live, query the `messages` table
-// scoped to (sender_id, recipient_id) or `circle_id`, subscribe via Supabase
-// Realtime, and render a message bubble list.
+const GROUP_GAP_MS = 5 * 60 * 1000;
 
-const CREAM = '#FCFCF9';
-const INK = '#1B1B18';
-const META = '#767779';
+interface DisplayMessage extends OptimisticMessage {
+  showTimestamp: boolean;
+  isLastSeen: boolean;
+}
 
-export default function ChatDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function ConversationScreen() {
+  const { id: partnerId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const conversation = getConversationById(id);
+  const { user } = useAuthContext();
+  const { profile: partner } = useProfile(partnerId);
+  const { markRead } = useMessagesContext();
+  const isFocused = useIsFocused();
+
+  const {
+    messages,
+    isLoading,
+    partnerLastReadAt,
+    sendMessage,
+    retryMessage,
+  } = useMessages(user?.id, partnerId);
+
+  useEffect(() => {
+    if (!user?.id || !partnerId || !isFocused) return;
+    markRead(partnerId);
+  }, [user?.id, partnerId, isFocused, messages.length, markRead]);
+
+  const display: DisplayMessage[] = useMemo(() => {
+    let lastSeenOwnId: string | null = null;
+    if (partnerLastReadAt) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i];
+        if (
+          m.sender_id === user?.id &&
+          m.status === 'sent' &&
+          (m.created_at ?? '') <= partnerLastReadAt
+        ) {
+          lastSeenOwnId = m.id;
+          break;
+        }
+      }
+    }
+
+    const flagged = messages.map<DisplayMessage>((m, i) => {
+      const prev = i > 0 ? messages[i - 1] : null;
+      const isFirstInGroup =
+        !prev ||
+        prev.sender_id !== m.sender_id ||
+        new Date(m.created_at ?? 0).getTime() - new Date(prev.created_at ?? 0).getTime() > GROUP_GAP_MS;
+      return {
+        ...m,
+        showTimestamp: isFirstInGroup,
+        isLastSeen: m.id === lastSeenOwnId,
+      };
+    });
+
+    return flagged.slice().reverse();
+  }, [messages, partnerLastReadAt, user?.id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
-          <Ionicons name="chevron-back" size={24} color={INK} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
+        {partner && (
+          <TouchableOpacity
+            style={styles.partnerInfo}
+            onPress={() => router.push(`/user/${partnerId}`)}
+          >
+            <Avatar uri={partner.avatar_url} name={partner.display_name ?? ''} size={32} />
+            <Text style={styles.partnerName}>{partner.display_name ?? partner.username}</Text>
+          </TouchableOpacity>
+        )}
+        <View style={{ width: 40 }} />
+      </View>
 
-        {conversation && (
-          <View style={styles.headerCenter}>
-            <Image source={{ uri: conversation.avatar }} style={styles.avatar} />
-            <Text style={styles.name} numberOfLines={1}>
-              {conversation.name}
-            </Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        {isLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.black} />
           </View>
+        ) : (
+          <FlatList
+            data={display}
+            keyExtractor={(item) => item.client_id}
+            inverted
+            renderItem={({ item }) => (
+              <ChatBubble
+                message={item}
+                isOwn={item.sender_id === user?.id}
+                showTimestamp={item.showTimestamp}
+                seenLabel={item.isLastSeen ? formatSeenTime(partnerLastReadAt!) : null}
+                onRetry={
+                  item.status === 'failed' ? () => retryMessage(item.client_id) : undefined
+                }
+              />
+            )}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+          />
         )}
 
-        <View style={styles.navButton} />
-      </View>
-
-      <View style={styles.body}>
-        <Ionicons name="chatbubbles-outline" size={40} color={META} />
-        <Text style={styles.title}>Chat coming soon</Text>
-        <Text style={styles.subtitle}>
-          {conversation
-            ? `Real-time messages with ${conversation.name} will live here.`
-            : 'This conversation will live here.'}
-        </Text>
-      </View>
+        <MessageInput onSend={sendMessage} />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: CREAM },
+  container: { flex: 1, backgroundColor: colors.white },
+  flex: { flex: 1 },
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  navButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#EEE',
-  },
-  name: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: 16,
+  backButton: { padding: spacing.sm },
+  partnerInfo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  partnerName: {
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
-    color: INK,
+    color: colors.text.primary,
   },
-  body: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  title: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: 20,
-    fontWeight: typography.fontWeight.semibold,
-    color: INK,
-  },
-  subtitle: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
-    color: META,
-    textAlign: 'center',
-    maxWidth: 280,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list: { paddingVertical: spacing.base },
 });

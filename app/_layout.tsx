@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/context/AuthContext';
 import { AppProvider } from '@/context/AppContext';
+import { MessagesProvider } from '@/context/MessagesContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,19 +38,21 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <AppProvider>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="event/[id]"
-              options={{ presentation: 'card', headerShown: false }}
-            />
-            <Stack.Screen
-              name="user/[id]"
-              options={{ presentation: 'card', headerShown: false }}
-            />
-          </Stack>
+          <MessagesProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="event/[id]"
+                options={{ presentation: 'card', headerShown: false }}
+              />
+              <Stack.Screen
+                name="user/[id]"
+                options={{ presentation: 'card', headerShown: false }}
+              />
+            </Stack>
+          </MessagesProvider>
         </AppProvider>
       </AuthProvider>
     </GestureHandlerRootView>
