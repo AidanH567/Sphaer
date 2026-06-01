@@ -32,31 +32,61 @@ const CHIP_BG = '#FCFCF9';
 const CHIP_ACTIVE_BG = '#E7E7E7';
 const LINK = '#829CC2';
 
-type FilterKey = 'all' | 'unread' | 'favourites' | 'circles';
+type FilterKey = 'all' | 'unread' | 'favourites' | 'activities' | 'circles';
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'favourites', label: 'Favourites' },
+  { key: 'activities', label: 'Activities' },
   { key: 'circles', label: 'Circles' },
 ];
 
-function toMockRow(conv: Conversation, ownUserId: string | undefined): MockConversation {
-  const partner = conv.partner;
+interface RowWithRoute {
+  row: MockConversation;
+  route: string;
+}
+
+function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute {
   const lastMsg = conv.last_message;
+  if (conv.kind === 'event') {
+    const e = conv.event;
+    return {
+      row: {
+        id: e.id,
+        name: e.title,
+        avatar: e.poster_url ?? `https://picsum.photos/seed/${e.id}/150/150`,
+        type: 'circle', // closest existing semantic — group chat, not 1:1
+        preview: lastMsg?.content ?? 'No messages yet',
+        previewKind: 'text',
+        isOwn: lastMsg?.sender_id === ownUserId,
+        status: 'delivered',
+        timestamp: formatMessageTime(lastMsg?.created_at),
+        isPinned: false,
+        hasMention: false,
+        unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+        hasStoryRing: false,
+      },
+      route: `/messages/event/${e.id}`,
+    };
+  }
+  const partner = conv.partner;
   return {
-    id: partner.id, // UUID — used for navigation to /messages/[id]
-    name: partner.display_name ?? partner.username ?? 'Unknown',
-    avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`,
-    type: 'user',
-    preview: lastMsg?.content ?? '',
-    previewKind: 'text',
-    isOwn: lastMsg?.sender_id === ownUserId,
-    status: 'delivered',
-    timestamp: formatMessageTime(lastMsg?.created_at),
-    isPinned: false,
-    hasMention: false,
-    unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
-    hasStoryRing: false,
+    row: {
+      id: partner.id,
+      name: partner.display_name ?? partner.username ?? 'Unknown',
+      avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`,
+      type: 'user',
+      preview: lastMsg?.content ?? '',
+      previewKind: 'text',
+      isOwn: lastMsg?.sender_id === ownUserId,
+      status: 'delivered',
+      timestamp: formatMessageTime(lastMsg?.created_at),
+      isPinned: false,
+      hasMention: false,
+      unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+      hasStoryRing: false,
+    },
+    route: `/messages/${partner.id}`,
   };
 }
 
@@ -66,20 +96,22 @@ export default function MessagesScreen() {
   const { conversations, isLoading } = useMessagesContext();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
-  const rows = useMemo(() => {
+  const rows: RowWithRoute[] = useMemo(() => {
     const filtered = (() => {
       switch (activeFilter) {
         case 'unread':
           return conversations.filter((c) => c.unread_count > 0);
         case 'favourites':
           return []; // not implemented yet
+        case 'activities':
+          return conversations.filter((c) => c.kind === 'event');
         case 'circles':
           return []; // circle group chats deferred to a later iteration
         default:
           return conversations;
       }
     })();
-    return filtered.map((c) => toMockRow(c, user?.id));
+    return filtered.map((c) => toRow(c, user?.id));
   }, [conversations, activeFilter, user?.id]);
 
   return (
@@ -153,11 +185,11 @@ export default function MessagesScreen() {
       ) : (
         <FlatList
           data={rows}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.row.id}
           renderItem={({ item }) => (
             <ConversationRow
-              conversation={item}
-              onPress={() => router.push(`/messages/${item.id}`)}
+              conversation={item.row}
+              onPress={() => router.push(item.route as never)}
             />
           )}
           contentContainerStyle={styles.list}

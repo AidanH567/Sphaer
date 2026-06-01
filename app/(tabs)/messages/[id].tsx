@@ -49,7 +49,7 @@ export default function ConversationScreen() {
 
   useEffect(() => {
     if (!user?.id || !partnerId || !isFocused) return;
-    markRead(partnerId);
+    markRead({ kind: 'dm', partnerId });
   }, [user?.id, partnerId, isFocused, messages.length, markRead]);
 
   const display: DisplayMessage[] = useMemo(() => {

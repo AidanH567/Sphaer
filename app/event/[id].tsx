@@ -21,6 +21,7 @@ import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
 import { useEvent } from '@/hooks/useEvents';
 import { useAuthContext } from '@/context/AuthContext';
+import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
 
 export default function EventDetailScreen() {
@@ -30,6 +31,17 @@ export default function EventDetailScreen() {
 
   const { event, isLoading } = useEvent(id);
   const { user } = useAuthContext();
+  const { conversations } = useMessagesContext();
+
+  // Chat is available to the creator (always) + anyone with the event in
+  // their conversations list (i.e. registered, since the RPC includes every
+  // event the user is registered for, even when there are no messages yet).
+  const canAccessChat = Boolean(
+    id &&
+      user?.id &&
+      (event?.creator_id === user.id ||
+        conversations.some((c) => c.kind === 'event' && c.event.id === id))
+  );
 
   const [isSaved, setIsSaved] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -98,6 +110,15 @@ export default function EventDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.navRight}>
+          {canAccessChat && (
+            <TouchableOpacity
+              onPress={() => router.push(`/messages/event/${id}`)}
+              style={styles.navButton}
+              accessibilityLabel="Open event chat"
+            >
+              <Ionicons name="chatbubble-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={handleShare} style={styles.navButton}>
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
