@@ -31,6 +31,12 @@ interface ProfileViewProps {
   isOwnProfile?: boolean;
   /** Fires when the user taps Edit Profile (only shown when isOwnProfile). */
   onEditPress?: () => void;
+  /**
+   * Fires when the user taps Message (only rendered when not isOwnProfile
+   * and a handler is provided). The handler is responsible for navigating
+   * to the chat screen.
+   */
+  onMessagePress?: () => void;
   /** Tappable stat callbacks. Each stat becomes pressable when its handler
    * is provided; otherwise it renders as plain text. */
   onFollowersPress?: () => void;
@@ -54,6 +60,7 @@ export function ProfileView({
   profile,
   isOwnProfile = false,
   onEditPress,
+  onMessagePress,
   onFollowersPress,
   onFollowingPress,
   onCirclesPress,
@@ -121,18 +128,34 @@ export function ProfileView({
             <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={[styles.followButton, following && styles.followButtonActive]}
-            onPress={() => {
-              setFollowing((v) => !v);
-              console.log('[Profile] toggle follow', profile.id);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.followText, following && styles.followTextActive]}>
-              {following ? 'Following' : 'Follow'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[
+                styles.followButton,
+                styles.actionButton,
+                following && styles.followButtonActive,
+              ]}
+              onPress={() => {
+                setFollowing((v) => !v);
+                console.log('[Profile] toggle follow', profile.id);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.followText, following && styles.followTextActive]}>
+                {following ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+            {onMessagePress && (
+              <TouchableOpacity
+                style={[styles.followButton, styles.actionButton, styles.messageButton]}
+                onPress={onMessagePress}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="chatbubble-outline" size={16} color={CHOCOLATE} />
+                <Text style={[styles.followText, styles.editText]}>Message</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -378,6 +401,18 @@ const styles = StyleSheet.create({
     backgroundColor: DIVIDER,
   },
 
+  // Action row (Follow + Message side-by-side on other people's profiles)
+  actionRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  actionButton: {
+    flex: 1,
+    marginTop: 0,
+  },
+
   // Follow button
   followButton: {
     width: '100%',
@@ -403,6 +438,15 @@ const styles = StyleSheet.create({
     color: CHOCOLATE,
   },
   editButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  // Message button styled like editButton (white bg + border) so it reads
+  // as the secondary action next to the primary Follow.
+  messageButton: {
     backgroundColor: colors.white,
     borderWidth: 1.5,
     borderColor: BORDER,

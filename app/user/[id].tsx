@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
+import { useAuthContext } from '@/context/AuthContext';
 import { getProfile, getProfileImages, getFollowers, getFollowing } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
@@ -33,6 +34,8 @@ import type { EventWithRelations } from '@/types/event.types';
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuthContext();
+  const isOwnProfile = Boolean(user?.id && id && user.id === id);
 
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found'>('loading');
@@ -143,6 +146,10 @@ export default function UserProfileScreen() {
         <>
           <ProfileView
             profile={displayProfile}
+            isOwnProfile={isOwnProfile}
+            onMessagePress={
+              isOwnProfile ? undefined : () => router.push(`/messages/${id}`)
+            }
             onFollowersPress={() => setOpenSheet('followers')}
             onFollowingPress={() => setOpenSheet('following')}
             onCirclesPress={() => setOpenSheet('circles')}
