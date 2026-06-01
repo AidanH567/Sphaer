@@ -182,7 +182,7 @@ export async function getMyCircles(userId: string): Promise<CircleWithCounts[]> 
 
   // Sort newest-first to roughly mirror "most recently joined" without
   // schema changes (full join-time sort would need joined_at from members).
-  return enriched.sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+  return enriched.sort((a, b) => +new Date(b.created_at ?? 0) - +new Date(a.created_at ?? 0));
 }
 
 /**

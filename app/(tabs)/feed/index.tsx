@@ -46,7 +46,7 @@ export default function FeedScreen() {
     const q = searchText.trim().toLowerCase();
     const hood = (feedFilters.neighborhood ?? '').toLowerCase();
     const base = [...events].sort(
-      (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
+      (a, b) => +new Date(b.created_at ?? 0) - +new Date(a.created_at ?? 0)
     );
     return base.filter((e) => {
       if (q.length > 0) {

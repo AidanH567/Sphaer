@@ -1,40 +1,21 @@
 import { supabase } from '@/lib/supabase';
-import type { MessageInsert, MessageWithSender, Conversation } from '@/types/message.types';
+import type {
+  Message,
+  MessageInsert,
+  MessageWithSender,
+  Conversation,
+} from '@/types/message.types';
+import type { Profile } from '@/types/user.types';
 
 export async function getConversations(userId: string): Promise<Conversation[]> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select(`*, sender:profiles!messages_sender_id_fkey(*)`)
-    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-    .is('circle_id', null)
-    .order('created_at', { ascending: false });
-
+  const { data, error } = await supabase.rpc('get_conversations', { p_user_id: userId });
   if (error) throw error;
 
-  const seen = new Set<string>();
-  const conversations: Conversation[] = [];
-
-  for (const msg of data ?? []) {
-    const partnerId = msg.sender_id === userId ? msg.recipient_id : msg.sender_id;
-    if (!partnerId || seen.has(partnerId)) continue;
-    seen.add(partnerId);
-
-    const { data: partnerData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', partnerId)
-      .single();
-
-    if (partnerData) {
-      conversations.push({
-        partner: partnerData,
-        last_message: msg,
-        unread_count: 0,
-      });
-    }
-  }
-
-  return conversations;
+  return (data ?? []).map((row) => ({
+    partner: row.partner as unknown as Profile,
+    last_message: row.last_message as unknown as Message,
+    unread_count: Number(row.unread_count ?? 0),
+  }));
 }
 
 export async function getMessages(
@@ -54,10 +35,41 @@ export async function getMessages(
   return (data as MessageWithSender[]) ?? [];
 }
 
-export async function sendMessage(message: MessageInsert) {
-  const { data, error } = await supabase.from('messages').insert(message).select().single();
+export async function sendMessage(message: MessageInsert): Promise<MessageWithSender> {
+  if (message.sender_id === message.recipient_id) {
+    throw new Error('Cannot message yourself.');
+  }
+  const { data, error } = await supabase
+    .from('messages')
+    .insert(message)
+    .select(`*, sender:profiles!messages_sender_id_fkey(*)`)
+    .single();
   if (error) throw error;
-  return data;
+  return data as MessageWithSender;
+}
+
+export async function markRead(userId: string, partnerId: string): Promise<void> {
+  const { error } = await supabase
+    .from('direct_message_reads')
+    .upsert(
+      { user_id: userId, partner_id: partnerId, last_read_at: new Date().toISOString() },
+      { onConflict: 'user_id,partner_id' }
+    );
+  if (error) throw error;
+}
+
+export async function getPartnerLastRead(
+  userId: string,
+  partnerId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('direct_message_reads')
+    .select('last_read_at')
+    .eq('user_id', partnerId)
+    .eq('partner_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.last_read_at ?? null;
 }
 
 export async function getCircleMessages(circleId: string): Promise<MessageWithSender[]> {

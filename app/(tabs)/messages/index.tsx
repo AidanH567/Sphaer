@@ -5,17 +5,23 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
-import { MOCK_CONVERSATIONS, type MockConversation } from '@/data/mockMessages';
+import type { MockConversation } from '@/data/mockMessages';
 import { typography } from '@/constants/theme';
+import { useAuthContext } from '@/context/AuthContext';
+import { useMessagesContext } from '@/context/MessagesContext';
+import { formatMessageTime } from '@/utils/date';
+import type { Conversation } from '@/types/message.types';
 
-// NOTE: shows mock conversations (src/data/mockMessages.ts). To go live,
-// query the `messages` table (already in supabase/migrations) joined to
-// `profiles` / `circles`, grouped by partner, taking the latest message.
+// NOTE: real Supabase data via `useMessagesContext()`. Each row is mapped
+// into the legacy `MockConversation` shape so the existing Figma-styled
+// `ConversationRow` keeps working. Replace the mapping with native real-data
+// rendering once `ConversationRow` is updated to accept `Conversation`.
 
 // Figma tokens
 const CREAM = '#FCFCF9';
@@ -34,26 +40,47 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'circles', label: 'Circles' },
 ];
 
-function isUnread(c: MockConversation): boolean {
-  return Boolean(c.unreadCount && c.unreadCount > 0) || Boolean(c.hasMention);
+function toMockRow(conv: Conversation, ownUserId: string | undefined): MockConversation {
+  const partner = conv.partner;
+  const lastMsg = conv.last_message;
+  return {
+    id: partner.id, // UUID — used for navigation to /messages/[id]
+    name: partner.display_name ?? partner.username ?? 'Unknown',
+    avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`,
+    type: 'user',
+    preview: lastMsg?.content ?? '',
+    previewKind: 'text',
+    isOwn: lastMsg?.sender_id === ownUserId,
+    status: 'delivered',
+    timestamp: formatMessageTime(lastMsg?.created_at),
+    isPinned: false,
+    hasMention: false,
+    unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+    hasStoryRing: false,
+  };
 }
 
 export default function MessagesScreen() {
   const router = useRouter();
+  const { user } = useAuthContext();
+  const { conversations, isLoading } = useMessagesContext();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
-  const conversations = useMemo(() => {
-    switch (activeFilter) {
-      case 'unread':
-        return MOCK_CONVERSATIONS.filter(isUnread);
-      case 'favourites':
-        return [];
-      case 'circles':
-        return MOCK_CONVERSATIONS.filter((c) => c.type === 'circle');
-      default:
-        return MOCK_CONVERSATIONS;
-    }
-  }, [activeFilter]);
+  const rows = useMemo(() => {
+    const filtered = (() => {
+      switch (activeFilter) {
+        case 'unread':
+          return conversations.filter((c) => c.unread_count > 0);
+        case 'favourites':
+          return []; // not implemented yet
+        case 'circles':
+          return []; // circle group chats deferred to a later iteration
+        default:
+          return conversations;
+      }
+    })();
+    return filtered.map((c) => toMockRow(c, user?.id));
+  }, [conversations, activeFilter, user?.id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -128,13 +155,17 @@ export default function MessagesScreen() {
       </View>
 
       {/* Conversation list */}
-      {conversations.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator color={INK} />
+        </View>
+      ) : rows.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No conversations to show</Text>
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={rows}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <ConversationRow
