@@ -103,21 +103,8 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Title section — Chat/Circles toggle + filter chips */}
+      {/* Title section — filter chips */}
       <View style={styles.titleSection}>
-        <View style={styles.toggleOuter}>
-          <View style={[styles.toggleItem, styles.toggleItemActive]}>
-            <Text style={[styles.toggleText, styles.toggleTextActive]}>Chat</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.toggleItem}
-            onPress={() => router.push('/(tabs)/circles')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.toggleText}>Circles</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.filtersRow}>
           {FILTERS.map((f) => (
             <TouchableOpacity
@@ -205,41 +192,13 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
   },
 
-  // Title section (toggle + filters)
+  // Title section (filter chips)
   titleSection: {
     paddingLeft: 20,
     paddingRight: 16,
     paddingTop: 4,
     paddingBottom: 8,
     gap: 12,
-  },
-  toggleOuter: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    height: 38,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-    backgroundColor: INK,
-    borderRadius: 30,
-  },
-  toggleItem: {
-    height: 34,
-    paddingHorizontal: 18,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleItemActive: {
-    backgroundColor: CREAM,
-  },
-  toggleText: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: 14,
-    fontWeight: typography.fontWeight.semibold,
-    color: CREAM,
-  },
-  toggleTextActive: {
-    color: INK,
   },
 
   filtersRow: {
