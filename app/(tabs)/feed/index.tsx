@@ -3,9 +3,15 @@ import { FlatList, View, Text, StyleSheet, ActivityIndicator, RefreshControl } f
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
+import { useAuthContext } from '@/context/AuthContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { EventCard } from '@/components/feed/EventCard';
 import { useEvents } from '@/hooks/useEvents';
+import {
+  getSavedEventIds,
+  saveEvent,
+  unsaveEvent,
+} from '@/services/events.service';
 import { colors, spacing, typography } from '@/constants/theme';
 
 /**
@@ -20,6 +26,7 @@ import { colors, spacing, typography } from '@/constants/theme';
 export default function FeedScreen() {
   const router = useRouter();
   const { feedView, setFeedView, feedFilters, setFeedFilters } = useAppContext();
+  const { user } = useAuthContext();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   // Search + neighbourhood now live in AppContext so Feed / Map / Mural
@@ -36,6 +43,26 @@ export default function FeedScreen() {
     useCallback(() => {
       refetch();
     }, [refetch])
+  );
+
+  // Hydrate the local savedIds set from the DB on mount + on focus so the
+  // bookmark icons reflect persisted state across reloads.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      if (!user?.id) {
+        setSavedIds(new Set());
+        return;
+      }
+      getSavedEventIds(user.id)
+        .then((ids) => {
+          if (!cancelled) setSavedIds(new Set(ids));
+        })
+        .catch((err) => console.error('[Feed] load saved ids failed:', err));
+      return () => {
+        cancelled = true;
+      };
+    }, [user?.id])
   );
 
   // Newest first so freshly published activities land on top. Service query
@@ -93,12 +120,29 @@ export default function FeedScreen() {
     setFeedFilters({ ...feedFilters, neighborhood: n ?? undefined });
   }
 
-  function toggleSave(eventId: string) {
+  async function toggleSave(eventId: string) {
+    if (!user?.id) return;
+    const wasSaved = savedIds.has(eventId);
+    // Optimistic flip — revert on failure so the UI matches DB state.
     setSavedIds((prev) => {
       const next = new Set(prev);
-      next.has(eventId) ? next.delete(eventId) : next.add(eventId);
+      wasSaved ? next.delete(eventId) : next.add(eventId);
       return next;
     });
+    try {
+      if (wasSaved) {
+        await unsaveEvent(user.id, eventId);
+      } else {
+        await saveEvent(user.id, eventId);
+      }
+    } catch (err) {
+      console.error('[Feed] toggleSave failed:', err);
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        wasSaved ? next.add(eventId) : next.delete(eventId);
+        return next;
+      });
+    }
   }
 
   return (

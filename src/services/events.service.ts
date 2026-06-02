@@ -71,6 +71,29 @@ export async function deleteEvent(id: string) {
   if (error) throw error;
 }
 
+/** Single-event check for event detail screen's bookmark button. */
+export async function isEventSaved(userId: string, eventId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('saved_events')
+    .select('event_id')
+    .eq('user_id', userId)
+    .eq('event_id', eventId)
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+/** Cheap ID-only fetch — the feed uses this to render the bookmark-icon
+ *  state on every card without pulling full event rows for each save. */
+export async function getSavedEventIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('saved_events')
+    .select('event_id')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return ((data ?? []) as { event_id: string }[]).map((r) => r.event_id);
+}
+
 export async function saveEvent(userId: string, eventId: string) {
   const { error } = await supabase
     .from('saved_events')

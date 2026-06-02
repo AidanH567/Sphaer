@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,11 @@ import { useEvent } from '@/hooks/useEvents';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
+import {
+  isEventSaved as isEventSavedService,
+  saveEvent,
+  unsaveEvent,
+} from '@/services/events.service';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,6 +52,36 @@ export default function EventDetailScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+
+  // Hydrate the bookmark icon state from the DB on mount.
+  useEffect(() => {
+    if (!user?.id || !id) return;
+    let cancelled = false;
+    isEventSavedService(user.id, id)
+      .then((saved) => {
+        if (!cancelled) setIsSaved(saved);
+      })
+      .catch((err) => console.error('[EventDetail] load isSaved failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, id]);
+
+  async function handleToggleSave() {
+    if (!user?.id || !id) return;
+    const wasSaved = isSaved;
+    setIsSaved(!wasSaved);
+    try {
+      if (wasSaved) {
+        await unsaveEvent(user.id, id);
+      } else {
+        await saveEvent(user.id, id);
+      }
+    } catch (err) {
+      console.error('[EventDetail] toggleSave failed:', err);
+      setIsSaved(wasSaved);
+    }
+  }
 
   // Loading state — covers initial fetch
   if (isLoading) {
@@ -122,7 +157,7 @@ export default function EventDetailScreen() {
           <TouchableOpacity onPress={handleShare} style={styles.navButton}>
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setIsSaved((v) => !v)} style={styles.navButton}>
+          <TouchableOpacity onPress={handleToggleSave} style={styles.navButton}>
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={22}

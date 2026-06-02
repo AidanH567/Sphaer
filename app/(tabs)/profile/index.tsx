@@ -23,6 +23,7 @@ import {
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
+import { getSavedEvents } from '@/services/events.service';
 import { signOut } from '@/services/auth.service';
 import { useAuthContext } from '@/context/AuthContext';
 import type { Profile, ProfileImage } from '@/types/user.types';
@@ -60,13 +61,15 @@ export default function ProfileScreen() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
 
-  // Stats popups — exactly one open at a time via a single discriminator
-  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
+  // Stats popups — exactly one open at a time via a single discriminator.
+  // 'saved' isn't a public stat but uses the same sheet machinery.
+  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | 'saved' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
   const [myCircles, setMyCircles] = useState<CircleWithCounts[]>([]);
   const [myActivities, setMyActivities] = useState<EventWithRelations[]>([]);
+  const [mySaved, setMySaved] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
 
   // Fetch data lazily when a stats popup opens. Re-runs each open so the
@@ -83,6 +86,8 @@ export default function ProfileScreen() {
         ? getFollowing(user.id).then((data) => active && setFollowing(data))
         : openSheet === 'circles'
         ? getMyCircles(user.id).then((data) => active && setMyCircles(data))
+        : openSheet === 'saved'
+        ? getSavedEvents(user.id).then((data) => active && setMySaved(data))
         : getMyRegisteredEvents(user.id).then((data) => active && setMyActivities(data));
 
     fetcher
@@ -91,6 +96,7 @@ export default function ProfileScreen() {
           if (openSheet === 'followers') setFollowers([]);
           else if (openSheet === 'following') setFollowing([]);
           else if (openSheet === 'circles') setMyCircles([]);
+          else if (openSheet === 'saved') setMySaved([]);
           else setMyActivities([]);
         }
       })
@@ -233,6 +239,17 @@ export default function ProfileScreen() {
         emptyMessage="No activities yet — create one or register from the feed."
         onClose={() => setOpenSheet(null)}
       />
+      <EntityListSheet
+        visible={openSheet === 'saved'}
+        title="Saved"
+        subtitle={`${mySaved.length.toLocaleString('en-US')} activities saved`}
+        type="activity"
+        items={mySaved}
+        withTimeTabs
+        isLoading={sheetLoading && openSheet === 'saved'}
+        emptyMessage="No saved activities yet — tap the bookmark on any activity to save it for later."
+        onClose={() => setOpenSheet(null)}
+      />
     </>
   ) : null;
 
@@ -282,6 +299,7 @@ export default function ProfileScreen() {
           onFollowingPress={() => setOpenSheet('following')}
           onCirclesPress={() => setOpenSheet('circles')}
           onActivitiesPress={() => setOpenSheet('activities')}
+          onSavedPress={() => setOpenSheet('saved')}
           trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}
         />
       )}

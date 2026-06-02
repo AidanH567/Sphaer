@@ -44,6 +44,12 @@ interface ProfileViewProps {
   onCirclesPress?: () => void;
   onActivitiesPress?: () => void;
   /**
+   * Opens the saved events sheet. Rendered as a dedicated button below the
+   * stats row, above Edit Profile — but only when isOwnProfile is true and
+   * a handler is provided. Other users never see this button.
+   */
+  onSavedPress?: () => void;
+  /**
    * Trailing slot rendered after the Images section. Used to inject the
    * "Available for work" placeholder bar on the own-profile tab without
    * coupling that placeholder to this shared component.
@@ -65,6 +71,7 @@ export function ProfileView({
   onFollowingPress,
   onCirclesPress,
   onActivitiesPress,
+  onSavedPress,
   trailingSlot,
 }: ProfileViewProps) {
   const [following, setFollowing] = useState(false);
@@ -119,14 +126,27 @@ export function ProfileView({
         </View>
 
         {isOwnProfile ? (
-          <TouchableOpacity
-            style={[styles.followButton, styles.editButton]}
-            onPress={onEditPress}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
-            <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
-          </TouchableOpacity>
+          <>
+            {onSavedPress && (
+              <TouchableOpacity
+                style={[styles.followButton, styles.savedButton]}
+                onPress={onSavedPress}
+                activeOpacity={0.85}
+                accessibilityLabel="View saved activities"
+              >
+                <Ionicons name="bookmark-outline" size={16} color={CHOCOLATE} />
+                <Text style={[styles.followText, styles.editText]}>Saved</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.followButton, styles.editButton]}
+              onPress={onEditPress}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
+              <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
+            </TouchableOpacity>
+          </>
         ) : (
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -443,6 +463,17 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     flexDirection: 'row',
     gap: 8,
+  },
+  // Saved button — sits above Edit Profile on own profile, matching the
+  // secondary (white + border) treatment but tighter vertical rhythm.
+  savedButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: spacing.xs,
+    marginBottom: 0,
   },
   // Message button styled like editButton (white bg + border) so it reads
   // as the secondary action next to the primary Follow.
