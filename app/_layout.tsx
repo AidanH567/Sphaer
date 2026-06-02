@@ -55,6 +55,10 @@ export default function RootLayout() {
                 name="ticket/[id]"
                 options={{ presentation: 'card', headerShown: false }}
               />
+              <Stack.Screen
+                name="location"
+                options={{ presentation: 'card', headerShown: false, gestureEnabled: false }}
+              />
             </Stack>
           </MessagesProvider>
         </AppProvider>

@@ -73,7 +73,7 @@ export default function SignUpScreen() {
       // OAuth users skip onboarding (per design) — they land straight on
       // the feed via the (auth) layout's session redirect.
       if (Platform.OS !== 'web') {
-        router.replace('/(tabs)/feed');
+        router.replace('/location' as never);
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Google sign-in failed.';

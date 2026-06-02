@@ -15,7 +15,12 @@ export default function AuthLayout() {
   }
 
   if (session) {
-    return <Redirect href="/(tabs)/feed" />;
+    // Onboarded users skip the location flow via the AsyncStorage flag
+    // inside /location itself — sending everyone there is simplest and
+    // saves us a duplicate flag check at the layout level.
+    // `as never` because expo-router's generated route types are stale
+    // until the dev server regenerates after we add the new file.
+    return <Redirect href={'/location' as never} />;
   }
 
   return (

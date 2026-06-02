@@ -99,5 +99,74 @@ interface GeocodeApiResponse {
     geometry: {
       location: { lat: number; lng: number };
     };
+    address_components?: Array<{
+      long_name: string;
+      short_name: string;
+      types: string[];
+    }>;
   }>;
+}
+
+/**
+ * Reverse-geocode coordinates into a Berlin Ortsteil (neighbourhood) name
+ * like "Kreuzberg" or "Mitte". Used by the location-onboarding flow to
+ * pre-filter the feed.
+ *
+ * Strategy: Google's reverse geocoding returns multiple address-component
+ * granularities. For Berlin neighbourhoods we want the finest political
+ * subdivision below the city itself — usually `sublocality_level_1`
+ * (e.g. "Kreuzberg" inside the borough "Friedrichshain-Kreuzberg"). We
+ * fall back through `sublocality` then `neighborhood` for places Google
+ * tags differently. Returns null on any failure or if no neighbourhood
+ * component is found.
+ */
+export async function reverseGeocodeNeighbourhood(
+  lat: number,
+  lng: number
+): Promise<string | null> {
+  const key = config.googleMapsApiKey;
+  if (!key) {
+    console.warn('[geocoding] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot reverse geocode.');
+    return null;
+  }
+
+  const url =
+    `https://maps.googleapis.com/maps/api/geocode/json` +
+    `?latlng=${lat},${lng}` +
+    `&result_type=sublocality_level_1|sublocality|neighborhood` +
+    `&language=en` +
+    `&key=${key}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[geocoding] reverse HTTP ${res.status}`);
+      return null;
+    }
+    const json = (await res.json()) as GeocodeApiResponse;
+
+    if (json.status === 'ZERO_RESULTS') return null;
+    if (json.status !== 'OK') {
+      const errMsg = (json as { error_message?: string }).error_message;
+      console.warn(`[geocoding] reverse API status ${json.status}`, errMsg ?? '');
+      return null;
+    }
+
+    // Preference order: sublocality_level_1 > sublocality > neighborhood.
+    // Google sometimes returns multiple candidates; we pick the first
+    // matching the tightest preferred type.
+    const preferOrder = ['sublocality_level_1', 'sublocality', 'neighborhood'];
+    for (const preferred of preferOrder) {
+      for (const result of json.results) {
+        const component = result.address_components?.find((c) =>
+          c.types.includes(preferred)
+        );
+        if (component?.long_name) return component.long_name;
+      }
+    }
+    return null;
+  } catch (e) {
+    console.warn('[geocoding] reverse fetch failed', e);
+    return null;
+  }
 }

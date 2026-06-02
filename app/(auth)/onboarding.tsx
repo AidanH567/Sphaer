@@ -47,7 +47,9 @@ export default function OnboardingScreen() {
         avatar_url: values.avatar_url,
       });
       setProfile(updated);
-      router.replace('/(tabs)/feed');
+      // Hand off to the location-onboarding flow; it'll send the user to
+      // the feed once they share location (or skip).
+      router.replace('/location' as never);
     } catch (e: unknown) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Try again.');
     }
