@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Share,
   Alert,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -242,17 +243,21 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderRadius: 18,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
     alignItems: 'center',
   },
+  // Notches sit on the seam between the QR section (top) and the info
+  // section (bottom) — roughly where the visual perforation would be on a
+  // real ticket. The QR is ~280px tall (including its wrap + padding), so
+  // the notch line lands a bit below it.
   notch: {
     position: 'absolute',
     width: NOTCH_SIZE,
     height: NOTCH_SIZE,
     borderRadius: NOTCH_SIZE / 2,
     backgroundColor: BACKDROP,
-    top: '50%',
-    marginTop: -NOTCH_SIZE / 2,
+    top: 304,
   },
   notchLeft: { left: -NOTCH_SIZE / 2 },
   notchRight: { right: -NOTCH_SIZE / 2 },
@@ -260,7 +265,15 @@ const styles = StyleSheet.create({
   qrWrap: {
     padding: spacing.md,
     backgroundColor: CARD_BG,
+    borderRadius: 14,
     position: 'relative',
+    // Drop shadow for the "sticker" feel from the Figma. iOS uses
+    // shadow* props; Android falls back to elevation.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
   },
   qtyBadge: {
     position: 'absolute',
@@ -282,23 +295,31 @@ const styles = StyleSheet.create({
   eventTitle: {
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    color: '#6F6E6A',
     textAlign: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
+    lineHeight: typography.fontSize.md * 1.3,
   },
   eventDate: {
     fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontWeight: typography.fontWeight.bold,
+    color: '#6F6E6A',
     textAlign: 'center',
     marginTop: spacing.xs,
   },
+  // Monospace gives the "boarding pass / terms" feel from the Figma.
+  // Platform.select keeps it native-system on each side.
   bodyText: {
     fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
-    lineHeight: typography.fontSize.xs * 1.5,
+    lineHeight: typography.fontSize.xs * 1.6,
     marginTop: spacing.lg,
-    fontFamily: typography.fontFamily.regular,
+    fontFamily: Platform.select({
+      ios: 'Courier',
+      android: 'monospace',
+      default: 'Courier',
+    }),
+    alignSelf: 'stretch',
   },
 
   // Actions
@@ -318,21 +339,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.base,
   },
   actionHalf: { flex: 1 },
+  // Outline buttons match the Figma: white background, dark text, very
+  // subtle light-gray border. They sit on the dark backdrop so the white
+  // fill provides the contrast.
   actionOutline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.white,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: '#D7D6D1',
   },
   actionOutlineText: {
-    color: colors.white,
+    color: colors.text.primary,
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
   },
+  // The single inverted button — dark fill, white text.
   actionPrimary: {
-    backgroundColor: colors.white,
+    backgroundColor: BACKDROP,
   },
   actionPrimaryText: {
-    color: BACKDROP,
+    color: colors.white,
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
   },
