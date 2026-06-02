@@ -20,7 +20,7 @@ import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
 import { useEvent } from '@/hooks/useEvents';
-import { config } from '@/constants/config';
+import { EventMapPreview } from '@/components/events/EventMapPreview';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
@@ -29,29 +29,6 @@ import {
   saveEvent,
   unsaveEvent,
 } from '@/services/events.service';
-
-/**
- * Build a Google Maps Static API URL for an event location. Returns a PNG
- * URL the Image component can fetch directly. scale=2 doubles the pixel
- * density for retina rendering without changing the logical viewport.
- *
- * Pricing: ~$2 per 1000 loads at the time of writing. Cached aggressively
- * by Google's CDN, so repeat visits cost nothing.
- */
-function buildStaticMapUrl(lat: number, lng: number): string {
-  const center = `${lat},${lng}`;
-  const params = new URLSearchParams({
-    center,
-    zoom: '15',
-    size: '640x320',
-    scale: '2',
-    // Dark pin matching the app's ink color (#1B1B18 = 0x1B1B18 in Google's
-    // hex format — no leading hash, two hex chars per channel).
-    markers: `color:0x1B1B18|${center}`,
-    key: config.googleMapsApiKey,
-  });
-  return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
-}
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -300,45 +277,26 @@ export default function EventDetailScreen() {
             <Text style={styles.address}>Location TBA</Text>
           )}
 
-          {/* Map preview — Google Static Maps API renders a PNG centered on
-              the event's lat/lng with a dark marker. Single image request,
-              no JS map runtime, identical on iOS / Android / web. Tapping
-              opens Apple Maps (iOS) or Google Maps (everywhere else) via
-              openInMaps. When the event has no coordinates we fall back to
-              the same plain "Open in Maps" tile as before. */}
-          {event.lat != null && event.lng != null && config.googleMapsApiKey ? (
-            <TouchableOpacity
-              onPress={openInMaps}
-              activeOpacity={0.85}
-              accessibilityLabel={`Open ${event.location_name ?? 'event location'} in Maps`}
-              style={styles.mapPreviewWrap}
-            >
-              <Image
-                source={{ uri: buildStaticMapUrl(event.lat, event.lng) }}
-                style={styles.mapPreview}
-                resizeMode="cover"
-              />
-              <View style={styles.mapOpenBadge}>
-                <Ionicons name="open-outline" size={14} color={colors.white} />
-                <Text style={styles.mapOpenBadgeText}>Open in Maps</Text>
-              </View>
-            </TouchableOpacity>
+          {/* Map preview — real interactive Google Map (react-native-maps
+              on native, @vis.gl/react-google-maps on web). User can pinch-
+              zoom / pan inside the embed; the "Open in Maps" pill in the
+              corner is the explicit affordance for launching Apple/Google
+              Maps externally. When the event has no coordinates we fall
+              back to the original gray tile. */}
+          {event.lat != null && event.lng != null ? (
+            <EventMapPreview
+              lat={event.lat}
+              lng={event.lng}
+              title={event.location_name ?? undefined}
+              onOpenInMaps={openInMaps}
+            />
           ) : (
-            <TouchableOpacity
-              style={styles.mapBox}
-              onPress={openInMaps}
-              activeOpacity={0.85}
-              disabled={event.lat == null || event.lng == null}
-            >
+            <View style={styles.mapBox}>
               <View style={styles.mapPin}>
-                <Ionicons name="location" size={26} color={colors.white} />
+                <Ionicons name="location" size={26} color={colors.text.tertiary} />
               </View>
-              <Text style={styles.mapHint}>
-                {event.lat != null && event.lng != null
-                  ? 'Open in Maps'
-                  : 'Location coordinates unavailable'}
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.mapHint}>Location coordinates unavailable</Text>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -521,42 +479,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  // Real map preview — renders a Google Static Maps image. Same height +
-  // rounded chrome as the fallback mapBox so layout doesn't jump when
-  // some events have coords and others don't.
-  mapPreviewWrap: {
-    height: 180,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    position: 'relative',
-  },
-  mapPreview: {
-    width: '100%',
-    height: '100%',
-  },
-  // Small floating affordance so it's obvious the map is tappable rather
-  // than a dead-end preview. Sits in the bottom-right corner.
-  mapOpenBadge: {
-    position: 'absolute',
-    bottom: spacing.sm,
-    right: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(13, 13, 13, 0.85)',
-  },
-  mapOpenBadgeText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: typography.fontWeight.semibold,
   },
   mapPin: {
     width: 44,
