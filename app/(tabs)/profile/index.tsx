@@ -62,14 +62,22 @@ export default function ProfileScreen() {
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
 
   // Stats popups — exactly one open at a time via a single discriminator.
-  // 'saved' isn't a public stat but uses the same sheet machinery.
-  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | 'saved' | null;
+  // 'saved' and 'tickets' aren't public stats but use the same sheet machinery.
+  type OpenSheet =
+    | 'followers'
+    | 'following'
+    | 'circles'
+    | 'activities'
+    | 'saved'
+    | 'tickets'
+    | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
   const [myCircles, setMyCircles] = useState<CircleWithCounts[]>([]);
   const [myActivities, setMyActivities] = useState<EventWithRelations[]>([]);
   const [mySaved, setMySaved] = useState<EventWithRelations[]>([]);
+  const [myTickets, setMyTickets] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
 
   // Fetch data lazily when a stats popup opens. Re-runs each open so the
@@ -88,6 +96,8 @@ export default function ProfileScreen() {
         ? getMyCircles(user.id).then((data) => active && setMyCircles(data))
         : openSheet === 'saved'
         ? getSavedEvents(user.id).then((data) => active && setMySaved(data))
+        : openSheet === 'tickets'
+        ? getMyRegisteredEvents(user.id).then((data) => active && setMyTickets(data))
         : getMyRegisteredEvents(user.id).then((data) => active && setMyActivities(data));
 
     fetcher
@@ -97,6 +107,7 @@ export default function ProfileScreen() {
           else if (openSheet === 'following') setFollowing([]);
           else if (openSheet === 'circles') setMyCircles([]);
           else if (openSheet === 'saved') setMySaved([]);
+          else if (openSheet === 'tickets') setMyTickets([]);
           else setMyActivities([]);
         }
       })
@@ -250,6 +261,18 @@ export default function ProfileScreen() {
         emptyMessage="No saved activities yet — tap the bookmark on any activity to save it for later."
         onClose={() => setOpenSheet(null)}
       />
+      <EntityListSheet
+        visible={openSheet === 'tickets'}
+        title="Tickets"
+        subtitle={`${myTickets.length.toLocaleString('en-US')} active`}
+        type="activity"
+        items={myTickets}
+        withTimeTabs
+        routeAsTicket
+        isLoading={sheetLoading && openSheet === 'tickets'}
+        emptyMessage="No tickets yet — register for an activity from the feed."
+        onClose={() => setOpenSheet(null)}
+      />
     </>
   ) : null;
 
@@ -300,6 +323,7 @@ export default function ProfileScreen() {
           onCirclesPress={() => setOpenSheet('circles')}
           onActivitiesPress={() => setOpenSheet('activities')}
           onSavedPress={() => setOpenSheet('saved')}
+          onTicketsPress={() => setOpenSheet('tickets')}
           trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}
         />
       )}

@@ -56,6 +56,9 @@ interface ActivityListProps extends BaseProps {
   items: EventWithRelations[];
   /** Activities only — render Upcoming / Past tabs that split items by start time. */
   withTimeTabs?: boolean;
+  /** When true, rows route to /ticket/<id> instead of /event/<id>. Used by
+   *  the Tickets sheet on the profile screen. */
+  routeAsTicket?: boolean;
 }
 
 export type EntityListSheetProps = UserListProps | CircleListProps | ActivityListProps;
@@ -193,11 +196,13 @@ export function EntityListSheet(props: EntityListSheetProps) {
       );
     }
     const e = item as EventWithRelations;
+    const activityProps = props as ActivityListProps;
+    const target = activityProps.routeAsTicket ? `/ticket/${e.id}` : `/event/${e.id}`;
     return (
       <ActivityRow
         key={e.id}
         event={e}
-        onPress={() => handleRowPress(`/event/${e.id}`)}
+        onPress={() => handleRowPress(target)}
         showDivider={index < filteredItems.length - 1}
       />
     );

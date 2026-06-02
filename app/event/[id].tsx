@@ -147,6 +147,15 @@ export default function EventDetailScreen() {
         <View style={styles.navRight}>
           {canAccessChat && (
             <TouchableOpacity
+              onPress={() => router.push(`/ticket/${id}`)}
+              style={styles.navButton}
+              accessibilityLabel="View ticket"
+            >
+              <Ionicons name="ticket-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
+          {canAccessChat && (
+            <TouchableOpacity
               onPress={() => router.push(`/messages/event/${id}`)}
               style={styles.navButton}
               accessibilityLabel="Open event chat"
