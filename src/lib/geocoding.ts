@@ -14,6 +14,13 @@
  */
 
 import { config } from '@/constants/config';
+import {
+  matchBerlinBorough,
+  matchBerlinNeighborhood,
+  ORTSTEIL_TO_BEZIRK,
+  type BerlinBorough,
+  type BerlinNeighborhood,
+} from '@/constants/berlinNeighborhoods';
 
 export interface GeocodeResult {
   lat: number;
@@ -107,33 +114,46 @@ interface GeocodeApiResponse {
   }>;
 }
 
+export interface ReverseGeocodeResult {
+  /** Berlin Ortsteil (Kreuzberg, Mitte, ...) — only set when Google
+   *  resolved that fine-grained level for these coords. */
+  neighbourhood: BerlinNeighborhood | null;
+  /** Berlin Bezirk (Friedrichshain-Kreuzberg, ...) — set whenever we can
+   *  determine the borough, either directly from a Google component or
+   *  derived from a resolved Ortsteil via ORTSTEIL_TO_BEZIRK. */
+  borough: BerlinBorough | null;
+}
+
 /**
- * Reverse-geocode coordinates into a Berlin Ortsteil (neighbourhood) name
- * like "Kreuzberg" or "Mitte". Used by the location-onboarding flow to
- * pre-filter the feed.
+ * Reverse-geocode coordinates into Berlin Ortsteil + Bezirk. Used by the
+ * location-onboarding flow to pre-filter the feed.
  *
  * Strategy: Google's reverse geocoding returns multiple address-component
- * granularities. For Berlin neighbourhoods we want the finest political
- * subdivision below the city itself — usually `sublocality_level_1`
- * (e.g. "Kreuzberg" inside the borough "Friedrichshain-Kreuzberg"). We
- * fall back through `sublocality` then `neighborhood` for places Google
- * tags differently. Returns null on any failure or if no neighbourhood
- * component is found.
+ * granularities. We harvest both the Ortsteil tags
+ * (`sublocality_level_1`, `neighborhood`) and the broader Bezirk tags
+ * (`sublocality`, `administrative_area_level_2`). When only the Ortsteil
+ * resolves we backfill the Bezirk via the static lookup; when only the
+ * Bezirk resolves we leave neighbourhood null (don't pretend we know more
+ * than Google told us). Returns both null on failure.
  */
-export async function reverseGeocodeNeighbourhood(
+export async function reverseGeocodeBerlinLocation(
   lat: number,
   lng: number
-): Promise<string | null> {
+): Promise<ReverseGeocodeResult> {
+  const empty: ReverseGeocodeResult = { neighbourhood: null, borough: null };
+
   const key = config.googleMapsApiKey;
   if (!key) {
     console.warn('[geocoding] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot reverse geocode.');
-    return null;
+    return empty;
   }
 
+  // We deliberately don't pass result_type — that filter forces a single
+  // type and we want every level Google has for these coords so we can
+  // pull both Ortsteil and Bezirk from the same response.
   const url =
     `https://maps.googleapis.com/maps/api/geocode/json` +
     `?latlng=${lat},${lng}` +
-    `&result_type=sublocality_level_1|sublocality|neighborhood` +
     `&language=en` +
     `&key=${key}`;
 
@@ -141,32 +161,49 @@ export async function reverseGeocodeNeighbourhood(
     const res = await fetch(url);
     if (!res.ok) {
       console.warn(`[geocoding] reverse HTTP ${res.status}`);
-      return null;
+      return empty;
     }
     const json = (await res.json()) as GeocodeApiResponse;
 
-    if (json.status === 'ZERO_RESULTS') return null;
+    if (json.status === 'ZERO_RESULTS') return empty;
     if (json.status !== 'OK') {
       const errMsg = (json as { error_message?: string }).error_message;
       console.warn(`[geocoding] reverse API status ${json.status}`, errMsg ?? '');
-      return null;
+      return empty;
     }
 
-    // Preference order: sublocality_level_1 > sublocality > neighborhood.
-    // Google sometimes returns multiple candidates; we pick the first
-    // matching the tightest preferred type.
-    const preferOrder = ['sublocality_level_1', 'sublocality', 'neighborhood'];
-    for (const preferred of preferOrder) {
-      for (const result of json.results) {
-        const component = result.address_components?.find((c) =>
-          c.types.includes(preferred)
-        );
-        if (component?.long_name) return component.long_name;
+    let neighbourhood: BerlinNeighborhood | null = null;
+    let borough: BerlinBorough | null = null;
+
+    // Scan every result + every component until we've filled both levels.
+    // Different results sometimes carry different granularities for the
+    // same point (e.g. street-level result vs locality-level result).
+    for (const result of json.results) {
+      for (const c of result.address_components ?? []) {
+        if (
+          !neighbourhood &&
+          (c.types.includes('sublocality_level_1') || c.types.includes('neighborhood'))
+        ) {
+          neighbourhood = matchBerlinNeighborhood(c.long_name);
+        }
+        if (
+          !borough &&
+          (c.types.includes('sublocality') || c.types.includes('administrative_area_level_2'))
+        ) {
+          borough = matchBerlinBorough(c.long_name);
+        }
       }
+      if (neighbourhood && borough) break;
     }
-    return null;
+
+    // Derive Bezirk from Ortsteil if Google didn't tag the broader level.
+    if (neighbourhood && !borough) {
+      borough = ORTSTEIL_TO_BEZIRK[neighbourhood];
+    }
+
+    return { neighbourhood, borough };
   } catch (e) {
     console.warn('[geocoding] reverse fetch failed', e);
-    return null;
+    return empty;
   }
 }

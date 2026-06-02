@@ -20,6 +20,9 @@ export interface SelectedAddress {
   lng: number;
   /** Canonicalised Berlin Ortsteil from our 26-name list, or null */
   neighbourhood: string | null;
+  /** Berlin Bezirk (borough) — broader than neighbourhood. Filled even
+   *  when neighbourhood is null. */
+  borough: string | null;
   /** Stable Google place id, useful for de-dup */
   place_id: string;
 }
@@ -107,6 +110,7 @@ export function AddressAutocompleteInput({
         lat: details.lat,
         lng: details.lng,
         neighbourhood: details.neighbourhood,
+        borough: details.borough,
         place_id: details.place_id,
       });
       setSelectedConfirmed(true);

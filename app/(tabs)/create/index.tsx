@@ -128,6 +128,7 @@ export default function CreateScreen() {
       let lat: number | null = null;
       let lng: number | null = null;
       let neighbourhood: string | null = null;
+      let borough: string | null = null;
       let finalAddress: string | null = null;
       let finalLocationName: string | null = locationName.trim() || null;
 
@@ -136,6 +137,7 @@ export default function CreateScreen() {
         lat = selectedPlace.lat;
         lng = selectedPlace.lng;
         neighbourhood = selectedPlace.neighbourhood;
+        borough = selectedPlace.borough;
         finalAddress = selectedPlace.formatted_address;
         // If the user didn't type a venue name and Google returned one
         // (e.g. "Berghain"), use that for `location_name`.
@@ -162,6 +164,7 @@ export default function CreateScreen() {
         lat,
         lng,
         neighbourhood,
+        borough,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt ? endsAt.toISOString() : null,
         categories,

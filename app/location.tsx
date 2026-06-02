@@ -15,7 +15,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '@/context/AppContext';
 import { useAuthContext } from '@/context/AuthContext';
-import { reverseGeocodeNeighbourhood } from '@/lib/geocoding';
+import { reverseGeocodeBerlinLocation } from '@/lib/geocoding';
 import { colors, typography, spacing } from '@/constants/theme';
 
 // State-machine view for the location-onboarding flow. The same screen
@@ -114,20 +114,21 @@ export default function LocationOnboardingScreen() {
       const pos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      const hood = await reverseGeocodeNeighbourhood(
+      const resolved = await reverseGeocodeBerlinLocation(
         pos.coords.latitude,
         pos.coords.longitude
       );
-      if (!hood) {
-        // We got coords but couldn't resolve a neighbourhood — still
-        // skip the reveal, no point pretending we know where they are.
+      // Prefer the Ortsteil ("Kreuzberg"); fall back to Bezirk
+      // ("Friedrichshain-Kreuzberg") when Google only knew that level.
+      // Don't pretend we have an Ortsteil when we don't — the
+      // eventMatchesLocationFilter logic handles either kind.
+      const label = resolved.neighbourhood ?? resolved.borough;
+      if (!label) {
         await finishAndGoToFeed();
         return;
       }
-      // Pre-set the feed filter so when they land on /feed the events
-      // are already scoped to their neighbourhood.
-      setNeighbourhood(hood);
-      setFeedFilters({ ...feedFilters, neighborhood: hood });
+      setNeighbourhood(label);
+      setFeedFilters({ ...feedFilters, neighborhood: label });
       setPhase('found');
     } catch (err) {
       console.error('[LocationOnboarding] capture failed:', err);

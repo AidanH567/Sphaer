@@ -213,6 +213,10 @@ export type Database = {
       events: {
         Row: {
           address: string | null
+          // Berlin Bezirk (borough) — broader than neighbourhood. Some
+          // Google geocoder results only resolve this level. Added in
+          // 20260601300000_events_borough.sql.
+          borough: string | null
           categories: string[] | null
           circle_id: string | null
           created_at: string | null
@@ -224,6 +228,8 @@ export type Database = {
           lat: number | null
           lng: number | null
           location_name: string | null
+          // Berlin Ortsteil — more specific. May be null when the
+          // geocoder only knew the borough.
           neighbourhood: string | null
           poster_url: string | null
           price: number | null
@@ -233,6 +239,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          borough?: string | null
           categories?: string[] | null
           circle_id?: string | null
           created_at?: string | null
@@ -253,6 +260,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          borough?: string | null
           categories?: string[] | null
           circle_id?: string | null
           created_at?: string | null

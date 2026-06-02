@@ -12,6 +12,7 @@ import {
   saveEvent,
   unsaveEvent,
 } from '@/services/events.service';
+import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { colors, spacing, typography } from '@/constants/theme';
 
 /**
@@ -89,12 +90,19 @@ export default function FeedScreen() {
         if (!haystack.includes(q)) return false;
       }
       if (hood.length > 0) {
-        // Prefer the structured `neighbourhood` column when present
-        // (set by Places autocomplete on Create Activity). Fall back
-        // to substring match on address/location for older events
-        // that don't have it yet.
-        if (e.neighbourhood) {
-          if (e.neighbourhood.toLowerCase() !== hood) return false;
+        // Two-level hierarchy: try eventMatchesLocationFilter first which
+        // understands both Ortsteil and Bezirk semantics (a Bezirk filter
+        // matches every event whose neighbourhood is in that Bezirk).
+        // Falls through to substring match on the freeform address when
+        // the filter string isn't a canonical Berlin name.
+        const structured = eventMatchesLocationFilter(feedFilters.neighborhood ?? '', {
+          borough: e.borough ?? null,
+          neighbourhood: e.neighbourhood ?? null,
+        });
+        if (structured === true) {
+          // pass through
+        } else if (structured === false) {
+          return false;
         } else {
           const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
           if (!locHaystack.includes(hood)) return false;
