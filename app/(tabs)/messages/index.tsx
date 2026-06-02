@@ -32,11 +32,21 @@ const CHIP_BG = '#FCFCF9';
 const CHIP_ACTIVE_BG = '#E7E7E7';
 const LINK = '#829CC2';
 
-type FilterKey = 'all' | 'unread' | 'favourites' | 'activities' | 'circles';
+type FilterKey =
+  | 'all'
+  | 'unread'
+  | 'favourites'
+  | 'direct'
+  | 'activities'
+  | 'circles';
+
+// Order: catch-all first, then cross-kind filters, then per-kind filters
+// grouped together (Direct → Activities → Circles).
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'favourites', label: 'Favourites' },
+  { key: 'direct', label: 'Direct' },
   { key: 'activities', label: 'Activities' },
   { key: 'circles', label: 'Circles' },
 ];
@@ -124,6 +134,8 @@ export default function MessagesScreen() {
           return conversations.filter((c) => c.unread_count > 0);
         case 'favourites':
           return []; // not implemented yet
+        case 'direct':
+          return conversations.filter((c) => c.kind === 'dm');
         case 'activities':
           return conversations.filter((c) => c.kind === 'event');
         case 'circles':
