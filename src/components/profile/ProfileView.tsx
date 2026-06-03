@@ -44,6 +44,17 @@ interface ProfileViewProps {
   onCirclesPress?: () => void;
   onActivitiesPress?: () => void;
   /**
+   * Real follow state for non-own profiles. When provided alongside
+   * onToggleFollow, the Follow button reflects + persists this value
+   * instead of the legacy local-only toggle. Both must be provided for
+   * the persistent path to activate.
+   */
+  isFollowing?: boolean;
+  /** Fires when the user taps Follow / Following. Caller persists. */
+  onToggleFollow?: () => void;
+  /** Disables the Follow button (in-flight network call). */
+  followBusy?: boolean;
+  /**
    * Opens the saved events sheet. Rendered as a dedicated button below the
    * stats row, above Edit Profile — but only when isOwnProfile is true and
    * a handler is provided. Other users never see this button.
@@ -79,9 +90,16 @@ export function ProfileView({
   onActivitiesPress,
   onSavedPress,
   onTicketsPress,
+  isFollowing,
+  onToggleFollow,
+  followBusy,
   trailingSlot,
 }: ProfileViewProps) {
-  const [following, setFollowing] = useState(false);
+  // Legacy local-only toggle. Only used when the caller didn't pass real
+  // isFollowing + onToggleFollow props (e.g. some embedded preview).
+  const [localFollowing, setLocalFollowing] = useState(false);
+  const persistent = typeof isFollowing === 'boolean' && typeof onToggleFollow === 'function';
+  const following = persistent ? (isFollowing as boolean) : localFollowing;
   const [aboutExpanded, setAboutExpanded] = useState(false);
 
   // Empty-state helpers — for a real, just-signed-up user most arrays will be
@@ -176,12 +194,17 @@ export function ProfileView({
                 styles.followButton,
                 styles.actionButton,
                 following && styles.followButtonActive,
+                followBusy && styles.followButtonBusy,
               ]}
               onPress={() => {
-                setFollowing((v) => !v);
-                console.log('[Profile] toggle follow', profile.id);
+                if (persistent) {
+                  onToggleFollow?.();
+                } else {
+                  setLocalFollowing((v) => !v);
+                }
               }}
               activeOpacity={0.85}
+              disabled={followBusy}
             >
               <Text style={[styles.followText, following && styles.followTextActive]}>
                 {following ? 'Following' : 'Follow'}
@@ -470,6 +493,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: BORDER,
   },
+  followButtonBusy: { opacity: 0.55 },
   followText: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 17,
