@@ -16,7 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, radius } from '@/constants/theme';
+import { colors, spacing, typography, radius, motion } from '@/constants/theme';
 import type { Profile } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
@@ -66,7 +66,7 @@ export type EntityListSheetProps = UserListProps | CircleListProps | ActivityLis
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const SHEET_HEIGHT = Math.round(Dimensions.get('window').height * 0.85);
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = motion.duration.standard;
 
 /**
  * Reusable slide-up bottom sheet that lists users, circles, or activities.
@@ -104,8 +104,7 @@ export function EntityListSheet(props: EntityListSheetProps) {
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          damping: 22,
-          stiffness: 180,
+          ...motion.spring.sheet,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {

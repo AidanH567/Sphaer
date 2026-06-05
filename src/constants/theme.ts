@@ -143,5 +143,34 @@ export const shadow = {
   },
 } as const;
 
-export const theme = { colors, typography, spacing, radius, shadow } as const;
+// ─── Motion ──────────────────────────────────────────────────────────────────
+// Shared animation timings + spring presets so every sheet, modal, and
+// transition uses the same feel. Anything that fades, slides, or scales
+// pulls from here — no hardcoded durations in components.
+//
+// Tuned for "swift" — sheets open quickly (240ms perceived) and close even
+// faster (200ms). Spring is stiffer than React Native's spring default
+// (stiffness 220 vs default 100) so the slide-up settles without bouncing.
+export const motion = {
+  duration: {
+    swift: 200,      // close / dismiss — should always feel quicker than open
+    standard: 240,   // open / appear — the workhorse for sheets, fades, backdrops
+    slow: 320,       // ambient / large-canvas transitions
+  },
+  spring: {
+    // Slide-up sheet preset: tight, no perceptible wobble at rest.
+    sheet: {
+      damping: 22,
+      stiffness: 220,
+    },
+    // Softer spring for hero / decorative motion that benefits from a little
+    // overshoot.
+    soft: {
+      damping: 18,
+      stiffness: 160,
+    },
+  },
+} as const;
+
+export const theme = { colors, typography, spacing, radius, shadow, motion } as const;
 export type Theme = typeof theme;

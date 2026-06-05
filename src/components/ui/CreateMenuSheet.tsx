@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, radius } from '@/constants/theme';
+import { colors, spacing, typography, radius, motion } from '@/constants/theme';
 
 interface CreateMenuSheetProps {
   visible: boolean;
@@ -28,7 +28,7 @@ interface MenuOption {
 }
 
 const SHEET_HEIGHT = 340;
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = motion.duration.standard;
 
 export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
   const router = useRouter();
@@ -46,8 +46,7 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          damping: 20,
-          stiffness: 180,
+          ...motion.spring.sheet,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {

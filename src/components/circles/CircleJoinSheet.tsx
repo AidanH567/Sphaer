@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, radius } from '@/constants/theme';
+import { colors, spacing, typography, radius, motion } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { joinCircle, isMember } from '@/services/circles.service';
 import type { CircleWithCounts } from '@/types/circle.types';
@@ -28,7 +28,7 @@ interface CircleJoinSheetProps {
 }
 
 const SHEET_HEIGHT = 460;
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = motion.duration.standard;
 
 /**
  * Bottom sheet shown when a circle card is tapped. Mirrors the open/close
@@ -63,8 +63,7 @@ export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetPr
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          damping: 20,
-          stiffness: 180,
+          ...motion.spring.sheet,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
