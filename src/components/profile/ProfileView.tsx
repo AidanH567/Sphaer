@@ -17,9 +17,9 @@ import type { MockProfile } from '@/data/mockProfiles';
 const NAME = colors.neutral.ink;
 const META = '#868579';
 const CHOCOLATE = colors.neutral.chocolate;
-const BODY = '#363530';
-const DIVIDER = '#CFCEC9';
-const TESTIMONIAL_BG = '#F1F3F6';
+const BODY = colors.neutral.body;
+const DIVIDER = colors.neutral.divider;
+const TESTIMONIAL_BG = colors.appleMail; // matches Feed bg, already a Figma token
 const TESTIMONIAL_BORDER = colors.neutral.neutral400;
 const LINK = '#3572C7';
 const SUCCESS = '#2A7E3B';

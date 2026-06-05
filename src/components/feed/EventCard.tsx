@@ -16,8 +16,8 @@ interface EventCardProps {
 
 // Exact tokens from Figma node 3419:7753 (feed event card).
 const CHOCOLATE = colors.neutral.chocolate; // card title
-const CARD_META = '#505049'; // date / time / location
-const PRICE = '#363530'; // price
+const CARD_META = colors.neutral.cardMeta; // date / time / location
+const PRICE = colors.neutral.body; // price
 
 const CARD_HEIGHT = 231;
 const POSTER_WIDTH = 163;

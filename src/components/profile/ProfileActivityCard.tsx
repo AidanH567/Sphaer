@@ -9,8 +9,8 @@ interface ProfileActivityCardProps {
 
 // Figma tokens
 const CHOCOLATE = colors.neutral.chocolate;
-const CARD_META = '#505049';
-const BODY = '#363530';
+const CARD_META = colors.neutral.cardMeta;
+const BODY = colors.neutral.body;
 
 /**
  * Activity card used on the profile page — title on the left, date / time /

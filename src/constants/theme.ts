@@ -24,8 +24,11 @@ export const colors = {
   neutral: {
     chocolate: '#2B2A27',   // Neutral/chocolate — primary text & card titles
     ink:       '#1B1B18',   // Neutral/ink — strong heading / display text
+    body:      '#363530',   // Neutral/body — body copy & price text on cards
+    cardMeta:  '#505049',   // Neutral/card-meta — date / time / location on cards
     meta:      '#767779',   // Neutral/meta — secondary metadata text
     neutral400:'#9E9D94',   // Neutral/neutral-400 — tertiary text / subtle borders
+    divider:   '#CFCEC9',   // Neutral/divider — hairline dividers on light bg
   },
 
   border: '#E5E5E5',

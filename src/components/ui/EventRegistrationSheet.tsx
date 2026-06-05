@@ -20,7 +20,7 @@ import type { EventWithRelations } from '@/types/event.types';
 const CHOCOLATE = colors.neutral.chocolate;
 const INK = colors.neutral.ink;
 const GREY = '#B6B6AF';
-const DIVIDER = '#CFCEC9';
+const DIVIDER = colors.neutral.divider;
 const BADGE_RED = '#B93D36';
 const BADGE_TEXT = '#FAF9F5';
 const SECONDARY = 'rgba(30,30,30,0.6)';
