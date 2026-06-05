@@ -15,8 +15,8 @@ const CARD_WIDTH = 176;
 const CARD_HEIGHT = 313;
 const IMAGE_SIZE = 148;
 const CONTENT_HEIGHT = 132;
-const CHOCOLATE = '#2B2A27'; // Neutral/chocolate — card title
-const META = '#9E9D94'; // neutral/neutral-400 — activity / member counts
+const CHOCOLATE = colors.neutral.chocolate; // Neutral/chocolate — card title
+const META = colors.neutral.neutral400; // neutral/neutral-400 — activity / member counts
 
 /**
  * Vertical circle card for the Circles explore page category rows.

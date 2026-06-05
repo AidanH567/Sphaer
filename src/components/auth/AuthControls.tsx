@@ -13,8 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
 
 // Figma tokens (Sign Up Flow Screen 1.1 — node 5013:10790)
-const CHOCOLATE = '#2B2A27';
-const INK = '#1B1B18';
+const CHOCOLATE = colors.neutral.chocolate;
+const INK = colors.neutral.ink;
 const META = '#5A5A5A';
 const PLACEHOLDER = '#9A9A9A';
 const INPUT_BORDER = '#C1C1C1';

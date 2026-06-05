@@ -188,7 +188,7 @@ export function ConfirmSheet({
   );
 }
 
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 const DESTRUCTIVE_RED = colors.badge.red; // '#E53935'
 
 const styles = StyleSheet.create({

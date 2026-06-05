@@ -14,13 +14,13 @@ import { ProfileActivityCard } from './ProfileActivityCard';
 import type { MockProfile } from '@/data/mockProfiles';
 
 // Figma design tokens (node 3637:4767)
-const NAME = '#1B1B18';
+const NAME = colors.neutral.ink;
 const META = '#868579';
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 const BODY = '#363530';
 const DIVIDER = '#CFCEC9';
 const TESTIMONIAL_BG = '#F1F3F6';
-const TESTIMONIAL_BORDER = '#9E9D94';
+const TESTIMONIAL_BORDER = colors.neutral.neutral400;
 const LINK = '#3572C7';
 const SUCCESS = '#2A7E3B';
 const BORDER = '#CCD0D7';

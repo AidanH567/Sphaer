@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { colors, typography } from '@/constants/theme';
 
-const DEFAULT_COLOR = '#2B2A27';
+const DEFAULT_COLOR = colors.neutral.chocolate;
 
 interface SphaerIconProps {
   size?: number;

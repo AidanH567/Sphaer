@@ -11,7 +11,7 @@ interface ConversationRowProps {
 
 // Figma tokens
 const NAME = '#0A0A0A';
-const META = '#767779';
+const META = colors.neutral.meta;
 const READ_BLUE = '#3572C7';
 const MENTION_BLUE = '#21386C';
 const STORY_RING = '#E67E22'; // warm gradient ring → solid approximation

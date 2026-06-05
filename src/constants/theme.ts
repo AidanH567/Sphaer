@@ -16,6 +16,18 @@ export const colors = {
     placeholder: '#AAAAAA',
   },
 
+  // Figma "Neutral/*" palette — the warm-grey tier the design system uses for
+  // text, titles, and subtle borders. Promoted here so the recurring local
+  // CHOCOLATE / META / INK consts across components flow through theme rather
+  // than hardcoding hex values (CLAUDE.md rule). Names mirror the Figma layer
+  // comments exactly so designers and devs can talk in the same vocabulary.
+  neutral: {
+    chocolate: '#2B2A27',   // Neutral/chocolate — primary text & card titles
+    ink:       '#1B1B18',   // Neutral/ink — strong heading / display text
+    meta:      '#767779',   // Neutral/meta — secondary metadata text
+    neutral400:'#9E9D94',   // Neutral/neutral-400 — tertiary text / subtle borders
+  },
+
   border: '#E5E5E5',
   borderDark: '#0D0D0D',
 

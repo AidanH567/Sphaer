@@ -8,7 +8,7 @@ interface ProfileActivityCardProps {
 }
 
 // Figma tokens
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 const CARD_META = '#505049';
 const BODY = '#363530';
 

@@ -504,8 +504,8 @@ function defaultEmptyMessage(type: 'user' | 'circle' | 'activity'): string {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const CHOCOLATE = '#2B2A27';
-const META = '#767779';
+const CHOCOLATE = colors.neutral.chocolate;
+const META = colors.neutral.meta;
 
 const styles = StyleSheet.create({
   backdrop: {

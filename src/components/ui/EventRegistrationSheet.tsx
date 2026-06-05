@@ -17,8 +17,8 @@ import { colors, spacing, typography } from '@/constants/theme';
 import type { EventWithRelations } from '@/types/event.types';
 
 // Exact colours from the Figma SVG export.
-const CHOCOLATE = '#2B2A27';
-const INK = '#1B1B18';
+const CHOCOLATE = colors.neutral.chocolate;
+const INK = colors.neutral.ink;
 const GREY = '#B6B6AF';
 const DIVIDER = '#CFCEC9';
 const BADGE_RED = '#B93D36';

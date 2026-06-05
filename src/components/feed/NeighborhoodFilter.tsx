@@ -139,7 +139,7 @@ export function NeighborhoodFilter({ value, onChange }: NeighborhoodFilterProps)
   );
 }
 
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },
