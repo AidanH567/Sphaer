@@ -1,7 +1,7 @@
 import { Stack, Redirect } from 'expo-router';
 import { useAuthContext } from '@/context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
-import { colors } from '@/constants/theme';
+import { colors, motion } from '@/constants/theme';
 
 export default function AuthLayout() {
   const { session, isLoading } = useAuthContext();
@@ -24,7 +24,13 @@ export default function AuthLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        animationDuration: motion.duration.standard,
+      }}
+    >
       <Stack.Screen name="index" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="login" />
