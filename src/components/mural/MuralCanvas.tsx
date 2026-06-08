@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { MuralPoster } from './MuralPoster';
 import { MuralMinimap } from './MuralMinimap';
@@ -119,11 +120,21 @@ export function MuralCanvas({
     onPosterTapRef.current = onPosterTap;
   }, [onPosterTap]);
 
+  // Canvas opacity, used to fade-dip during filter-driven layout changes.
+  // Stays at 1.0 outside of those moments — no first-mount flash.
+  const canvasOpacity = useSharedValue(1);
+
   // When the canvas shape changes (filter rebuilt the wall), gently spring
   // the viewport back into the new bounds rather than jump-cutting. Initial
   // mount is already centered via useSharedValue seeds, so this effect is
   // purely the "filters shrank the wall, your view is now out of bounds"
   // recovery path.
+  //
+  // Additionally: dip opacity to ~0.25 during the relayout so the snap
+  // between filter states reads as a deliberate transition rather than a
+  // hard cut. Skip on the very first mount (when prev refs are unset) so
+  // the user doesn't see the dip when they first land on the screen.
+  const prevCanvasRef = useRef<{ w: number; h: number } | null>(null);
   useEffect(() => {
     const x = boundsFor(viewportWidth, canvasWidth, scale.value);
     const y = boundsFor(viewportHeight, canvasHeight, scale.value);
@@ -135,6 +146,17 @@ export function MuralCanvas({
       clampJS(translateY.value, y.min, y.max),
       SPRING_CONFIG
     );
+
+    const prev = prevCanvasRef.current;
+    const sameShape =
+      prev && prev.w === canvasWidth && prev.h === canvasHeight;
+    if (prev && !sameShape) {
+      // Filter triggered a layout shape change — fade-dip the canvas.
+      canvasOpacity.value = withTiming(0.25, { duration: 140 }, () => {
+        canvasOpacity.value = withTiming(1, { duration: 220 });
+      });
+    }
+    prevCanvasRef.current = { w: canvasWidth, h: canvasHeight };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasWidth, canvasHeight, viewportWidth, viewportHeight]);
 
@@ -351,13 +373,14 @@ export function MuralCanvas({
   // explicit deps are required. With the plugin (native) deps are harmless.
   const animatedStyle = useAnimatedStyle(
     () => ({
+      opacity: canvasOpacity.value,
       transform: [
         { translateX: translateX.value },
         { translateY: translateY.value },
         { scale: scale.value },
       ],
     }),
-    [translateX, translateY, scale]
+    [translateX, translateY, scale, canvasOpacity]
   );
 
   // Teleport: animate translate so a chosen canvas point lands at viewport
