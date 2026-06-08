@@ -150,12 +150,14 @@ function computeLayout({
   }
   maxBandWidth = Math.max(maxBandWidth, bandCursorX);
 
-  // Canvas is at least screen-sized so single-event filters still pan.
-  const canvasWidth = Math.max(maxBandWidth, screenWidth);
-  const canvasHeight = Math.max(
-    (bandIndex + 1) * bandHeight,
-    screenHeight
-  );
+  // Canvas dimensions reflect TRUE content size — no padding-to-viewport.
+  // Previously we padded up to screenWidth/Height so single-event filters
+  // would still "pan." But with the FILL min-scale (MuralCanvas), padded
+  // space would render as empty black area you could pan into — exactly
+  // the "mural floats in black" bug we're fixing here. The Canvas's
+  // min-scale will fill the viewport from the true content size.
+  const canvasWidth = maxBandWidth;
+  const canvasHeight = (bandIndex + 1) * bandHeight;
 
   return {
     posters,

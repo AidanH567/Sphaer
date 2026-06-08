@@ -74,35 +74,40 @@ export function MuralCanvas({
 }: MuralCanvasProps) {
   const { posters, canvasWidth, canvasHeight } = layout;
 
-  // Minimum scale that still fits the whole canvas in the viewport. The
-  // smaller axis dominates: we want the canvas to fit entirely in both
-  // dimensions when fully zoomed out.
-  const minScale = useMemo(
-    () =>
-      Math.max(
-        Math.min(viewportWidth / canvasWidth, viewportHeight / canvasHeight),
-        MIN_SCALE_FLOOR
-      ),
-    [canvasWidth, canvasHeight, viewportWidth, viewportHeight]
-  );
+  // Minimum scale = FILL behavior. The wall always fills the viewport on
+  // the *more constrained* axis at min zoom, then extends past on the
+  // other axis (pannable). This means the user never sees the wall
+  // "floating in black" — there's always wall under their finger.
+  //
+  // Math: take the LARGER of (viewportWidth/canvasWidth,
+  // viewportHeight/canvasHeight). That's the scale that needs to be
+  // applied so the smaller-relative-to-viewport axis just covers it; the
+  // other axis grows past viewport (pannable). Empty-canvas guard
+  // protects against the zero-events case (no posters → cw/ch == 0 →
+  // division by zero).
+  const minScale = useMemo(() => {
+    if (canvasWidth <= 0 || canvasHeight <= 0) return 1;
+    return Math.max(
+      Math.max(viewportWidth / canvasWidth, viewportHeight / canvasHeight),
+      MIN_SCALE_FLOOR
+    );
+  }, [canvasWidth, canvasHeight, viewportWidth, viewportHeight]);
 
-  // Initial mount: shared values seed to a slightly zoomed-in centered
-  // position. The slight zoom (1.3×) makes the wall feel like it extends
-  // past the viewport in every direction, prompting the user to explore.
-  // At scale = 1.0 the canvas barely overflows on iPhone widths, which
-  // reads as "you can already see everything" — not the intended feel.
-  // MuralCanvas only mounts once viewport size is known (parent gates on
-  // viewportReady), so the centering math here is safe.
-  const INITIAL_SCALE = 1.3;
-  const initialTX = centerOf(viewportWidth, canvasWidth, INITIAL_SCALE);
-  const initialTY = centerOf(viewportHeight, canvasHeight, INITIAL_SCALE);
+  // Initial mount: 1.15× of min-scale, so the user opens to "wall fills
+  // viewport + a slight zoom-in" — a hint that there's more to explore on
+  // the longer axis. Scales correctly across wall sizes (small or large
+  // event sets land at the same relative feel). Floor still applies via
+  // minScale so this can't go below MIN_SCALE_FLOOR.
+  const initialScale = useMemo(() => minScale * 1.15, [minScale]);
+  const initialTX = centerOf(viewportWidth, canvasWidth, initialScale);
+  const initialTY = centerOf(viewportHeight, canvasHeight, initialScale);
 
   const translateX = useSharedValue(initialTX);
   const translateY = useSharedValue(initialTY);
-  const scale = useSharedValue(INITIAL_SCALE);
+  const scale = useSharedValue(initialScale);
   const savedTranslateX = useSharedValue(initialTX);
   const savedTranslateY = useSharedValue(initialTY);
-  const savedScale = useSharedValue(INITIAL_SCALE);
+  const savedScale = useSharedValue(initialScale);
   // Flips true on pan/pinch begin, false on end. The minimap reads this to
   // bump its opacity 0.7 → 1.0 during active interaction, mirroring the
   // iOS scrollbar pattern.
