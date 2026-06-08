@@ -144,6 +144,79 @@ const POSTER_MAPPINGS: PosterMapping[] = [
     designerSource: 'Inhale//Exhale Morning Yoga (imgPoster15)',
   },
   // evt-startup intentionally not listed — see note at top of array.
+
+  // ─── Batch 2 (2026-06-08) — figma-rectangles pool ───────────────────────
+  // Secondary poster pool from the same Figma file. These were
+  // `imgRectangle4..14` + `imgFrame4`/`imgFrame7` in the original design
+  // export — initially missed because the first pass focused on the
+  // `imgPoster*` slot. All 13 confirmed as real Berlin-aesthetic posters
+  // on visual inspection (Blues & Rhythm Festival, Type Craft Workshop,
+  // Pictoplasma, Studio 8 Berlin, Toundra, SXTN, etc).
+  {
+    eventId: 'evt-typecraft',
+    figmaAssetUuid: '59eee340-ee11-4409-ad3e-cb3ffe8c7edb',
+    designerSource: 'Type Craft Workshop — Form & Texture (imgRectangle4)',
+  },
+  {
+    eventId: 'evt-modular',
+    figmaAssetUuid: '8ed2dd88-feb7-4b62-a5cc-cac0720f09e9',
+    designerSource: 'Modular synth hands (imgRectangle6)',
+  },
+  {
+    eventId: 'evt-orchestra',
+    figmaAssetUuid: '00f166fe-44d5-4b0a-be8c-59e8b93e4603',
+    designerSource: 'Santtu-Matias Rouvali — DSO Berlin (imgRectangle9)',
+  },
+  {
+    eventId: 'evt-blues',
+    figmaAssetUuid: 'cec83860-7f86-4273-81e1-a7b2e0429d25',
+    designerSource: 'Blues & Rhythm Festival 2026 (imgRectangle5)',
+  },
+  {
+    eventId: 'evt-collection',
+    figmaAssetUuid: 'f678cab6-87ec-41ed-b8d2-8be5b95a444b',
+    designerSource: 'Studio 8 Berlin Collection Launch (imgFrame7)',
+  },
+  {
+    eventId: 'evt-toundra',
+    figmaAssetUuid: '46de02b8-6714-4f6f-975c-5ef272f51a93',
+    designerSource: 'Toundra @ Bi Nuu (imgFrame4)',
+  },
+  {
+    eventId: 'evt-sxtn',
+    figmaAssetUuid: '402dc949-93b6-4b47-aadb-93e4b10eed43',
+    designerSource: 'SXTN Tour (imgRectangle8)',
+  },
+  {
+    eventId: 'evt-bitterend',
+    figmaAssetUuid: '1b98b993-7fb3-46ab-8808-c6f559a842ed',
+    designerSource: 'The Bitter End — Stand Up Tragedy (imgRectangle12)',
+  },
+  {
+    eventId: 'evt-margiana',
+    figmaAssetUuid: '24fad705-1cf4-4572-a547-2407a15ade43',
+    designerSource: 'Margiana — Neues Museum (imgRectangle13)',
+  },
+  {
+    eventId: 'evt-plakat',
+    figmaAssetUuid: '1ec2b604-ade5-4dd0-89a9-cbd9281e6fd6',
+    designerSource: 'Das Plakat — MK&G (imgRectangle7)',
+  },
+  {
+    eventId: 'evt-foreign',
+    figmaAssetUuid: 'dd52fcfd-5bac-4788-8239-7fd65d4a4818',
+    designerSource: 'Foreign Diplomats @ Badehaus (imgRectangle11)',
+  },
+  {
+    eventId: 'evt-leaving',
+    figmaAssetUuid: '8400a493-f689-4d98-87b2-b218f61a74a4',
+    designerSource: 'Thought About Leaving (imgRectangle10)',
+  },
+  {
+    eventId: 'evt-pictoplasma',
+    figmaAssetUuid: '6dcaa7fe-740c-4079-a57a-91732f6785d1',
+    designerSource: 'Pictoplasma Festival (imgRectangle14)',
+  },
 ];
 
 const FIGMA_ASSET_BASE = 'https://www.figma.com/api/mcp/asset/';
