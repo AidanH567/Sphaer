@@ -276,8 +276,17 @@ export function MuralCanvas({
             canvasHeight,
             scale.value
           );
-          translateX.value = rubberBand(newX, xBounds.min, xBounds.max);
-          translateY.value = rubberBand(newY, yBounds.min, yBounds.max);
+          // On web, hard-clamp (no rubber-band) so mouse drag never
+          // over-shoots past the wall edges into the black background.
+          // Rubber-band on native still feels iOS-correct under touch;
+          // on web it reads as a glitch ("I can see outside the mural").
+          if (RUN_GESTURE_ON_JS) {
+            translateX.value = clampWorklet(newX, xBounds.min, xBounds.max);
+            translateY.value = clampWorklet(newY, yBounds.min, yBounds.max);
+          } else {
+            translateX.value = rubberBand(newX, xBounds.min, xBounds.max);
+            translateY.value = rubberBand(newY, yBounds.min, yBounds.max);
+          }
         })
         .onEnd(() => {
           const xBounds = boundsForWorklet(viewportWidth, canvasWidth, scale.value);
@@ -322,10 +331,18 @@ export function MuralCanvas({
           // the finger pair now. Solve: focalX = newTX + canvasFocalX * newScale
           // where canvasFocalX = (focalX - oldTX) / oldScale.
           const scaleRatio = newScale / savedScale.value;
-          translateX.value =
+          const nextTX =
             e.focalX - (e.focalX - savedTranslateX.value) * scaleRatio;
-          translateY.value =
+          const nextTY =
             e.focalY - (e.focalY - savedTranslateY.value) * scaleRatio;
+          // Clamp translate to the new scale's bounds DURING the pinch so
+          // the canvas can't expose the black backdrop as the user pinches.
+          // Without this clamp, the focal-point math drifts past edges
+          // whenever the pinch focal is far from the canvas centre.
+          const xB = boundsForWorklet(viewportWidth, canvasWidth, newScale);
+          const yB = boundsForWorklet(viewportHeight, canvasHeight, newScale);
+          translateX.value = clampWorklet(nextTX, xB.min, xB.max);
+          translateY.value = clampWorklet(nextTY, yB.min, yB.max);
           scale.value = newScale;
         })
         .onEnd(() => {
