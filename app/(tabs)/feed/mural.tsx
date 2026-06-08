@@ -284,14 +284,20 @@ function SkeletonWall({ viewportWidth, viewportHeight }: SkeletonWallProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.black },
+  // Header is a flex item, not an absolute overlay. The earlier overlay
+  // design caused the canvas's top posters to render UNDER the search bar /
+  // category chips because canvasSlot's flex:1 extended to y=0. With the
+  // header as a flex item, canvasSlot only fills the space *below* it,
+  // which is what the user sees as "the mural component fitting inside the
+  // screen."
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
+    backgroundColor: colors.appleMail,
   },
-  canvasSlot: { flex: 1 },
+  // canvasSlot fills the remaining space below the (now flex) header.
+  // Small bottom margin so the wall doesn't sit flush against the
+  // BottomNav border — gives a "framed" feel instead of "clipped at the
+  // edge of the screen."
+  canvasSlot: { flex: 1, marginBottom: 8 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyText: {
