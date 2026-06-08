@@ -101,7 +101,37 @@ export default function MuralScreen() {
         .filter((u): u is string => !!u),
     [visibleEvents]
   );
-  const { dimensions, ready: dimensionsReady } = useMuralDimensions(posterUrls);
+  // Embedded dimensions (figma-seed events have these baked in). Lets
+  // useMuralDimensions skip the Image.getSize() round-trip — Mural mounts
+  // instantly for the demo set instead of waiting 10–15s for 32MB of PNGs
+  // to download just so we can read their width/height.
+  const presetDimensions = useMemo(() => {
+    const map = new Map<string, { width: number; height: number }>();
+    for (const e of visibleEvents) {
+      // poster_width / poster_height are MockEvent extensions — real
+      // EventWithRelations rows from Supabase don't have them yet, so the
+      // cast keeps both code paths typesafe.
+      const me = e as typeof e & {
+        poster_width?: number;
+        poster_height?: number;
+      };
+      if (
+        e.poster_url &&
+        typeof me.poster_width === 'number' &&
+        typeof me.poster_height === 'number'
+      ) {
+        map.set(e.poster_url, {
+          width: me.poster_width,
+          height: me.poster_height,
+        });
+      }
+    }
+    return map;
+  }, [visibleEvents]);
+  const { dimensions, ready: dimensionsReady } = useMuralDimensions(
+    posterUrls,
+    presetDimensions
+  );
 
   // Measure the canvas slot below the header. Dynamic so tablets / future
   // layouts get correct bounds without manual height calc.

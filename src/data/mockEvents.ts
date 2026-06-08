@@ -25,6 +25,15 @@ export interface MockEvent extends EventWithRelations {
     followers: number;
     verified: boolean;
   };
+  /**
+   * Pre-measured poster image dimensions (pixels). Only set on figma-seed
+   * events so the Mural can lay out without an Image.getSize() round-trip
+   * — the values were captured at upload time by `import-figma-posters.ts`.
+   * Forward-compatible with the planned `poster_width`/`poster_height`
+   * columns on the events table (see BACKLOG).
+   */
+  poster_width?: number;
+  poster_height?: number;
 }
 
 /** Build a minimal Profile row for an event creator / host. */
@@ -67,6 +76,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-26T23:30:00',
     categories: ['Film', 'Talk', 'Education'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-tarkovsky.png',
+    poster_width: 1024,
+    poster_height: 749,
     ticket_url: null,
     is_free: true,
     price: null,
@@ -92,6 +103,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-26T23:30:00',
     categories: ['Art', 'Workshop'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-ceramic.png',
+    poster_width: 1760,
+    poster_height: 2406,
     ticket_url: 'https://example.com/tickets/ceramic',
     is_free: false,
     price: 15,
@@ -117,6 +130,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-29T23:00:00',
     categories: ['Music', 'Workshop'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-eurorack.png',
+    poster_width: 1024,
+    poster_height: 576,
     ticket_url: 'https://example.com/tickets/eurorack',
     is_free: false,
     price: 80,
@@ -143,6 +158,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-26T23:30:00',
     categories: ['Music', 'Concert'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-jassmom.png',
+    poster_width: 420,
+    poster_height: 298,
     ticket_url: 'https://example.com/tickets/jassmom',
     is_free: false,
     price: 15,
@@ -168,6 +185,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-22T22:30:00',
     categories: ['Talk', 'Concert'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-poetry.png',
+    poster_width: 729,
+    poster_height: 1024,
     ticket_url: null,
     is_free: true,
     price: null,
@@ -193,6 +212,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-24T04:00:00',
     categories: ['Music', 'Concert'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-techno.png',
+    poster_width: 572,
+    poster_height: 1024,
     ticket_url: 'https://example.com/tickets/techno',
     is_free: false,
     price: 12,
@@ -218,6 +239,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-24T08:30:00',
     categories: ['Wellness'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-yoga.png',
+    poster_width: 1024,
+    poster_height: 683,
     ticket_url: 'https://example.com/tickets/yoga',
     is_free: false,
     price: 10,
@@ -243,6 +266,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-25T18:00:00',
     categories: ['Art', 'Workshop'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-photo.png',
+    poster_width: 725,
+    poster_height: 1024,
     ticket_url: null,
     is_free: true,
     price: null,
@@ -268,6 +293,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-27T17:00:00',
     categories: ['Job', 'Meet'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-jobfair.png',
+    poster_width: 842,
+    poster_height: 1264,
     ticket_url: null,
     is_free: true,
     price: null,
@@ -293,6 +320,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-05-28T21:00:00',
     categories: ['Art'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-painting.png',
+    poster_width: 896,
+    poster_height: 1192,
     ticket_url: 'https://example.com/tickets/painting',
     is_free: false,
     price: 9,
@@ -343,6 +372,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-06-02T20:00:00',
     categories: ['Workshop'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-dance.png',
+    poster_width: 1728,
+    poster_height: 2442,
     ticket_url: 'https://example.com/tickets/dance',
     is_free: false,
     price: 14,
@@ -368,6 +399,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-06-05T23:59:00',
     categories: ['Film'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-film2.png',
+    poster_width: 495,
+    poster_height: 700,
     ticket_url: 'https://example.com/tickets/film2',
     is_free: false,
     price: 8,
@@ -393,6 +426,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-06-08T22:30:00',
     categories: ['Meet', 'Service'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-cooking.png',
+    poster_width: 2528,
+    poster_height: 1686,
     ticket_url: 'https://example.com/tickets/cooking',
     is_free: false,
     price: 35,
@@ -418,6 +453,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-06-12T21:30:00',
     categories: ['Wellness', 'Therapy'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-soundbath.png',
+    poster_width: 1728,
+    poster_height: 2444,
     ticket_url: 'https://example.com/tickets/soundbath',
     is_free: false,
     price: 18,
@@ -443,6 +480,8 @@ export const MOCK_EVENTS: MockEvent[] = [
     ends_at: '2026-06-15T21:30:00',
     categories: ['Education', 'Workshop'],
     poster_url: 'https://dgxmesiouwajazyhbhkn.supabase.co/storage/v1/object/public/event-posters/figma-seed/evt-coding.png',
+    poster_width: 1003,
+    poster_height: 1024,
     ticket_url: null,
     is_free: true,
     price: null,

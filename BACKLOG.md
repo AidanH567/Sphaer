@@ -37,7 +37,66 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ## ▶ UP NEXT
 
-### 1. Login → location-onboarding glitch
+### 1. Generate & import 20+ AI-style event posters (fills out the wall)
+
+**Why.** Even after the size pass (sessions 06-08), the Mural still feels
+small because there are only ~15 events. Densifying alone hit its ceiling;
+the wall needs more content. The user shared 5 reference images
+(Pictoplasma, Blues & Rhythm Festival, Type Craft Workshop, Studio 8 Berlin
+Collection Launch, Das Plat… book-design feel) as the visual target —
+that's the Berlin underground / design-studio aesthetic to match.
+
+**Approach.**
+1. Generate ~25 posters via Midjourney / DALL-E / Adobe Firefly. Prompts
+   should target the references' look: bold typography, brutalist or
+   collage aesthetics, single-colour backgrounds, photo-typography hybrids.
+   Examples to model: "festival poster pink monochrome saxophone
+   illustration," "minimalist black typography on silver foil," "geometric
+   8-shape orange poster art-gallery," "neon collage performance art."
+2. Save each render locally — e.g. `assets/seed-posters/<slug>.png`.
+3. Extend `mockEvents.ts` with new MOCK_EVENT entries (one per generated
+   poster) that hit varied categories. Match the existing host pool or add
+   2-3 new ghost hosts in `seed-demo-data.ts`.
+4. Add each new poster to `scripts/import-figma-posters.ts` (or split into
+   `scripts/import-seed-posters.ts` if the file feels poorly named now) and
+   re-run to push to Supabase Storage at
+   `event-posters/figma-seed/<slug>.png`.
+5. Re-seed via `npx tsx scripts/seed-demo-data.ts`.
+6. Verify on web: Mural now shows ~40 posters across many bands, wall
+   genuinely feels big to explore.
+
+**Done when.**
+- [ ] ~25 new poster images in `assets/seed-posters/` (or wherever the gen
+      lands — committed or gitignored, whichever the team prefers)
+- [ ] Same ~25 uploaded to Supabase Storage under `event-posters/figma-seed/`
+- [ ] `mockEvents.ts` has ~40 events total (existing 16 + ~25 new)
+- [ ] Each new MOCK_EVENT carries `poster_width`/`poster_height`
+- [ ] Re-seed completes cleanly
+- [ ] Mural now feels big enough to "explore" — multiple full screen-heights
+      of vertical content and several screen-widths of horizontal pan
+
+**Files likely touched.**
+- `assets/seed-posters/` (new dir, ~25 PNGs)
+- `src/data/mockEvents.ts` (~25 new entries)
+- `scripts/import-figma-posters.ts` (extend or rename)
+- `scripts/seed-demo-data.ts` (possibly new ghost hosts)
+- `BACKLOG.md` (move to Shipped)
+
+**Open questions to answer at start of build session.**
+- Who runs the AI gen — the user, the designer, or do we use a generation
+  MCP if one's connected? Claude can't directly generate images today.
+- Do new posters get committed to the repo (`assets/seed-posters/`) or
+  uploaded straight to Supabase from a local gen folder?
+- Naming convention for new events — random Berlin-event titles or
+  matching the existing `evt-<theme>` slug pattern?
+
+**Out of scope.** Real AI-poster-on-demand for user-created events
+(separate, much bigger feature — captured under "AI-generated event
+posters" in the later-stage backlog).
+
+---
+
+### 2. Login → location-onboarding glitch
 
 **Why.** Existing users who already completed location onboarding sometimes get
 re-routed through `/location` after logging in. Looks broken at demo time and
@@ -89,7 +148,7 @@ deletion — those are separate P1 launch-blocker items below.
 
 ---
 
-### 2. Profile completion % + hide "Finish setting up profile"
+### 3. Profile completion % + hide "Finish setting up profile"
 
 **Why.** The "Finish setting up profile" CTA on the profile page persists
 even after a user fills out every field. Looks broken at demo time, and
@@ -363,6 +422,7 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-08 — Mural sizing pass: Figma-correct dense layout + instant cold mount.** Band height dropped from `screenHeight/2` (~400px) to a fixed 140px (matches the Figma comp showing ~5 bands of ~93px-wide posters per iPhone viewport). `MIN_BAND_COUNT=3` keeps the wall from collapsing on small data sets. Cold mount now skips `Image.getSize()` entirely for figma-seed posters thanks to embedded `poster_width`/`poster_height` on each MockEvent — first paint is instant instead of waiting 10–15s for 32MB to download. Two CSS-stacking-context bugs fixed along the way: removed `backgroundColor` from both the canvas and each poster wrapper because RN Web's `<Image>` renders its picture at `z-index: -1`, which any parent `backgroundColor` painted over. Branch: `funny-kare-983d2c`. Follow-up: more posters via AI gen (now UP NEXT #1) — wall feels right but still small.
 - **2026-06-08 — Figma poster import (15 designer-curated posters).** `scripts/import-figma-posters.ts` extracts posters from Figma file `HIVq6Vaymj01dZ37AvwCUF` via the Figma MCP, uploads to Supabase Storage at `event-posters/figma-seed/<evt-id>.png`, and `src/data/mockEvents.ts` updated for 15 of 16 events (`evt-startup` retains picsum until a 16th designer poster lands — tracked in P0). Verified: 15 rows in `events` table with figma-seed URLs; Mural visibly renders "Fire of Love" / "Typography Experiment" / etc. Branch: `funny-kare-983d2c`. Follow-up: WebP compression for the ~32MB total → see P0 "Compress Figma-seed posters."
 - **2026-06-08 — Mural feature (2D pan-pinch poster wall).** Brick layout, pinch-zoom with focal point, web wheel-handler for trackpad pan/pinch, Feed/Map/Mural filter parity. Branch: `funny-kare-983d2c`.
 

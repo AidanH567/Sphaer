@@ -1,7 +1,6 @@
 import React, { memo } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import type { PosterRect } from '@/hooks/useMuralLayout';
-import { colors } from '@/constants/theme';
 
 interface MuralPosterProps {
   rect: PosterRect;
@@ -70,11 +69,13 @@ const styles = StyleSheet.create({
   poster: {
     position: 'absolute',
     overflow: 'hidden',
-    // Fallback colour shown while the picture decodes or if it fails. Sits
-    // behind the <Image>, so when the picture arrives it covers this
-    // entirely on native, and on web RN's backgroundImage layer paints
-    // over it once the source loads.
-    backgroundColor: colors.surface,
+    // NO backgroundColor on the wrapper. RN Web's <Image> renders the
+    // picture as a `background-image` on an inner div at z-index: -1.
+    // Inside an `position: absolute` parent (which creates a stacking
+    // context), that z-index:-1 child renders BEHIND the wrapper's
+    // background-color paint — meaning any colour we set here hides the
+    // picture on cached / remounted images. The canvas's own black
+    // background shows through during the brief load window instead.
   },
   image: {
     width: '100%',

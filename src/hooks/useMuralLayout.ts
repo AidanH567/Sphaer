@@ -33,6 +33,18 @@ const MIN_ASPECT = 0.4;
 const MAX_ASPECT = 2.0;
 const FALLBACK_ASPECT = 2 / 3; // 2:3 portrait — matches dimensions fallback
 
+// Fixed band height in viewport pixels. The Figma Mural shows posters at
+// ~30–50px wide (iPhone width ~390), implying band heights of ~120–160. We
+// pick 140 as the sweet spot: dense enough to read as a "wall of posters,"
+// big enough that tap targets stay above HIG minimums. Previously we used
+// `screenHeight / 2` (~400px on iPhone) which gave magazine-cover-sized
+// posters — wrong design intent.
+const BAND_HEIGHT = 140;
+// Minimum bands stacked vertically. Stops the wall from collapsing to one
+// row when there are very few events, and keeps a useful "vertical to
+// explore" feel even at small data sets.
+const MIN_BAND_COUNT = 3;
+
 /**
  * Compute the 2D brick layout for the Mural canvas.
  *
@@ -71,7 +83,7 @@ function computeLayout({
   screenWidth,
   screenHeight,
 }: UseMuralLayoutArgs): MuralLayout {
-  const bandHeight = screenHeight / 2;
+  const bandHeight = BAND_HEIGHT;
 
   if (events.length === 0) {
     return {
@@ -92,7 +104,14 @@ function computeLayout({
   });
 
   const totalWidth = widths.reduce((sum, w) => sum + w, 0);
-  const bandCount = Math.max(1, Math.ceil(Math.sqrt(events.length / 2)));
+  // Use a higher band count now that posters are smaller — fills the
+  // vertical viewport better and gives the wall room to grow horizontally
+  // (totalWidth / bandCount = target band width, so more bands = narrower
+  // bands but more vertical content to scroll through).
+  const bandCount = Math.max(
+    MIN_BAND_COUNT,
+    Math.ceil(Math.sqrt(events.length))
+  );
   const targetBandWidth = totalWidth / bandCount;
 
   // Pass 2: greedy band-packing. Events are already in caller-supplied order

@@ -426,6 +426,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
-    backgroundColor: colors.black,
+    // NO backgroundColor here. The canvas is `position: absolute` +
+    // `transform: ...`, which creates a stacking context — and inside that
+    // context the poster cells render their picture as a `background-image`
+    // on a child div at z-index: -1. Painting the canvas with any colour
+    // covers those negative-z children. The viewport (parent) keeps its
+    // black background so the wall has a dark backdrop while panning.
   },
 });
