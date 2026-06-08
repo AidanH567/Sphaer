@@ -8,6 +8,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { MuralPoster } from './MuralPoster';
+import { MuralMinimap } from './MuralMinimap';
 import type { MuralLayout, PosterRect } from '@/hooks/useMuralLayout';
 import { colors } from '@/constants/theme';
 
@@ -84,19 +85,27 @@ export function MuralCanvas({
     [canvasWidth, canvasHeight, viewportWidth, viewportHeight]
   );
 
-  // Initial mount: shared values seed to the centered position so the very
-  // first paint already shows the middle of the canvas — no top-left flash
-  // before the effect runs. MuralCanvas only mounts once viewport size is
-  // known (parent gates on viewportReady), so this calc is safe.
-  const initialTX = centerOf(viewportWidth, canvasWidth, 1);
-  const initialTY = centerOf(viewportHeight, canvasHeight, 1);
+  // Initial mount: shared values seed to a slightly zoomed-in centered
+  // position. The slight zoom (1.3×) makes the wall feel like it extends
+  // past the viewport in every direction, prompting the user to explore.
+  // At scale = 1.0 the canvas barely overflows on iPhone widths, which
+  // reads as "you can already see everything" — not the intended feel.
+  // MuralCanvas only mounts once viewport size is known (parent gates on
+  // viewportReady), so the centering math here is safe.
+  const INITIAL_SCALE = 1.3;
+  const initialTX = centerOf(viewportWidth, canvasWidth, INITIAL_SCALE);
+  const initialTY = centerOf(viewportHeight, canvasHeight, INITIAL_SCALE);
 
   const translateX = useSharedValue(initialTX);
   const translateY = useSharedValue(initialTY);
-  const scale = useSharedValue(1);
+  const scale = useSharedValue(INITIAL_SCALE);
   const savedTranslateX = useSharedValue(initialTX);
   const savedTranslateY = useSharedValue(initialTY);
-  const savedScale = useSharedValue(1);
+  const savedScale = useSharedValue(INITIAL_SCALE);
+  // Flips true on pan/pinch begin, false on end. The minimap reads this to
+  // bump its opacity 0.7 → 1.0 during active interaction, mirroring the
+  // iOS scrollbar pattern.
+  const isInteracting = useSharedValue(false);
 
   // postersRef stays in sync with whatever the layout produced so the JS
   // tap handler always hit-tests against the current set without needing
@@ -229,6 +238,7 @@ export function MuralCanvas({
         .onStart(() => {
           savedTranslateX.value = translateX.value;
           savedTranslateY.value = translateY.value;
+          isInteracting.value = true;
         })
         .onUpdate((e) => {
           const newX = savedTranslateX.value + e.translationX;
@@ -257,6 +267,7 @@ export function MuralCanvas({
             clampWorklet(translateY.value, yBounds.min, yBounds.max),
             SPRING_CONFIG
           );
+          isInteracting.value = false;
         })
         .runOnJS(RUN_GESTURE_ON_JS),
     // Re-create when canvas geometry changes so onUpdate closes over fresh
@@ -272,6 +283,7 @@ export function MuralCanvas({
           savedScale.value = scale.value;
           savedTranslateX.value = translateX.value;
           savedTranslateY.value = translateY.value;
+          isInteracting.value = true;
         })
         .onUpdate((e) => {
           const newScale = clampWorklet(
@@ -304,6 +316,7 @@ export function MuralCanvas({
             clampWorklet(translateY.value, yBounds.min, yBounds.max),
             SPRING_CONFIG
           );
+          isInteracting.value = false;
         })
         .runOnJS(RUN_GESTURE_ON_JS),
     [canvasWidth, canvasHeight, viewportWidth, viewportHeight, minScale]
@@ -347,25 +360,57 @@ export function MuralCanvas({
     [translateX, translateY, scale]
   );
 
+  // Teleport: animate translate so a chosen canvas point lands at viewport
+  // centre. Called from the minimap's tap handler.
+  const teleportTo = (canvasX: number, canvasY: number) => {
+    const s = scale.value;
+    const targetTX = viewportWidth / 2 - canvasX * s;
+    const targetTY = viewportHeight / 2 - canvasY * s;
+    const x = boundsFor(viewportWidth, canvasWidth, s);
+    const y = boundsFor(viewportHeight, canvasHeight, s);
+    translateX.value = withSpring(
+      clampJS(targetTX, x.min, x.max),
+      SPRING_CONFIG
+    );
+    translateY.value = withSpring(
+      clampJS(targetTY, y.min, y.max),
+      SPRING_CONFIG
+    );
+  };
+
   return (
-    <GestureDetector gesture={composed}>
-      <View ref={viewportRef} style={styles.viewport}>
-        <Animated.View
-          style={[
-            styles.canvas,
-            {
-              width: canvasWidth,
-              height: canvasHeight,
-            },
-            animatedStyle,
-          ]}
-        >
-          {posters.map((rect) => (
-            <MuralPoster key={rect.event.id} rect={rect} />
-          ))}
-        </Animated.View>
-      </View>
-    </GestureDetector>
+    <View style={styles.viewport}>
+      <GestureDetector gesture={composed}>
+        <View ref={viewportRef} style={styles.gestureLayer}>
+          <Animated.View
+            style={[
+              styles.canvas,
+              {
+                width: canvasWidth,
+                height: canvasHeight,
+              },
+              animatedStyle,
+            ]}
+          >
+            {posters.map((rect) => (
+              <MuralPoster key={rect.event.id} rect={rect} />
+            ))}
+          </Animated.View>
+        </View>
+      </GestureDetector>
+      <MuralMinimap
+        posters={posters}
+        canvasWidth={canvasWidth}
+        canvasHeight={canvasHeight}
+        viewportWidth={viewportWidth}
+        viewportHeight={viewportHeight}
+        translateX={translateX}
+        translateY={translateY}
+        scale={scale}
+        isInteracting={isInteracting}
+        onTeleport={teleportTo}
+      />
+    </View>
   );
 }
 
@@ -421,6 +466,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.black,
     overflow: 'hidden',
+  },
+  gestureLayer: {
+    flex: 1,
   },
   canvas: {
     position: 'absolute',
