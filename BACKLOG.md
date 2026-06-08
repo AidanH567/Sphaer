@@ -1,12 +1,376 @@
-# Sphaer — Deferred Work
+# Sphaer — Backlog
 
-Things explicitly scoped *out* during planning for later builds. Captured so they
-don't get lost. Each entry includes why it was deferred and the rough shape of
-the work when we come back to it.
+Single source of truth for what to build next. The repo is worked on in
+**checkpointed sessions**: one feature end-to-end per session, then human
+review before the next. Future autonomous Claude sessions read the
+`▶ UP NEXT` block, build it, update this file, hand back.
 
 ---
 
-## ▶ UP NEXT — Messaging v1 (decisions locked, ready to build)
+## How to use this file (for future sessions)
+
+1. Start every session by reading `▶ UP NEXT` and skipping straight to the
+   first item there. Do **not** re-grill decisions that are already locked
+   in the item's spec.
+2. While building, if you discover work that should be its own item, add it
+   to the appropriate priority section below — *don't expand the scope of
+   the current item*.
+3. When the item ships:
+   - Move it out of `▶ UP NEXT` into a new `## ✓ Shipped` section at the
+     bottom (date + one-line summary + commit/PR link).
+   - Promote the next two items from P0 into `▶ UP NEXT`, give them the
+     full B-spec treatment (why / done-when / files / approach / open
+     questions).
+   - Commit `BACKLOG.md` changes in the same PR as the feature so the
+     review captures both.
+4. Items below `▶ UP NEXT` are **lightweight** — title + one-line why +
+   done-when checklist. They get fleshed out only when promoted.
+5. Priority sections (`P0`, `P1`, `P2`) are ordered — top item in each
+   section ships first.
+
+**Token budget guardrail (user request):** the human asked that we stop work
+once daily Claude usage hits ~90%. We can't query usage directly. Be
+conservative — prefer shipping one solid item to half-shipping two. If a
+session feels like it's stretching past ~3 hours, stop and hand back.
+
+---
+
+## ▶ UP NEXT
+
+### 1. Login → location-onboarding glitch
+
+**Why.** Existing users who already completed location onboarding sometimes get
+re-routed through `/location` after logging in. Looks broken at demo time and
+makes returning users feel like the app forgot them.
+
+**Approach.**
+1. Trace the routing logic in `app/(auth)/login.tsx` line 57:
+   `router.replace('/(tabs)/feed')`. The redirect to `/location` must be
+   happening *inside* `(tabs)/_layout.tsx` or a profile gate based on a
+   missing column.
+2. Inspect `app/(tabs)/_layout.tsx` and any `useEffect` in screens that calls
+   `router.replace('/location')`. Find the gate condition.
+3. Hypothesis: the gate checks `profile.location === null` instead of an
+   `onboarding_completed` boolean. OAuth signups skip onboarding entirely
+   (signup.tsx lines 73-76), so for those users `location` is null and the
+   gate fires. Confirm and fix.
+4. Fix path A (cheap): add `onboarding_completed BOOLEAN DEFAULT FALSE` to
+   `profiles`, set it to TRUE at the end of the existing onboarding flows.
+   Gate checks that column.
+5. Fix path B (cheaper): the location screen itself should bail early if
+   `profile.location` is already set, regardless of how the user got there.
+6. Test all four entry paths:
+   - Email signup → onboarding → location → feed (should work today)
+   - OAuth signup → location → feed (should work today)
+   - Email returning login (currently broken intermittently — verify)
+   - OAuth returning login (currently broken intermittently — verify)
+
+**Done when.**
+- [ ] Existing users who have completed onboarding NEVER see `/location`
+      again after login (Google, Apple, email — all three)
+- [ ] First-time signups still complete the onboarding flow as today
+- [ ] A migration (if path A) or a guard (if path B) is committed
+- [ ] Manual test plan covering the four entry paths documented in the PR
+
+**Files likely touched.**
+- `app/(tabs)/_layout.tsx` (gate logic)
+- `app/location.tsx` (early-bail guard)
+- `app/(auth)/login.tsx` (possibly)
+- `supabase/migrations/<timestamp>_onboarding_completed.sql` (new — if path A)
+- `BACKLOG.md` (move to Shipped)
+
+**Open questions to answer at start of build session.**
+- Path A vs B (DB column vs early-bail). Recommendation: A is more correct
+  semantically, B is faster to ship. Maybe both — early-bail today, column
+  in a follow-up.
+
+**Out of scope.** Reset password, email verification re-enable, account
+deletion — those are separate P1 launch-blocker items below.
+
+---
+
+### 2. Profile completion % + hide "Finish setting up profile"
+
+**Why.** The "Finish setting up profile" CTA on the profile page persists
+even after a user fills out every field. Looks broken at demo time, and
+makes investors think users are stuck. Replacing it with a completion %
+bar that hides at 100% turns a bug into a polish moment.
+
+**Approach.**
+1. Inspect the current "Finish setting up profile" component — likely lives
+   in `src/components/profile/` or `app/(tabs)/profile/index.tsx`. Find where
+   it's rendered and what data it uses.
+2. Define `profile completion` as the percentage of these fields filled:
+   `avatar_url, cover_url, bio, disciplines (≥1), location, about,
+   experiences (≥1)`. ~7 dimensions → each worth ~14%. Adjust weighting if
+   the design implies different importance.
+3. Compute the percentage client-side in a memoised helper
+   (`src/utils/profile-completion.ts`) that takes a `Profile` and returns
+   `{ percentage, missing: string[] }`.
+4. Wire the existing card to render:
+   - Nothing at 100% (just unmount)
+   - Progress bar + label "Profile {N}% complete — add {first 2 missing
+     items as readable copy}" at <100%
+5. Tap on the card → routes to Edit Profile (already exists), pre-scrolled
+   to the first missing field if feasible.
+
+**Done when.**
+- [ ] `profile-completion.ts` helper exists with unit tests (or at least
+      hand-tested examples in a comment block)
+- [ ] Profile page card hides entirely at 100%
+- [ ] At <100%, the card shows percentage + readable list of missing items
+- [ ] Tap card → opens Edit Profile
+- [ ] Demo-account profile (filled in via `seed-demo-data.ts`) shows >70%
+      so the card doesn't dominate the demo profile
+
+**Files likely touched.**
+- `src/utils/profile-completion.ts` (new)
+- `src/components/profile/<CompletionCard or similar>` (rename + behaviour)
+- `app/(tabs)/profile/index.tsx` (gate the render)
+- `BACKLOG.md` (move to Shipped)
+
+**Open questions to answer at start of build session.**
+- Which 7 fields exactly count toward completion? (Check Figma if it
+  specifies; otherwise the list above is the recommendation.)
+- Field weighting: equal (14% each) or weighted (avatar = 20%, bio = 15%,
+  etc.)? Recommendation: equal weights for v1, weighted in a v2 pass.
+- Does tapping the card route to Edit Profile or scroll within the profile
+  page to a specific section? Default to Edit Profile route.
+
+**Out of scope.** Edit Profile flow polish (separate P1 item below).
+Notifications / nudges when profile is incomplete (could be a P2 add).
+
+---
+
+## P0 — Investor demo polish
+
+Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
+spec when scheduled.
+
+### Whole-app Figma styling audit
+Why: Investor demo will hit screens we never matched against Figma; visual drift makes the app feel half-finished.
+Done when:
+- [ ] Per-screen audit completed for: Feed list, Map, Mural, Event Detail, Profile, User Profile, Circle Detail, Inbox, Chat, Settings (each is a sub-session)
+- [ ] Each audit produces a list of deltas → its own backlog item if non-trivial
+- [ ] All `colors.*` and `spacing.*` references come from `theme.ts` (no hex inline)
+
+### Empty state on other users' profile gallery
+Why: Other-user profiles render nothing in the gallery tab if they have no images, which looks like a broken screen.
+Done when:
+- [ ] Empty gallery shows centered text "{display_name} hasn't uploaded any photos yet"
+- [ ] Same pattern audited and applied to other empty-list locations (testimonials, past events, etc.)
+
+### App-wide empty states audit
+Why: Empty Feed / no-match search / zero notifications / etc. probably look like bugs today. Each one needs a copy + visual that says "this is intentional."
+Done when:
+- [ ] Walk every screen with a fresh account (no follows, no events, no messages) and screenshot every empty state
+- [ ] Items emitted to backlog per missing empty state
+- [ ] One reusable `<EmptyState icon title body cta?>` component in `src/components/ui/`
+
+### Compress Figma-seed posters (perf follow-up to shipped item)
+Why: The 15 imported Figma posters total 32MB on Storage (median ~2MB, largest 8MB). On cold-cache Mural mount, dimension prefetch is slow because `Image.getSize` downloads the full image. WebP at quality 80 would shrink this ~10×.
+Done when:
+- [ ] `sharp` (or `jimp` if sharp's native build is messy) installed as dev dep
+- [ ] `scripts/import-figma-posters.ts` extended to convert each PNG to WebP before upload (output: `event-posters/figma-seed/<evt-id>.webp`)
+- [ ] `mockEvents.ts` URLs updated to `.webp`
+- [ ] Re-seed
+- [ ] Mural cold-mount feels snappy (subjective — measure first-paint timing if needed)
+
+### Add evt-startup poster (one missing seed)
+Why: `evt-startup` ("Founders Meetup: Build in Public") still uses a picsum.photos placeholder because the Figma file only had 15 distinct posters. The 16th Figma asset was a 256×256 low-res placeholder.
+Done when:
+- [ ] Designer adds a 16th poster to the Figma file (or picks an existing rectangle/frame node as a substitute)
+- [ ] Imported via `scripts/import-figma-posters.ts` (add to POSTER_MAPPINGS)
+- [ ] `evt-startup.poster_url` updated in mockEvents.ts
+- [ ] Re-seed
+
+### Loading skeletons audit
+Why: Several screens still show a raw `ActivityIndicator` mid-screen. The mural's shimmer skeleton looks better; spread the pattern.
+Done when:
+- [ ] Feed list cards have a skeleton
+- [ ] Profile loading shows a skeleton (avatar + name + grid placeholders)
+- [ ] Circles cards have a skeleton
+- [ ] Event detail page has a skeleton hero + body
+
+---
+
+## P0 — Real bugs
+
+(Login → location glitch is in `▶ UP NEXT`.)
+
+### Audit other auth edge cases after the glitch fix
+Why: Once the location-onboarding gate is rewritten we should sanity-check every related path.
+Done when:
+- [ ] Signup → email confirmation → first login (when email confirm is re-enabled)
+- [ ] Password reset (when shipped)
+- [ ] Session expiry → next app open → login
+- [ ] OAuth cancel mid-flow
+
+### MOCK_EVENTS retired (already in existing Profile v2 #19 — keep there)
+
+---
+
+## P1 — Core flows
+
+### Messaging v1 (Realtime + read receipts) — DETAILED SPEC PRESERVED BELOW
+
+The full Messaging v1 spec lives in the appendix at the bottom of this file
+(was originally the `▶ UP NEXT` before investor polish became priority).
+Decisions locked, ready to build when promoted back to UP NEXT.
+
+### Events Near Me (location-based filter)
+Why: User explicitly requested. A "Near me" pill on Feed/Map filters events within ~5km of current location.
+Done when:
+- [ ] `expo-location` permission flow on first tap of the pill
+- [ ] Filter chip added to Feed and Map (reuses `feedFilters` AppContext)
+- [ ] Service query: `events` within `ST_DWithin(lat,lng, user_lat, user_lng, 5000)` — or client-side haversine if PostGIS extension not enabled
+- [ ] Empty state if zero events nearby ("No events within 5km — try expanding")
+- [ ] Defaults to OFF (user has to tap to enable)
+
+### Search across events
+Why: Currently the Feed search bar filters client-side over the already-loaded set. Doesn't scale and misses events outside the loaded window.
+Done when:
+- [ ] Server-side `ilike` `.or()` query on title, description, location_name, categories
+- [ ] Debounced (~300ms) so typing doesn't hammer Supabase
+- [ ] Same client-side fallback when the search query is empty (lists newest events as today)
+- [ ] Promoted from existing Activities v2 #11 to active when shipped
+
+### Profile editing flow polish
+Why: Profile fields are editable but the flow is rough — modal feels half-designed, no inline validation, save button placement.
+Done when:
+- [ ] Edit Profile screen matches Figma exactly (compare in the styling audit)
+- [ ] Inline validation per field (display_name length, bio max chars, etc.)
+- [ ] "Save" is disabled when nothing's changed; enabled + primary when something is
+
+### Instagram-style unread message styling
+Why: User explicitly requested. Read messages look identical to unread ones. Instagram bolds the unread sender name + preview, makes them white; reads them in gray.
+Done when:
+- [ ] `ConversationRow` reads its `unread` count and applies bold/white when > 0
+- [ ] Same row reverts to medium weight + tertiary text color when unread = 0
+- [ ] Unread count pill on the right edge of the row (replaces or augments the timestamp)
+- [ ] Visual match against Instagram's exact look — reference an Instagram screenshot in the PR
+- [ ] Blocked-by: Messaging v1 ship — requires `read_at` to be wired
+
+---
+
+## P1 — Launch blockers (App Store requirements)
+
+### Account deletion
+Why: App Store rejects apps that allow signup but no in-app account deletion.
+Done when:
+- [ ] Settings screen has a "Delete account" row with red text + double confirm
+- [ ] On confirm: cascade delete events, profile, follows, saved_events, registrations, messages where sender_id or recipient_id = userId
+- [ ] Auth user record deleted via service-role call (Supabase admin API)
+- [ ] User signed out, redirected to landing
+- [ ] PR includes the SQL for cascade and a test plan
+
+### Password reset / forgot password
+Why: Login screen says "forgot password?" linking nowhere. App Store reviewers will hit this.
+Done when:
+- [ ] "Forgot password" link on login screen routes to `/(auth)/reset-password`
+- [ ] Screen collects email, calls Supabase `resetPasswordForEmail()`
+- [ ] Email template in Supabase configured with a deep link back to the app
+- [ ] Deep link route `/(auth)/update-password?token=...` lets user set new password
+
+### Error boundaries on every screen
+Why: A single crashed screen currently shows a white screen of death — no recovery, no error report.
+Done when:
+- [ ] Generic `<ErrorBoundary>` component renders a "Something went wrong" view with a "Try again" button
+- [ ] Wrapped around every top-level screen in `app/`
+- [ ] Crash payload logged to console for now (Sentry is a separate P2)
+
+### Migrate from RN's `Image` to `expo-image`
+Why: We hit a real bug today where RN Web's Image hides cached images on remount (the placeholder z-index issue from the mural launch). expo-image's web fallback handles this correctly + has better caching on native.
+Done when:
+- [ ] `expo-image` installed
+- [ ] All `import { Image } from 'react-native'` replaced with `import { Image } from 'expo-image'`
+- [ ] All `resizeMode="cover"` replaced with `contentFit="cover"` (API differs)
+- [ ] Smoke test on iOS + web that posters still render correctly
+- [ ] Remove the now-unnecessary wrapper bg color workaround in `MuralPoster.tsx`
+
+### Apple Sign In (if Google Sign In is shipped)
+Why: App Store rule — if you offer third-party sign-in (Google, Facebook), you must also offer Sign in with Apple. Otherwise reject.
+Done when:
+- [ ] Apple sign-in button on landing + login screens
+- [ ] `expo-apple-authentication` integrated
+- [ ] Supabase Auth Apple provider configured
+- [ ] Same OAuth-skip-onboarding flow as Google
+
+### Email confirmation re-enabled (already in existing Profile v2 #9)
+
+---
+
+## P2 — Soon (next quarter-ish)
+
+### Push notifications via Expo Notifications
+Why: Currently notifications only render in-app. Real engagement needs push.
+Done when:
+- [ ] `expo-notifications` setup + permission flow
+- [ ] User push token stored in `profiles.expo_push_token`
+- [ ] Edge function or trigger sends a push on new message, new follower, event reminder, new event from followed circle
+- [ ] In-app preferences for which notification types to receive
+
+### "Tonight" / "This weekend" / "Free" filter pills on Feed
+Why: Most common filters users want. Reduces friction vs. opening category picker.
+Done when:
+- [ ] Three new pills next to category pills on Feed/Map/Mural header
+- [ ] Each computes a date range or `is_free` filter client-side
+- [ ] Mutex with each other (Tonight excludes weekend, etc.) — or stackable, design call
+- [ ] Empty state when no events match
+
+### Share event externally (deep links)
+Why: Users want to share events to other apps; investors want to see organic viral growth.
+Done when:
+- [ ] Each event detail has a Share button → opens iOS/Android share sheet
+- [ ] Shared link opens a web preview at `sphaer.app/event/<id>` with OG tags + "Open in app" button
+- [ ] Universal links / app links wired so the deep link opens the native app if installed
+- [ ] Same for circles and profiles (lower priority)
+
+### Save/bookmark events synced
+Why: Currently saved-events state is local (`AsyncStorage`). Reinstall = lost saves.
+Done when:
+- [ ] Existing `saved_events` table is the source of truth (it already exists)
+- [ ] Save/unsave writes through to the table immediately
+- [ ] Saved list view at `/(tabs)/profile/saved` (or similar)
+- [ ] Optimistic UI matches existing pattern in `feed/index.tsx` toggleSave
+
+### Pull-to-refresh on Mural
+Why: Feed has it via FlatList's RefreshControl; Mural doesn't. Investors will try.
+Done when:
+- [ ] Vertical overscroll from top of Mural triggers refetch + dimension recompute
+- [ ] Subtle indicator matches the rest of the app
+
+---
+
+## Backlog (later — months out)
+
+- **Circle group chat** — v2 of Messaging spec. Schema already supports `circle_id` on messages.
+- **Map clustering** — when zoomed out, group pins to avoid visual mess. `react-native-maps` supports this with a cluster wrapper.
+- **Calendar export of saved events** — generate .ics file or deep-link to native calendar with event details prefilled.
+- **Dark mode** — `theme.ts` is already token-based, so this is mostly a swap of color values + `useColorScheme()` hook.
+- **Blocking / reporting users** — mute/block flow + report-to-mods. App Store may push back if absent given the social nature.
+- **Analytics (PostHog / Mixpanel)** — track funnel: signup → first event view → first save → first message. Pick one.
+- **Crash reporting (Sentry / Bugsnag)** — wire to error boundaries from the P1 item.
+- **Accessibility audit** — VoiceOver labels on every interactive element, dynamic type support, color contrast spot-checks. Aim for WCAG AA before launch.
+- **AI-generated event posters** — user mentioned this is coming. Designers can generate a poster from an event title/description. Hook `expo-image-manipulator` for client crop, openAI or Replicate for the gen, store dims at gen time (resolves the deferred `poster_width`/`poster_height` columns from the Mural session).
+- **Onboarding tutorial** — first-time users see a 3-screen swipeable "what is Sphaer" intro before signup CTA. Helps investor demos especially.
+- **Splash screen polish** — current splash is the Expo default. Custom Sphaer artwork matching the landing screen.
+- **Profile image gallery editing** — long-press to delete, drag-to-reorder. Currently photos are append-only.
+
+---
+
+## ✓ Shipped
+
+*Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
+
+- **2026-06-08 — Figma poster import (15 designer-curated posters).** `scripts/import-figma-posters.ts` extracts posters from Figma file `HIVq6Vaymj01dZ37AvwCUF` via the Figma MCP, uploads to Supabase Storage at `event-posters/figma-seed/<evt-id>.png`, and `src/data/mockEvents.ts` updated for 15 of 16 events (`evt-startup` retains picsum until a 16th designer poster lands — tracked in P0). Verified: 15 rows in `events` table with figma-seed URLs; Mural visibly renders "Fire of Love" / "Typography Experiment" / etc. Branch: `funny-kare-983d2c`. Follow-up: WebP compression for the ~32MB total → see P0 "Compress Figma-seed posters."
+- **2026-06-08 — Mural feature (2D pan-pinch poster wall).** Brick layout, pinch-zoom with focal point, web wheel-handler for trackpad pan/pinch, Feed/Map/Mural filter parity. Branch: `funny-kare-983d2c`.
+
+---
+
+# Appendix — Detailed specs (preserved from earlier sessions)
+
+## Messaging v1 (decisions locked, ready to build when promoted)
 
 Architectural calls already made (don't re-grill these next session, just build):
 
@@ -152,8 +516,6 @@ explicitly cut from v1 scope to keep that ship-able.
 - **When we come back:** a proper cropping experience with pinch-to-zoom,
   rotation, etc. — probably via `react-native-image-crop-picker` or a custom
   reanimated implementation.
-
----
 
 ---
 
