@@ -519,6 +519,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
+    // Transform origin pinned to the canvas's top-left corner. CSS
+    // defaults to `50% 50%` (centre) which makes scale rotate the visual
+    // around the canvas centre — the centerOf() / boundsFor() math
+    // assumes top-left origin, so without this pin the rendered position
+    // is offset (visible as a black L-strip on the top + left of the
+    // viewport at idle). RN's `transformOrigin` prop maps to the CSS
+    // property on web and is a no-op on native (native already
+    // transforms around the top-left by default for Animated.View).
+    transformOrigin: '0 0',
     // NO backgroundColor here. The canvas is `position: absolute` +
     // `transform: ...`, which creates a stacking context — and inside that
     // context the poster cells render their picture as a `background-image`
