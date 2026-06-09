@@ -5,14 +5,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
-import { ProfileIncompleteBanner } from '@/components/profile/ProfileIncompleteBanner';
+import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCard';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
+import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
+import { computeProfileCompletion } from '@/utils/profile-completion';
 import { getMockProfileById, CURRENT_USER_PROFILE_ID } from '@/data/mockProfiles';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
 import {
@@ -31,6 +32,7 @@ import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { colors, typography, spacing } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const INK = '#1B1B18';
 const META = '#767779';
@@ -58,7 +60,6 @@ export default function ProfileScreen() {
   const [gallery, setGallery] = useState<ProfileImage[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(true);
 
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
 
   // Stats popups — exactly one open at a time via a single discriminator.
@@ -184,9 +185,8 @@ export default function ProfileScreen() {
   if (authLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.center}>
-          <ActivityIndicator color={INK} />
-        </View>
+        <TopBar onSignOut={handleSignOut} />
+        <ProfileSkeleton />
       </SafeAreaView>
     );
   }
@@ -294,25 +294,20 @@ export default function ProfileScreen() {
 
   // ── Real authed user ─────────────────────────────────────────────────────
   const displayProfile = adaptProfileToDisplay(user.id, profile, counts, gallery);
-  const missing = computeMissing(profile);
-  const showBanner = missing.length > 0 && !bannerDismissed;
+  const completion = computeProfileCompletion(profile);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <TopBar onSignOut={handleSignOut} />
 
-      {showBanner && (
-        <ProfileIncompleteBanner
-          missing={missing}
-          onDismiss={() => setBannerDismissed(true)}
-          onEditPress={handleEdit}
-        />
-      )}
+      <ProfileCompletionCard
+        percentage={completion.percentage}
+        missing={completion.missing}
+        onEditPress={handleEdit}
+      />
 
       {extrasLoading && gallery.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={INK} />
-        </View>
+        <ProfileSkeleton />
       ) : (
         <ProfileView
           profile={displayProfile}
@@ -365,7 +360,15 @@ function AvailableForWorkBar({ location }: { location: string }) {
       <TouchableOpacity
         style={styles.getInTouchButton}
         onPress={() =>
-          Alert.alert('Coming soon', 'DMs are not wired up yet — sit tight.')
+          // DMs ARE wired up — this bar's "Get in touch" is the placeholder
+          // for what will eventually be the OTHER-user-profile messaging
+          // entry once the "Available for work" toggle ships (Profile v2 #2).
+          // On the own-profile we keep the bar visible as a demo of the
+          // shape, but the button has no honest action yet.
+          Alert.alert(
+            'Coming soon',
+            'The "Available for work" toggle ships in Profile v2 — this bar will appear on other artists\' profiles when they mark themselves available.'
+          )
         }
         activeOpacity={0.85}
       >
@@ -373,21 +376,6 @@ function AvailableForWorkBar({ location }: { location: string }) {
       </TouchableOpacity>
     </View>
   );
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * What's missing from the profile for the soft-gate banner. The banner only
- * shows when this list is non-empty.
- */
-function computeMissing(profile: Profile | null): string[] {
-  if (!profile) return [];
-  const missing: string[] = [];
-  if (!profile.avatar_url) missing.push('a profile photo');
-  if (!profile.bio || profile.bio.trim().length === 0) missing.push('a tagline');
-  if (!profile.about || profile.about.trim().length === 0) missing.push('an about section');
-  return missing;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -464,3 +452,5 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('profile-own');

@@ -1,13 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/ui/Input';
@@ -67,7 +60,12 @@ export function ProfileForm({
   // ── Form state ────────────────────────────────────────────────────────────
   const [values, setValues] = useState<ProfileFormValues>(initialValues);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ display_name?: string }>({});
+  const [errors, setErrors] = useState<{
+    display_name?: string;
+    bio?: string;
+    about?: string;
+    website?: string;
+  }>({});
 
   // Gallery is "live" — adds/removes persist immediately, not on submit
   const [gallery, setGallery] = useState<ProfileImage[]>(initialGallery);
@@ -80,6 +78,14 @@ export function ProfileForm({
 
   function update<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
+    // Clear any field-level error as soon as the user edits the field —
+    // sticky errors after a fix feel like the form is fighting the user.
+    setErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete (next as Record<string, string | undefined>)[key as string];
+      return next;
+    });
   }
 
   // ── Avatar picker ─────────────────────────────────────────────────────────
@@ -212,6 +218,24 @@ export function ProfileForm({
     if (trimmedName.length < 2 || trimmedName.length > 50) {
       next.display_name = 'Name must be 2–50 characters';
     }
+    // Cheap, locally-checkable copy guardrails. The actual DB columns are
+    // TEXT, so these are UX-only — but a 5000-char "bio" reads as broken
+    // even before save, and a malformed website URL would break the link
+    // on the public profile page.
+    if (values.bio && values.bio.length > 80) {
+      next.bio = 'Tagline is too long (80 characters max)';
+    }
+    if (values.about && values.about.length > 600) {
+      next.about = 'About section is too long (600 characters max)';
+    }
+    if (values.website) {
+      const w = values.website.trim();
+      // Accept bare domains too — strip protocol before testing.
+      const stripped = w.replace(/^https?:\/\//i, '');
+      if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i.test(stripped)) {
+        next.website = 'Enter a valid website (e.g. yoursite.com)';
+      }
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -262,6 +286,15 @@ export function ProfileForm({
 
   const finalSubmitLabel = submitLabel ?? (mode === 'onboarding' ? "Let's go" : 'Save');
 
+  // Dirty-state guard: the Save button is disabled until the user has
+  // actually changed something. Cheaply implemented via JSON stringify —
+  // the form values are flat (strings + arrays of POJOs) and small. The
+  // onboarding mode always treats the form as dirty since the user hasn't
+  // touched anything yet but still needs to be able to advance.
+  const isDirty =
+    mode === 'onboarding' ||
+    JSON.stringify(values) !== JSON.stringify(initialValues);
+
   return (
     <View style={styles.root}>
       {/* ── Avatar ─────────────────────────────────────── */}
@@ -300,6 +333,7 @@ export function ProfileForm({
           value={values.bio}
           onChangeText={(t) => update('bio', t)}
           maxLength={80}
+          error={errors.bio}
         />
         <Input
           label="About"
@@ -310,6 +344,7 @@ export function ProfileForm({
           numberOfLines={4}
           style={styles.aboutInput}
           maxLength={600}
+          error={errors.about}
         />
         <Input
           label="Location"
@@ -334,6 +369,7 @@ export function ProfileForm({
           autoCapitalize="none"
           keyboardType="url"
           maxLength={120}
+          error={errors.website}
         />
       </View>
 
@@ -417,6 +453,7 @@ export function ProfileForm({
         label={finalSubmitLabel}
         onPress={handleSubmit}
         isLoading={isSubmitting}
+        disabled={!isDirty}
         style={styles.submitButton}
       />
     </View>

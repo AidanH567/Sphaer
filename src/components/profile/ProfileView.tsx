@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Linking,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/constants/theme';
 import { ProfileActivityCard } from './ProfileActivityCard';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { MockProfile } from '@/data/mockProfiles';
 
 // Figma design tokens (node 3637:4767)
@@ -246,18 +240,25 @@ export function ProfileView({
         <>
           <View style={styles.section}>
             <SectionHeader title="About" />
-            <TouchableOpacity onPress={onEditPress} activeOpacity={0.7}>
-              <Text style={styles.emptyHint}>
-                Tell people about your work — tap Edit Profile to add an About section.
-              </Text>
-            </TouchableOpacity>
+            <EmptyState
+              body="Tell people about your work — tap Edit Profile to add an About section."
+              onPress={onEditPress}
+            />
           </View>
           <Divider />
         </>
       ) : null}
 
       {/* ── Activity ─────────────────────────────────────── */}
-      {hasActivities && (
+      {/*
+        The list is only populated for the own-profile path (we don't fetch
+        timeline events on /user/[id]); the stats row shows the count
+        instead, and tapping "Activities" opens the full list in a sheet.
+        Show the empty placeholder only when the COUNT is also zero —
+        otherwise we'd be lying ("Anke Peters hasn't shared any activities
+        yet" when stats says Activities: 1).
+      */}
+      {hasActivities ? (
         <>
           <View style={styles.section}>
             <SectionHeader title="Activity" />
@@ -269,7 +270,17 @@ export function ProfileView({
           </View>
           <Divider />
         </>
-      )}
+      ) : !isOwnProfile && profile.activitiesCount === 0 ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Activity" />
+            <EmptyState
+              body={`${profile.displayName} hasn't shared any activities yet.`}
+            />
+          </View>
+          <Divider />
+        </>
+      ) : null}
 
       {/* ── Experience ───────────────────────────────────── */}
       {hasExperience ? (
@@ -293,15 +304,24 @@ export function ProfileView({
         <>
           <View style={styles.section}>
             <SectionHeader title="Experience" />
-            <TouchableOpacity onPress={onEditPress} activeOpacity={0.7}>
-              <Text style={styles.emptyHint}>
-                Add roles, residencies, and projects from Edit Profile.
-              </Text>
-            </TouchableOpacity>
+            <EmptyState
+              body="Add roles, residencies, and projects from Edit Profile."
+              onPress={onEditPress}
+            />
           </View>
           <Divider />
         </>
-      ) : null}
+      ) : (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Experience" />
+            <EmptyState
+              body={`${profile.displayName} hasn't added any experience yet.`}
+            />
+          </View>
+          <Divider />
+        </>
+      )}
 
       {/* ── Testimonials ─────────────────────────────────── */}
       <View style={styles.section}>
@@ -315,13 +335,15 @@ export function ProfileView({
               </View>
             ))}
           </View>
+        ) : isOwnProfile ? (
+          <EmptyState body="No testimonials yet — these arrive as people you've worked with leave them." />
         ) : (
-          <Text style={styles.emptyHint}>No testimonials yet</Text>
+          <EmptyState body={`${profile.displayName} hasn't received any testimonials yet.`} />
         )}
       </View>
 
       {/* ── Images ───────────────────────────────────────── */}
-      {hasImages && (
+      {hasImages ? (
         <View style={styles.section}>
           <SectionHeader title="Images" />
           <View style={styles.imageGrid}>
@@ -330,10 +352,27 @@ export function ProfileView({
                 key={`${src}-${i}`}
                 source={{ uri: src }}
                 style={styles.imageTile}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ))}
           </View>
+        </View>
+      ) : isOwnProfile ? (
+        <View style={styles.section}>
+          <SectionHeader title="Images" />
+          <EmptyState
+            body="Show your work — add photos from Edit Profile."
+            onPress={onEditPress}
+            centered
+          />
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <SectionHeader title="Images" />
+          <EmptyState
+            body={`${profile.displayName} hasn't uploaded any photos yet.`}
+            centered
+          />
         </View>
       )}
 
@@ -540,12 +579,6 @@ const styles = StyleSheet.create({
   },
   editText: {
     color: CHOCOLATE,
-  },
-  emptyHint: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
-    color: META,
-    fontStyle: 'italic',
   },
 
   // Sections
