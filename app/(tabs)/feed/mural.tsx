@@ -15,6 +15,7 @@ import { useEvents } from '@/hooks/useEvents';
 import { useMuralDimensions } from '@/hooks/useMuralDimensions';
 import { useMuralLayout } from '@/hooks/useMuralLayout';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
+import { applyChipFilters } from '@/utils/event-filters';
 import { colors, spacing, typography } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
@@ -90,9 +91,21 @@ export default function MuralScreen() {
       }
       return true;
     });
+    const chipped = applyChipFilters(filtered, {
+      tonight: feedFilters.tonight,
+      thisWeekend: feedFilters.thisWeekend,
+      isFree: feedFilters.isFree,
+    });
     // Safety cap — see MURAL_MAX_EVENTS comment.
-    return filtered.slice(0, MURAL_MAX_EVENTS);
-  }, [events, searchText, neighborhood]);
+    return chipped.slice(0, MURAL_MAX_EVENTS);
+  }, [
+    events,
+    searchText,
+    neighborhood,
+    feedFilters.tonight,
+    feedFilters.thisWeekend,
+    feedFilters.isFree,
+  ]);
 
   // Pre-fetch poster dimensions for everything we plan to render.
   const posterUrls = useMemo(

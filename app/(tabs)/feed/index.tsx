@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { FlatList, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Alert, ScrollView } from 'react-native';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback } from 'react';
@@ -19,6 +19,7 @@ import {
 } from '@/services/events.service';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { haversineKm, NEAR_ME_RADIUS_KM } from '@/utils/geo';
+import { applyChipFilters } from '@/utils/event-filters';
 import { colors, spacing, typography } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
@@ -92,7 +93,7 @@ export default function FeedScreen() {
     const base = [...events].sort(
       (a, b) => +new Date(b.created_at ?? 0) - +new Date(a.created_at ?? 0)
     );
-    return base.filter((e) => {
+    const filtered = base.filter((e) => {
       if (q.length > 0) {
         const haystack = [
           e.title,
@@ -134,7 +135,48 @@ export default function FeedScreen() {
       }
       return true;
     });
-  }, [events, searchText, feedFilters.neighborhood, feedFilters.nearMe, userCoords]);
+    // Layer the chip filters (tonight / thisWeekend / isFree) on top of
+    // search + hood + near-me. Centralised in event-filters.ts so map +
+    // mural can share the exact same predicates.
+    return applyChipFilters(filtered, {
+      tonight: feedFilters.tonight,
+      thisWeekend: feedFilters.thisWeekend,
+      isFree: feedFilters.isFree,
+    });
+  }, [
+    events,
+    searchText,
+    feedFilters.neighborhood,
+    feedFilters.nearMe,
+    feedFilters.tonight,
+    feedFilters.thisWeekend,
+    feedFilters.isFree,
+    userCoords,
+  ]);
+
+  // Tonight ⇄ This weekend are mutually exclusive — turning one on clears
+  // the other so they read as "pick one time window". `isFree` stacks
+  // freely with either since it's orthogonal.
+  function toggleTonight() {
+    setFeedFilters({
+      ...feedFilters,
+      tonight: feedFilters.tonight ? undefined : true,
+      thisWeekend: feedFilters.tonight ? feedFilters.thisWeekend : undefined,
+    });
+  }
+  function toggleThisWeekend() {
+    setFeedFilters({
+      ...feedFilters,
+      thisWeekend: feedFilters.thisWeekend ? undefined : true,
+      tonight: feedFilters.thisWeekend ? feedFilters.tonight : undefined,
+    });
+  }
+  function toggleIsFree() {
+    setFeedFilters({
+      ...feedFilters,
+      isFree: feedFilters.isFree ? undefined : true,
+    });
+  }
 
   function toggleCategory(cat: string) {
     const current = feedFilters.categories ?? [];
@@ -238,18 +280,23 @@ export default function FeedScreen() {
         onNeighborhoodChange={setNeighborhood}
       />
 
-      {/* Near-me chip — lives between the header and the list so it can be
-          dropped in without restructuring the SearchFilterBar layout. */}
-      <View style={styles.chipRow}>
+      {/* Quick filter chips — lives between the header and the list so it
+          can be dropped in without restructuring the SearchFilterBar layout.
+          ScrollView so it scrolls horizontally on narrow screens. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
+      >
         <TouchableOpacity
           onPress={toggleNearMe}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityState={{ selected: !!feedFilters.nearMe, busy: nearMeBusy }}
           style={[
-            styles.nearMeChip,
-            feedFilters.nearMe && styles.nearMeChipActive,
-            nearMeBusy && styles.nearMeChipBusy,
+            styles.chip,
+            feedFilters.nearMe && styles.chipActive,
+            nearMeBusy && styles.chipBusy,
           ]}
         >
           <Ionicons
@@ -258,15 +305,63 @@ export default function FeedScreen() {
             color={feedFilters.nearMe ? colors.white : colors.text.primary}
           />
           <Text
-            style={[
-              styles.nearMeChipText,
-              feedFilters.nearMe && styles.nearMeChipTextActive,
-            ]}
+            style={[styles.chipText, feedFilters.nearMe && styles.chipTextActive]}
           >
             {feedFilters.nearMe ? `Within ${NEAR_ME_RADIUS_KM} km` : 'Near me'}
           </Text>
         </TouchableOpacity>
-      </View>
+
+        <TouchableOpacity
+          onPress={toggleTonight}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityState={{ selected: !!feedFilters.tonight }}
+          style={[styles.chip, feedFilters.tonight && styles.chipActive]}
+        >
+          <Ionicons
+            name="moon-outline"
+            size={12}
+            color={feedFilters.tonight ? colors.white : colors.text.primary}
+          />
+          <Text style={[styles.chipText, feedFilters.tonight && styles.chipTextActive]}>
+            Tonight
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={toggleThisWeekend}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityState={{ selected: !!feedFilters.thisWeekend }}
+          style={[styles.chip, feedFilters.thisWeekend && styles.chipActive]}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={12}
+            color={feedFilters.thisWeekend ? colors.white : colors.text.primary}
+          />
+          <Text style={[styles.chipText, feedFilters.thisWeekend && styles.chipTextActive]}>
+            This weekend
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={toggleIsFree}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityState={{ selected: !!feedFilters.isFree }}
+          style={[styles.chip, feedFilters.isFree && styles.chipActive]}
+        >
+          <Ionicons
+            name="pricetag-outline"
+            size={12}
+            color={feedFilters.isFree ? colors.white : colors.text.primary}
+          />
+          <Text style={[styles.chipText, feedFilters.isFree && styles.chipTextActive]}>
+            Free
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       {isLoading && events.length === 0 ? (
         <View style={styles.skeletonList}>
@@ -277,16 +372,32 @@ export default function FeedScreen() {
       ) : visibleEvents.length === 0 ? (
         <View style={styles.center}>
           <EmptyState
-            icon={feedFilters.nearMe ? 'navigate' : 'calendar-outline'}
+            icon={
+              feedFilters.tonight || feedFilters.thisWeekend
+                ? 'calendar-outline'
+                : feedFilters.isFree
+                ? 'pricetag-outline'
+                : feedFilters.nearMe
+                ? 'navigate'
+                : 'calendar-outline'
+            }
             title={
-              feedFilters.nearMe
+              feedFilters.tonight
+                ? 'Nothing on tonight'
+                : feedFilters.thisWeekend
+                ? 'Nothing on this weekend'
+                : feedFilters.isFree
+                ? 'No free events match'
+                : feedFilters.nearMe
                 ? `Nothing within ${NEAR_ME_RADIUS_KM} km`
                 : searchText
                 ? `No matches for "${searchText}"`
                 : 'Nothing on right now'
             }
             body={
-              feedFilters.nearMe
+              feedFilters.tonight || feedFilters.thisWeekend || feedFilters.isFree
+                ? 'Try clearing the chips above to see everything.'
+                : feedFilters.nearMe
                 ? 'Try expanding by tapping "Near me" off, or pan around the Map view.'
                 : searchText
                 ? 'Try a different search, or clear the filter to see everything.'
@@ -329,7 +440,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.xs,
   },
-  nearMeChip: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -340,18 +451,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  nearMeChipActive: {
+  chipActive: {
     backgroundColor: colors.black,
     borderColor: colors.black,
   },
-  nearMeChipBusy: { opacity: 0.6 },
-  nearMeChipText: {
+  chipBusy: { opacity: 0.6 },
+  chipText: {
     fontFamily: typography.fontFamily.ui,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
   },
-  nearMeChipTextActive: {
+  chipTextActive: {
     color: colors.white,
   },
   center: {

@@ -28,4 +28,13 @@ export interface EventFilters {
    * stay serialisable without leaking geo into URL state.
    */
   nearMe?: boolean;
+  /**
+   * Quick time-based filter chips. Mutually exclusive — turning one on
+   * clears the other in the chip handler. `tonight` matches events whose
+   * `starts_at` is today, between now and end-of-day local time.
+   * `thisWeekend` matches events between the upcoming Friday 18:00 and
+   * Sunday 23:59:59 local time.
+   */
+  tonight?: boolean;
+  thisWeekend?: boolean;
 }
