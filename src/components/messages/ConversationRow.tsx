@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
 import type { MockConversation } from '@/data/mockMessages';
@@ -41,6 +42,11 @@ export function ConversationRow({ conversation, onPress }: ConversationRowProps)
     hasStoryRing,
   } = conversation;
 
+  // Instagram-style: unread rows pop with bold name + dark preview; read
+  // rows recede to medium-weight name + grey preview. The badge on the
+  // right is the existing count pill.
+  const isUnread = typeof unreadCount === 'number' && unreadCount > 0;
+
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       {/* Avatar */}
@@ -51,7 +57,7 @@ export function ConversationRow({ conversation, onPress }: ConversationRowProps)
       {/* Body — name + preview + right column */}
       <View style={styles.body}>
         <View style={styles.contact}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={[styles.name, isUnread && styles.nameUnread]} numberOfLines={1}>
             {name}
           </Text>
 
@@ -76,6 +82,7 @@ export function ConversationRow({ conversation, onPress }: ConversationRowProps)
               style={[
                 styles.preview,
                 previewKind === 'typing' && styles.previewItalic,
+                isUnread && styles.previewUnread,
               ]}
               numberOfLines={1}
             >
@@ -151,9 +158,14 @@ const styles = StyleSheet.create({
   name: {
     fontFamily: typography.fontFamily.display,
     fontSize: 16,
-    fontWeight: typography.fontWeight.semibold,
-    color: NAME,
+    fontWeight: typography.fontWeight.medium,
+    color: META,
     letterSpacing: -0.32,
+  },
+  // Unread variant — full ink + bold weight, Instagram-style.
+  nameUnread: {
+    fontWeight: typography.fontWeight.bold,
+    color: NAME,
   },
   previewRow: {
     flexDirection: 'row',
@@ -172,6 +184,11 @@ const styles = StyleSheet.create({
   },
   previewItalic: {
     fontStyle: 'italic',
+  },
+  // Unread variant — primary ink + semibold so the preview reads as still-fresh.
+  previewUnread: {
+    color: NAME,
+    fontWeight: typography.fontWeight.semibold,
   },
 
   // Right column

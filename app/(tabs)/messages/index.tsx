@@ -11,12 +11,14 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { MockConversation } from '@/data/mockMessages';
 import { typography } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { formatMessageTime } from '@/utils/date';
 import type { Conversation } from '@/types/message.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // NOTE: real Supabase data via `useMessagesContext()`. Each row is mapped
 // into the legacy `MockConversation` shape so the existing Figma-styled
@@ -50,6 +52,50 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'activities', label: 'Activities' },
   { key: 'circles', label: 'Circles' },
 ];
+
+/** Tab-aware empty-state copy for the inbox. */
+function emptyCopyForFilter(
+  filter: FilterKey
+): { icon: 'chatbubbles-outline' | 'mail-open-outline' | 'star-outline'; title: string; body: string } {
+  switch (filter) {
+    case 'unread':
+      return {
+        icon: 'mail-open-outline',
+        title: "You're all caught up",
+        body: 'Nothing unread — new messages will show up here.',
+      };
+    case 'favourites':
+      return {
+        icon: 'star-outline',
+        title: 'No favourites yet',
+        body: 'Star a conversation to keep it pinned to this tab.',
+      };
+    case 'direct':
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No direct messages yet',
+        body: 'Message an artist from their profile to start a chat.',
+      };
+    case 'activities':
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No activity chats yet',
+        body: 'Register for an event to join its group chat.',
+      };
+    case 'circles':
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No circle chats yet',
+        body: 'Join a circle to chat with its members.',
+      };
+    default:
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No conversations yet',
+        body: 'Message an artist from their profile, or join a circle to start chatting.',
+      };
+  }
+}
 
 interface RowWithRoute {
   row: MockConversation;
@@ -213,7 +259,7 @@ export default function MessagesScreen() {
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No conversations to show</Text>
+          <EmptyState {...emptyCopyForFilter(activeFilter)} centered spaced />
         </View>
       ) : (
         <FlatList
@@ -326,9 +372,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
-    color: META,
-  },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('messages-inbox');
