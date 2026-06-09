@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '@/constants/theme';
+import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateShort, formatEventTimeRange } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
 import type { EventWithRelations } from '@/types/event.types';
@@ -61,7 +62,7 @@ export function EventCard({ event, onSave, isSaved = false }: EventCardProps) {
       {/* Right — poster image + bookmark */}
       <View style={styles.imageWrap}>
         {event.poster_url ? (
-          <Image source={{ uri: event.poster_url }} style={styles.image} resizeMode="cover" />
+          <Image source={{ uri: event.poster_url }} style={styles.image} contentFit="cover" />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]} />
         )}
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: CARD_HEIGHT,
     backgroundColor: colors.white,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     marginHorizontal: spacing.base,
     marginBottom: spacing.md,
     paddingLeft: 2,
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: typography.fontFamily.display,
-    fontSize: 20,
+    fontSize: typography.fontSize.lg,
     lineHeight: 23.4, // Figma: 117%
     fontWeight: typography.fontWeight.regular,
     color: CHOCOLATE,

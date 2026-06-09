@@ -1,19 +1,26 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, View, Text, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { FlatList, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
+import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '@/context/AppContext';
 import { useAuthContext } from '@/context/AuthContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { EventCard } from '@/components/feed/EventCard';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { EventCardSkeleton } from '@/components/ui/skeletons/EventCardSkeleton';
 import { useEvents } from '@/hooks/useEvents';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
   getSavedEventIds,
   saveEvent,
   unsaveEvent,
 } from '@/services/events.service';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
+import { haversineKm, NEAR_ME_RADIUS_KM } from '@/utils/geo';
 import { colors, spacing, typography } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
  * Activity feed. Pulls real `events` rows from Supabase via useEvents().
@@ -26,16 +33,25 @@ import { colors, spacing, typography } from '@/constants/theme';
  */
 export default function FeedScreen() {
   const router = useRouter();
-  const { feedView, setFeedView, feedFilters, setFeedFilters } = useAppContext();
+  const { feedView, setFeedView, feedFilters, setFeedFilters, userCoords, setUserCoords } =
+    useAppContext();
   const { user } = useAuthContext();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [nearMeBusy, setNearMeBusy] = useState(false);
 
   // Search + neighbourhood now live in AppContext so Feed / Map / Mural
   // share filter state. Mural can opt in later — Feed and Map opt in now.
   const searchText = feedFilters.search ?? '';
 
+  // Debounce the raw search input before it hits the service. Typing into
+  // the search bar updates AppContext immediately (so the input stays
+  // responsive) but the actual Supabase query waits 300ms after the last
+  // keystroke — avoids firing one `ilike` per character.
+  const debouncedSearch = useDebounce(searchText, 300);
+
   const { events, isLoading, refetch } = useEvents({
     categories: feedFilters.categories,
+    search: debouncedSearch.trim() || undefined,
   });
 
   // Refetch whenever the feed comes back into focus — covers the
@@ -108,9 +124,17 @@ export default function FeedScreen() {
           if (!locHaystack.includes(hood)) return false;
         }
       }
+      // Near me — keep events with valid coords within radius. Events
+      // without lat/lng pass through silently (we don't have data to filter
+      // them on); flipping the filter to "strict" later means excluding
+      // those, but for the demo set it's friendlier to keep them visible.
+      if (feedFilters.nearMe && userCoords && e.lat != null && e.lng != null) {
+        const d = haversineKm(userCoords, { lat: e.lat, lng: e.lng });
+        if (d > NEAR_ME_RADIUS_KM) return false;
+      }
       return true;
     });
-  }, [events, searchText, feedFilters.neighborhood]);
+  }, [events, searchText, feedFilters.neighborhood, feedFilters.nearMe, userCoords]);
 
   function toggleCategory(cat: string) {
     const current = feedFilters.categories ?? [];
@@ -126,6 +150,51 @@ export default function FeedScreen() {
 
   function setNeighborhood(n: string | null) {
     setFeedFilters({ ...feedFilters, neighborhood: n ?? undefined });
+  }
+
+  /**
+   * Toggle the "Near me" filter. First time it's enabled we ask for the OS
+   * location permission and resolve a single fix — subsequent toggles reuse
+   * the cached `userCoords`. On denial we leave the chip un-toggled and
+   * show a one-shot alert explaining why; users can grant later via Settings.
+   */
+  async function toggleNearMe() {
+    // Disable — no permission work needed.
+    if (feedFilters.nearMe) {
+      setFeedFilters({ ...feedFilters, nearMe: undefined });
+      return;
+    }
+    // Enable. If we already have coords, just flip the flag.
+    if (userCoords) {
+      setFeedFilters({ ...feedFilters, nearMe: true });
+      return;
+    }
+    // Otherwise prompt for location.
+    if (nearMeBusy) return;
+    setNearMeBusy(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location needed',
+          'Enable location access to filter activities within 5 km. You can change this later in Settings.'
+        );
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setFeedFilters({ ...feedFilters, nearMe: true });
+    } catch (err) {
+      console.error('[Feed] near-me location lookup failed:', err);
+      Alert.alert(
+        'Could not get your location',
+        'Try again in a moment, or check your location settings.'
+      );
+    } finally {
+      setNearMeBusy(false);
+    }
   }
 
   async function toggleSave(eventId: string) {
@@ -169,15 +238,63 @@ export default function FeedScreen() {
         onNeighborhoodChange={setNeighborhood}
       />
 
+      {/* Near-me chip — lives between the header and the list so it can be
+          dropped in without restructuring the SearchFilterBar layout. */}
+      <View style={styles.chipRow}>
+        <TouchableOpacity
+          onPress={toggleNearMe}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityState={{ selected: !!feedFilters.nearMe, busy: nearMeBusy }}
+          style={[
+            styles.nearMeChip,
+            feedFilters.nearMe && styles.nearMeChipActive,
+            nearMeBusy && styles.nearMeChipBusy,
+          ]}
+        >
+          <Ionicons
+            name="navigate"
+            size={12}
+            color={feedFilters.nearMe ? colors.white : colors.text.primary}
+          />
+          <Text
+            style={[
+              styles.nearMeChipText,
+              feedFilters.nearMe && styles.nearMeChipTextActive,
+            ]}
+          >
+            {feedFilters.nearMe ? `Within ${NEAR_ME_RADIUS_KM} km` : 'Near me'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {isLoading && events.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
+        <View style={styles.skeletonList}>
+          {[0, 1, 2, 3].map((i) => (
+            <EventCardSkeleton key={i} index={i} />
+          ))}
         </View>
       ) : visibleEvents.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.empty}>
-            {searchText ? `No activities match "${searchText}"` : 'No activities yet'}
-          </Text>
+          <EmptyState
+            icon={feedFilters.nearMe ? 'navigate' : 'calendar-outline'}
+            title={
+              feedFilters.nearMe
+                ? `Nothing within ${NEAR_ME_RADIUS_KM} km`
+                : searchText
+                ? `No matches for "${searchText}"`
+                : 'Nothing on right now'
+            }
+            body={
+              feedFilters.nearMe
+                ? 'Try expanding by tapping "Near me" off, or pan around the Map view.'
+                : searchText
+                ? 'Try a different search, or clear the filter to see everything.'
+                : 'Your feed will fill in as artists and circles post events near you. Pull to refresh.'
+            }
+            centered
+            spaced
+          />
         </View>
       ) : (
         <FlatList
@@ -204,16 +321,45 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.appleMail },
   list: { paddingTop: spacing.base, paddingBottom: spacing['4xl'] },
+  skeletonList: { paddingTop: spacing.base },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  nearMeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  nearMeChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  nearMeChipBusy: { opacity: 0.6 },
+  nearMeChipText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  nearMeChipTextActive: {
+    color: colors.white,
+  },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
   },
-  empty: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: typography.fontSize.base,
-    color: colors.text.tertiary,
-    textAlign: 'center',
-  },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('feed-list');

@@ -8,11 +8,25 @@ export interface PosterSize {
   height: number;
 }
 
+export interface UserCoords {
+  lat: number;
+  lng: number;
+}
+
 interface AppContextValue {
   feedView: FeedView;
   setFeedView: (view: FeedView) => void;
   feedFilters: EventFilters;
   setFeedFilters: (filters: EventFilters) => void;
+  /**
+   * User's last-known coordinates. Acquired via `expo-location` the first
+   * time the user toggles "Near me" on the feed; subsequent toggles reuse
+   * the cached value. `null` = either denied permission or not yet asked.
+   * Lives here rather than in `feedFilters` so the filter can stay
+   * serialisable without leaking geo into URL state.
+   */
+  userCoords: UserCoords | null;
+  setUserCoords: (coords: UserCoords | null) => void;
   /** Cache for Image.getSize() results, keyed by poster_url. Lives at app
    *  scope so navigating into a poster and back doesn't re-trigger the
    *  HEAD-style network round-trip when Mural remounts. Read via getter to
@@ -26,6 +40,8 @@ const AppContext = createContext<AppContextValue>({
   setFeedView: () => {},
   feedFilters: {},
   setFeedFilters: () => {},
+  userCoords: null,
+  setUserCoords: () => {},
   getPosterSize: () => undefined,
   setPosterSize: () => {},
 });
@@ -33,6 +49,7 @@ const AppContext = createContext<AppContextValue>({
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [feedView, setFeedView] = useState<FeedView>('list');
   const [feedFilters, setFeedFilters] = useState<EventFilters>({});
+  const [userCoords, setUserCoords] = useState<UserCoords | null>(null);
 
   // Plain Map ref — reads don't trigger renders, writes notify the Mural via
   // its own `useMuralDimensions` loading-progress state. Keeps the rest of
@@ -53,6 +70,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setFeedView,
         feedFilters,
         setFeedFilters,
+        userCoords,
+        setUserCoords,
         getPosterSize,
         setPosterSize,
       }}

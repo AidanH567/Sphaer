@@ -21,4 +21,11 @@ export interface EventFilters {
   startDate?: string;
   endDate?: string;
   isFree?: boolean;
+  /**
+   * "Near me" toggle. When true, the feed filters events to within
+   * `NEAR_ME_RADIUS_KM` (default 5 km) of the user's last-known coordinates.
+   * Coords live separately on AppContext (`userCoords`) so the filter can
+   * stay serialisable without leaking geo into URL state.
+   */
+  nearMe?: boolean;
 }

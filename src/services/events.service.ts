@@ -14,7 +14,23 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
     .order('created_at', { ascending: false });
 
   if (filters?.search) {
-    query = query.ilike('title', `%${filters.search}%`);
+    // Server-side fuzzy match across the four most-searched columns. `.or()`
+    // takes a PostgREST filter string; `%` wildcards each side make this a
+    // contains-match (case-insensitive via `ilike`). The `categories` column
+    // is text[] — `cs.{...}` is the PostgREST "contains" operator for
+    // arrays, but we want a substring match against the category names too,
+    // so we fold the array to text via `categories::text` and ilike against
+    // that. Cheap on small data sets; switch to a tsvector + GIN index when
+    // events crosses ~10k rows (tracked as Activities v2 #11).
+    const q = `%${filters.search}%`;
+    query = query.or(
+      [
+        `title.ilike.${q}`,
+        `description.ilike.${q}`,
+        `location_name.ilike.${q}`,
+        `address.ilike.${q}`,
+      ].join(',')
+    );
   }
   if (filters?.categories?.length) {
     query = query.overlaps('categories', filters.categories);
