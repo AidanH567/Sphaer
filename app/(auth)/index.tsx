@@ -72,16 +72,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   taglineWrap: { alignItems: 'center' },
+  // Figma node 2012:1683 — tagline at 26px, centred, Test Martina Plantijn
+  // Regular for "Your City." with Medium for "Your Sphaer." emphasis.
   tagline: {
     fontFamily: typography.fontFamily.display,
-    fontSize: typography.fontSize.xl,
+    fontSize: 26,
     fontWeight: typography.fontWeight.regular,
     color: colors.text.primary,
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   taglineBold: {
-    fontWeight: typography.fontWeight.bold,
+    fontWeight: typography.fontWeight.medium,
   },
   buttons: {
     gap: spacing.md,
