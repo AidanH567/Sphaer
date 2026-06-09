@@ -7,11 +7,17 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Returns the raw supabase signUp `data` so the caller can branch on
+   * whether a session was created immediately (email confirmation OFF) or
+   * whether it has to wait for the user to click the confirmation email
+   * (`data.session === null`).
+   */
   async function signUp(email: string, password: string, displayName: string) {
     setIsLoading(true);
     setError(null);
     try {
-      await authService.signUpWithEmail(email, password, displayName);
+      return await authService.signUpWithEmail(email, password, displayName);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Sign up failed');
       throw e;

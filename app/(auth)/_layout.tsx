@@ -13,11 +13,18 @@ export default function AuthLayout() {
   // otherwise bounce the user to /location or /feed before they could set
   // a new password.
   // Cast to plain string because expo-router's generated route literal type
-  // hasn't picked up `update-password` yet — the dev server regenerates it
-  // on the next reload after the file lands.
+  // hasn't picked up `update-password` / `verify-email` yet — the dev server
+  // regenerates it on the next reload after the file lands.
   const lastSeg = String(segments[segments.length - 1] ?? '');
   const onOnboarding = lastSeg === 'onboarding';
   const onUpdatePassword = lastSeg === 'update-password';
+  // verify-email mounts WITHOUT a session — by design (the user has signed
+  // up but hasn't confirmed yet). When the email click finally lands and
+  // SIGNED_IN fires, the screen itself navigates to onboarding. So the
+  // fall-through here exists purely for the brief moment the verify-email
+  // screen is active and a session might or might not exist (Supabase's
+  // resend helper might briefly populate one).
+  const onVerifyEmail = lastSeg === 'verify-email';
 
   if (isLoading) {
     return (
@@ -40,9 +47,10 @@ export default function AuthLayout() {
     }
     // The first-time email signup flow is signup → onboarding form →
     // /location. Without this fall-through, the redirect below intercepts
-    // step 2 and the user never sees the form. update-password is the
-    // recovery-link landing — same intercept problem, same fall-through.
-    if (!onOnboarding && !onUpdatePassword) {
+    // step 2 and the user never sees the form. update-password and
+    // verify-email are also mid-flow auth screens with the same intercept
+    // problem — same fall-through.
+    if (!onOnboarding && !onUpdatePassword && !onVerifyEmail) {
       // First-timers (or anyone whose flag isn't set yet) get the flow.
       // `as never` because expo-router's generated route types are stale
       // until the dev server regenerates after we add the new file.
@@ -65,6 +73,7 @@ export default function AuthLayout() {
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="reset-password" />
       <Stack.Screen name="update-password" />
+      <Stack.Screen name="verify-email" />
     </Stack>
   );
 }
