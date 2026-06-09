@@ -112,59 +112,54 @@ serif until the .otf files land).
 
 ---
 
-### 2. Account deletion (fallback if Figma stays blocked)
+### 2. Password reset / forgot password (P1 launch blocker)
 
-**Why.** P1 launch blocker — App Store rejects apps that allow signup but
-no in-app account deletion. Concrete, well-defined, no Figma dependency.
-Promote this to actively working on if the Figma audit is fully blocked
-and the user is away.
+**Why.** Login screen already says "forgot password?" but the link routes
+nowhere. App Store reviewers will hit this on day-one of their submission
+walk-through and reject the build. Concrete, well-defined, no Figma
+dependency — promote into active work as soon as the Figma audit blocks.
 
 **Approach.**
-1. Add a "Delete account" row to `app/(tabs)/profile/index.tsx` (settings
-   icon area near the existing sign-out button) — destructive red, double
-   confirm via `ConfirmSheet`.
-2. Add `deleteAccount(userId)` to a new `src/services/account.service.ts`
-   that:
-   - Calls a new Supabase Edge Function (`delete-account`) with the
-     user's JWT
-   - The function uses the service-role key to cascade-delete:
-     `events` (where `creator_id = userId`),
-     `event_registrations` (`user_id`), `saved_events` (`user_id`),
-     `follows` (`follower_id OR following_id`),
-     `circle_members` (`user_id`), `circle_follows` (`user_id`),
-     `messages` (`sender_id OR recipient_id`), `direct_message_reads`,
-     `event_chat_reads`, `circle_chat_reads`, `profile_images`,
-     `profiles` (`id`), and finally `auth.users` via admin API
-3. On success: `signOut()` → `router.replace('/(auth)')`
-4. Migration for the edge function deploys via `supabase functions
-   deploy delete-account`
+1. Wire the existing "Forgot password?" copy on the login screen to
+   navigate to a new `app/(auth)/reset-password.tsx` screen.
+2. The reset-password screen collects an email + calls
+   `supabase.auth.resetPasswordForEmail(email, { redirectTo })` where
+   `redirectTo` is the deep link back into the app
+   (`sphaer://auth/update-password` on native, the deployed web origin on
+   web — mirror the OAuth redirect pattern in `auth.service.ts`).
+3. Configure the Supabase dashboard's "Reset Password" email template
+   to use that redirectTo URL.
+4. Add `app/(auth)/update-password.tsx` that:
+   - Reads the recovery token out of the URL hash on web (or via deep
+     link params on native) and calls `supabase.auth.setSession()` or
+     relies on `detectSessionInUrl: true` to populate the session.
+   - Renders a "set a new password" form that calls
+     `supabase.auth.updateUser({ password })`.
+   - On success, signs the user in (their session is already set) and
+     routes to `/(tabs)/feed`.
+5. Cover both the happy path and the "token expired / invalid" error
+   path with copy that points back to the reset flow.
 
 **Done when.**
-- [ ] Settings row with red "Delete account" text + double confirm sheet
-- [ ] Edge function exists, deploys cleanly, handles cascade correctly
-- [ ] Client service wires to the function with the user's JWT
-- [ ] After confirm: user signed out, all data removed from DB,
-      redirected to landing
-- [ ] Manual test on a throwaway account before merging
+- [ ] `/login` "Forgot password" link routes to `/(auth)/reset-password`.
+- [ ] Reset screen sends the email; success copy + back-to-login.
+- [ ] Deep link route `/(auth)/update-password` accepts the token,
+      lets the user set a new password, and routes back into the app.
+- [ ] Email template configured in Supabase dashboard (operations note;
+      not commitable — flag it in the ship summary).
+- [ ] Manual test on a throwaway account before merging.
 
 **Files likely touched.**
-- `app/(tabs)/profile/index.tsx` (settings row)
-- `src/services/account.service.ts` (new)
-- `supabase/functions/delete-account/index.ts` (new)
-- `BACKLOG.md` (move to Shipped, promote next two)
+- `app/(auth)/login.tsx` — wire the existing link.
+- `app/(auth)/reset-password.tsx` — new screen.
+- `app/(auth)/update-password.tsx` — new screen, deep link target.
+- `src/services/auth.service.ts` — add `requestPasswordReset(email)` +
+  `updatePassword(newPassword)` helpers.
+- `BACKLOG.md` (move to Shipped, promote next).
 
-**Open questions.**
-- Should the cascade `auth.users` deletion happen via Supabase Admin API
-  (requires service-role key) or via a SQL `RPC` we expose carefully?
-  Admin API is cleaner; RPC is faster to ship but requires careful RLS.
-  Recommend Admin API via the edge function.
-- Confirmation copy — "This will permanently delete your account and all
-  posted events" or include a typed-confirmation ("Type DELETE to
-  confirm")? Default: double confirm sheet is fine for v1; typed
-  confirmation is over-engineered for a solo demo.
-
-**Out of scope.** Soft-delete / restore window. Data export before
-delete (could be a separate item if needed for compliance).
+**Out of scope.** Magic-link-only auth (would replace passwords entirely
+— bigger product call). SMS-based reset (no Twilio / Supabase phone
+auth configured yet).
 
 ---
 
@@ -277,6 +272,7 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — Account deletion (P1 App Store launch blocker).** New `supabase/functions/delete-account/index.ts` edge function: verifies the caller's JWT via a user-scoped client, best-effort cleans up storage (avatars under `<userId>/`, gallery objects under `<userId>/`, plus posters on events they created and images on circles they created — fetched via a creator_id query BEFORE the cascade fires so paths are still resolvable), then calls `admin.auth.admin.deleteUser(userId)`. The schema already has `profiles.id REFERENCES auth.users(id) ON DELETE CASCADE` and every downstream FK is `ON DELETE CASCADE` (events, event_registrations, event_message_reads, saved_events, follows, circles, circle_members, circle_follows, circle_message_reads, messages, direct_message_reads, notifications, profile_images) — so a single auth-row delete cascades the entire user graph. No new migration needed. Client: new `src/services/account.service.ts#deleteAccount()` invokes the function via `supabase.functions.invoke('delete-account')` with the caller's JWT auto-attached. UI: new `SettingsSection` at the bottom of `app/(tabs)/profile/index.tsx` (below the Available-for-work bar, separated by a hairline) with a red trash icon + "Delete account" row; tapping opens a two-step ConfirmSheet flow — first sheet "Delete your Sphaer account?" with red "Continue" button; on Continue advances (with a 240ms gap so the close animation finishes cleanly) to second sheet "Permanently delete account · Last chance" with red "Delete account" button. On success the local session is killed via signOut() (errors swallowed because the JWT now references a non-existent user) and the user is bounced to `/`. Visually verified in preview by clicking through both sheets. `tsconfig.json` now excludes `supabase/functions/**` from the project's tsc check since the edge function runs under Deno's own type system. **Deployment note:** the function file is committed but NOT yet deployed — Supabase MCP returned net::ERR_FAILED for the entire session. Run `supabase functions deploy delete-account` once the MCP is back up or via the CLI to make the client call resolve; until deployed the UI surfaces "Function not found" via the ConfirmSheet's error alert. **Test plan (not yet executed — no throwaway account at hand):** sign up a throwaway account, post an event, save another event, follow someone, join a circle, send a DM; tap Delete account → Continue → Delete account; verify (a) you're bounced to `/`, (b) the auth row is gone (Supabase dashboard → Auth → Users), (c) the profile row is gone (`select * from profiles where id = '<uuid>'`), (d) the event is gone, (e) the save is gone, (f) the follow is gone, (g) the circle membership is gone, (h) the message is gone, (i) the avatar object is gone from the avatars bucket. Commit `__HASH__`.
 - **2026-06-09 — Figma audit: Tagline screen (2012:1683).** "Your City. Your Sphaer." on the landing screen was at fontSize 24 / weight bold for "Your Sphaer." — Figma spec is 26 / Medium. Updated styles.tagline / styles.taglineBold on `app/(auth)/index.tsx`. Color, layout, animation, and hero structure already matched. Font file Test Martina Plantijn is referenced via `typography.fontFamily.display` but not loaded at runtime — falls back to system serif until the .otf files land (separate item). Commit `bc36700`.
 - **2026-06-09 — Figma audit: Splash Screen (2012:1757).** Replaced the 1×1 placeholder `assets/images/splash.png` with a Figma-matched 1024×1024 splash. New `scripts/generate-splash.ts` emits the splash via sharp: white Master Cream bg (`#FFFFFF`), two-hoop logo from the existing `SphaerIcon` SVG paths scaled 3× and centred, "Sphaer" wordmark below in system sans-serif Semibold, all in Neutral/chocolate (`#2B2A27`). Cluster centred vertically with the Figma's ~7.5px optical lift. Closes the "Splash screen polish" Backlog (later) item early. Commit `bf3cd71`. **Note for future sessions:** the Figma audit is now the active UP NEXT — 12 screens remaining, user pending a Figma subscription upgrade for full audit bandwidth.
 - **2026-06-08 — P1 Core flows: 5 items shipped in one pass.** State discovery first — the BACKLOG significantly understated progress, so the actual remaining slice across the section was much smaller than 5 fresh items. **Messaging v1 closed out**: codebase already had migrations (`20260601*`), `messages.service`, `useMessages` with Realtime subscriptions, chat detail screen with `formatSeenTime`-driven read receipts, and the Instagram-style BottomNav unread badge — the only residual was the misleading "Coming soon — DMs are not wired up yet" Alert on the own-profile placeholder bar, which is actually a Profile v2 #2 "Available for work" toggle concern; updated the alert copy to point at that instead. The real DM entry on `/user/[id].tsx` (`onMessagePress` → `router.push('/messages/${id}')`) was already correctly wired. **Instagram unread row styling** (newly unblocked): `ConversationRow` now switches name to bold + ink and preview to semibold + ink when `unreadCount > 0`; reverts to medium + meta-grey when zero. The existing count pill stays put on the right. **Search expansion + debounce**: extended `events.service.ts`'s title-only `ilike` to a PostgREST `.or()` across `title` + `description` + `location_name` + `address`, plus a new `useDebounce` hook wired through the feed at 300ms so typing doesn't fire one Supabase round-trip per keystroke. Verified the `.or()` syntax against the live DB ("public" search returns Founders Meetup + Studio 8 Berlin). **Profile editing flow polish**: added per-field validation (bio ≤80, about ≤600, website regex), wired `error` props through to the Tagline / About / Website Inputs, added a JSON-stringify `isDirty` guard that disables Save until the form has actually changed, and clear-field-error-on-edit so sticky errors don't fight the user. **Events Near Me**: added `nearMe?: boolean` to EventFilters + `userCoords` to AppContext; new `src/utils/geo.ts` with haversine + `NEAR_ME_RADIUS_KM = 5`; chip on the feed between header and list with three visual states (off / on / busy); first tap requests `expo-location` permission, caches coords, sets filter; client-side haversine in `visibleEvents` filters events with valid lat/lng (no-lat events pass through silently rather than disappearing); empty-state copy switches to "Nothing within 5 km — try expanding" when the filter is on. Chip renders correctly in preview; runtime permission grant is OS-mediated. Visual Figma match on Edit Profile carved off as a separate item pending the Whole-app styling audit. Branch: `funny-kare-983d2c`.
