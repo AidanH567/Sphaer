@@ -37,105 +37,134 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ## ▶ UP NEXT
 
-### 1. Whole-app Figma styling audit (BLOCKED on Figma MCP rate limit; user may need to bump the seat or paste node IDs by hand)
+### 1. Figma styling audit — 12 of 14 screens remaining
 
-**Why.** Investor demo will hit screens we never matched against Figma; a
-piece of visual drift on any of them — wrong padding, hex inline instead of
-a theme token, a font that doesn't match the display family — makes the
-whole app feel half-finished even if the underlying logic is sound. This
-item is a *meta* one: it kicks off per-screen sub-audits.
+**Why.** Investor demo will hit screens we never matched against Figma; visual
+drift on any of them makes the app feel half-finished even when the logic
+is sound. Today we got the first 2 of 14 screens shipped before the Figma
+MCP hit its Starter-plan total-calls cap. **The user said they will buy a
+Figma subscription so this audit can resume at full bandwidth.** When the
+rate limit lifts (either via the upgrade, a daily reset, or — worst case —
+the Dev Mode paste fallback below), the remaining 12 ship per-screen as
+their own commits per the standard workflow.
 
-**Approach.**
-1. Pick the 10 in-scope screens (one sub-session each, in this order):
-   Feed list, Map, Mural, Event Detail, Profile, User Profile, Circle
-   Detail, Inbox, Chat, Settings.
-2. For each screen:
-   - Open the matching Figma frame side-by-side with the running screen.
-   - Walk top-to-bottom comparing spacing, font, color, radius, shadow,
-     icon size, alignment.
-   - Note every delta in a checklist. Trivial deltas (off-by-2 padding,
-     wrong token reference) fix inline during the same sub-session.
-     Non-trivial deltas (component restructure, missing feature) emit
-     their own backlog item.
-3. Lint pass: grep the screen's file(s) for hex literals (`#[0-9A-Fa-f]{3,8}`)
-   and any spacing/font numbers that should be coming from `theme.ts`.
-   Swap each to its token. Compare against `tailwind.config.js` to keep
-   NativeWind and theme.ts in lockstep.
-4. Each sub-session ships as its own commit referencing the screen.
+**Figma file (use this fileKey for every call):**
+`iuCO8ENAhfYIJly1JGAeU1` — `Sphaer_Prototype_RA (Copy)` in user's drafts.
+Verified working as long as the rate limit has bandwidth left.
+
+**Already shipped (do NOT re-audit):**
+- ✅ `2012:1757` — Splash Screen (1×1 placeholder PNG → Figma-matched
+  splash.png via new scripts/generate-splash.ts). Commit `bf3cd71`.
+- ✅ `2012:1683` — Tagline screen ("Your City. Your Sphaer."). Size
+  24→26, "Your Sphaer." weight bold→medium on app/(auth)/index.tsx.
+  Commit `bc36700`.
+
+**Remaining queue (12 screens — user dropped these URLs in chat 2026-06-09):**
+
+| # | Node ID | Likely screen (confirm via screenshot first) |
+|---|---|---|
+| 1 | `2012:1711` | Auth flow (3rd of 3 splash-flow screens?) |
+| 2 | `5013:10790` | Sign Up form (Figma Sign Up Flow Screen 1.1 per existing comments) |
+| 3 | `5013:10915` | Sign Up form variant 2 (per existing comments) |
+| 4 | `2012:1787` | Location-onboarding prompt phase (per existing comments) |
+| 5 | `5108:8379` | Location-onboarding searching/intermediate (per existing comments) |
+| 6 | `2012:1797` | Location-onboarding "We Found You" (per existing comments) |
+| 7 | `4045:8204` | Likely a feed/list screen — confirm |
+| 8 | `2665:12253` | Likely an event detail or profile — confirm |
+| 9 | `3491:2499` | Confirm via screenshot |
+| 10 | `4025:5033` | Confirm via screenshot |
+| 11 | `4484:10814` | Confirm via screenshot |
+| 12 | `4025:5294` | Confirm via screenshot |
+
+**Per-screen workflow.**
+1. `get_design_context(fileKey: 'iuCO8ENAhfYIJly1JGAeU1', nodeId: <node>)`
+2. Identify which React Native screen/component the Figma frame corresponds
+   to — match by content (e.g. tagline frame → `app/(auth)/index.tsx`).
+3. Compare per-element: spacing, font size/weight/family, color, radius,
+   shadow, icon size, alignment. The Figma uses `Test_Martina_Plantijn` for
+   display text — match via `typography.fontFamily.display`. Cream bg
+   `#FFFFFF` ↔ `colors.white`. Chocolate ink `#2B2A27` ↔ `colors.neutral.chocolate`.
+4. Trivial deltas (token swaps, off-by-2 padding, weight tweaks) fix
+   inline. Non-trivial (component restructure, missing feature, new layout)
+   file as their own BACKLOG item.
+5. Commit per screen: `style(<screen>): match Figma <nodeId>` with a body
+   listing the deltas. Push and merge to main per the standard solo-dev
+   workflow in CLAUDE.md.
+6. Update this BACKLOG entry's queue table (move shipped row into the
+   "Already shipped" list above).
 
 **Done when.**
-- [ ] Per-screen audit completed for: Feed list, Map, Mural, Event Detail,
-      Profile, User Profile, Circle Detail, Inbox, Chat, Settings (each
-      is its own sub-session and its own ship entry)
-- [ ] Each audit produced either inline fixes or a new backlog item per
-      non-trivial delta
-- [ ] All `colors.*` and `spacing.*` references on those screens come from
-      `theme.ts` (no hex inline, no magic numbers)
+- [ ] All 12 queued screens audited (2 already shipped → 14/14 total)
+- [ ] Each shipped commit references its Figma node ID
+- [ ] Non-trivial deltas filed as their own items in `P0 — Investor demo polish`
+- [ ] `tailwind.config.js` and `theme.ts` stay in lockstep — any new token
+      added on one side is mirrored on the other
 
-**Files likely touched.**
-- All `app/(tabs)/*` and `app/event/[id].tsx`, `app/user/[id].tsx`
-- `src/components/*` for shared components used on those screens
-- `src/constants/theme.ts` if new tokens are needed
-- `tailwind.config.js` to wire new tokens
-- `BACKLOG.md` (move each sub-audit to Shipped, promote next two)
+**Rate-limit fallback.** If the user hasn't upgraded yet and the MCP is
+capped, ask the user to open the frame in Figma's Dev Mode panel (right
+side), copy the spec, and paste into chat. Audit against the paste, no
+MCP calls needed. Slower but works.
 
-**Open questions.**
-- Figma source-of-truth link — current spec doesn't carry one; check with
-  the user before starting which Figma file/branch to audit against.
-- Should the audit cover the modal sheets (CircleJoinSheet, etc.) or only
-  the full screens? Default: full screens first, sheets as a follow-up.
-- Is each sub-audit billable as its own session under the chain-features
-  rule, or is the whole audit one ship? Treat each sub-audit as its own
-  ship for the BACKLOG bookkeeping, but stay in the same session unless
-  the user redirects.
-
-**Out of scope.** Map-marker styling (the map has its own design layer),
-typography font-file changes (the custom Martina Plantijn font is a separate
-fonts-loading item).
+**Out of scope.** Map-marker styling, custom font-file loading (separate
+backlog item — Test Martina Plantijn is referenced via
+`typography.fontFamily.display` but not loaded; falls back to system
+serif until the .otf files land).
 
 ---
 
-### 2. Per-screen Figma sub-audit (start with Feed list)
+### 2. Account deletion (fallback if Figma stays blocked)
 
-**Why.** Once the Figma MCP rate limit resets (or the user upgrades the seat /
-provides a node-id directly), the styling audit becomes 10 separate ship
-items per the parent meta-spec. Feed list is the natural first since most
-investor-demo eyeball-time lands there.
+**Why.** P1 launch blocker — App Store rejects apps that allow signup but
+no in-app account deletion. Concrete, well-defined, no Figma dependency.
+Promote this to actively working on if the Figma audit is fully blocked
+and the user is away.
 
 **Approach.**
-1. Get the Figma frame URL for the Feed list (full screen — search bar,
-   Feed/Map/Mural toggle, category chips, event card list). User to provide.
-2. Pull design context via `get_design_context` MCP — Supabase-side
-   `tailwind.config.js` + `theme.ts` should be the React-side source of
-   truth.
-3. Per-element compare: spacing, font size, font weight, color, radius,
-   shadow. Note deltas.
-4. Fix trivial deltas inline (off-by-2 padding, hex → token swap). File
-   non-trivial ones to backlog.
-5. Lint pass on `app/(tabs)/feed/index.tsx`, `src/components/feed/FeedHeader.tsx`,
-   `src/components/feed/EventCard.tsx` for hex literals (`#[0-9A-Fa-f]{3,8}`)
-   and magic numbers.
+1. Add a "Delete account" row to `app/(tabs)/profile/index.tsx` (settings
+   icon area near the existing sign-out button) — destructive red, double
+   confirm via `ConfirmSheet`.
+2. Add `deleteAccount(userId)` to a new `src/services/account.service.ts`
+   that:
+   - Calls a new Supabase Edge Function (`delete-account`) with the
+     user's JWT
+   - The function uses the service-role key to cascade-delete:
+     `events` (where `creator_id = userId`),
+     `event_registrations` (`user_id`), `saved_events` (`user_id`),
+     `follows` (`follower_id OR following_id`),
+     `circle_members` (`user_id`), `circle_follows` (`user_id`),
+     `messages` (`sender_id OR recipient_id`), `direct_message_reads`,
+     `event_chat_reads`, `circle_chat_reads`, `profile_images`,
+     `profiles` (`id`), and finally `auth.users` via admin API
+3. On success: `signOut()` → `router.replace('/(auth)')`
+4. Migration for the edge function deploys via `supabase functions
+   deploy delete-account`
 
 **Done when.**
-- [ ] Feed list visually matches Figma at 375pt viewport (the demo width)
-- [ ] No inline hex on the touched files; all colors through `colors.*` tokens
-- [ ] Non-trivial deltas filed as separate backlog items
-- [ ] Shipped entry references the specific Figma node IDs audited
+- [ ] Settings row with red "Delete account" text + double confirm sheet
+- [ ] Edge function exists, deploys cleanly, handles cascade correctly
+- [ ] Client service wires to the function with the user's JWT
+- [ ] After confirm: user signed out, all data removed from DB,
+      redirected to landing
+- [ ] Manual test on a throwaway account before merging
 
 **Files likely touched.**
-- `app/(tabs)/feed/index.tsx`
-- `src/components/feed/FeedHeader.tsx`
-- `src/components/feed/EventCard.tsx`
-- `src/components/feed/SearchFilterBar.tsx`
-- `src/constants/theme.ts` (if new tokens needed)
+- `app/(tabs)/profile/index.tsx` (settings row)
+- `src/services/account.service.ts` (new)
+- `supabase/functions/delete-account/index.ts` (new)
 - `BACKLOG.md` (move to Shipped, promote next two)
 
 **Open questions.**
-- Which Figma frame is the canonical Feed list? User to provide URL.
-- Master flow page `2012:1670` covers many screens — we need a specific
-  child node, not the whole flow board.
+- Should the cascade `auth.users` deletion happen via Supabase Admin API
+  (requires service-role key) or via a SQL `RPC` we expose carefully?
+  Admin API is cleaner; RPC is faster to ship but requires careful RLS.
+  Recommend Admin API via the edge function.
+- Confirmation copy — "This will permanently delete your account and all
+  posted events" or include a typed-confirmation ("Type DELETE to
+  confirm")? Default: double confirm sheet is fine for v1; typed
+  confirmation is over-engineered for a solo demo.
 
-**Out of scope.** Map, Mural, Profile, etc. — those are separate sub-items.
+**Out of scope.** Soft-delete / restore window. Data export before
+delete (could be a separate item if needed for compliance).
 
 ---
 
@@ -163,14 +192,7 @@ Done when:
 
 ## P1 — Launch blockers (App Store requirements)
 
-### Account deletion
-Why: App Store rejects apps that allow signup but no in-app account deletion.
-Done when:
-- [ ] Settings screen has a "Delete account" row with red text + double confirm
-- [ ] On confirm: cascade delete events, profile, follows, saved_events, registrations, messages where sender_id or recipient_id = userId
-- [ ] Auth user record deleted via service-role call (Supabase admin API)
-- [ ] User signed out, redirected to landing
-- [ ] PR includes the SQL for cascade and a test plan
+(Account deletion is in `▶ UP NEXT` #2 as the Figma-blocked fallback work.)
 
 ### Password reset / forgot password
 Why: Login screen says "forgot password?" linking nowhere. App Store reviewers will hit this.
@@ -255,6 +277,8 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — Figma audit: Tagline screen (2012:1683).** "Your City. Your Sphaer." on the landing screen was at fontSize 24 / weight bold for "Your Sphaer." — Figma spec is 26 / Medium. Updated styles.tagline / styles.taglineBold on `app/(auth)/index.tsx`. Color, layout, animation, and hero structure already matched. Font file Test Martina Plantijn is referenced via `typography.fontFamily.display` but not loaded at runtime — falls back to system serif until the .otf files land (separate item). Commit `bc36700`.
+- **2026-06-09 — Figma audit: Splash Screen (2012:1757).** Replaced the 1×1 placeholder `assets/images/splash.png` with a Figma-matched 1024×1024 splash. New `scripts/generate-splash.ts` emits the splash via sharp: white Master Cream bg (`#FFFFFF`), two-hoop logo from the existing `SphaerIcon` SVG paths scaled 3× and centred, "Sphaer" wordmark below in system sans-serif Semibold, all in Neutral/chocolate (`#2B2A27`). Cluster centred vertically with the Figma's ~7.5px optical lift. Closes the "Splash screen polish" Backlog (later) item early. Commit `bf3cd71`. **Note for future sessions:** the Figma audit is now the active UP NEXT — 12 screens remaining, user pending a Figma subscription upgrade for full audit bandwidth.
 - **2026-06-08 — P1 Core flows: 5 items shipped in one pass.** State discovery first — the BACKLOG significantly understated progress, so the actual remaining slice across the section was much smaller than 5 fresh items. **Messaging v1 closed out**: codebase already had migrations (`20260601*`), `messages.service`, `useMessages` with Realtime subscriptions, chat detail screen with `formatSeenTime`-driven read receipts, and the Instagram-style BottomNav unread badge — the only residual was the misleading "Coming soon — DMs are not wired up yet" Alert on the own-profile placeholder bar, which is actually a Profile v2 #2 "Available for work" toggle concern; updated the alert copy to point at that instead. The real DM entry on `/user/[id].tsx` (`onMessagePress` → `router.push('/messages/${id}')`) was already correctly wired. **Instagram unread row styling** (newly unblocked): `ConversationRow` now switches name to bold + ink and preview to semibold + ink when `unreadCount > 0`; reverts to medium + meta-grey when zero. The existing count pill stays put on the right. **Search expansion + debounce**: extended `events.service.ts`'s title-only `ilike` to a PostgREST `.or()` across `title` + `description` + `location_name` + `address`, plus a new `useDebounce` hook wired through the feed at 300ms so typing doesn't fire one Supabase round-trip per keystroke. Verified the `.or()` syntax against the live DB ("public" search returns Founders Meetup + Studio 8 Berlin). **Profile editing flow polish**: added per-field validation (bio ≤80, about ≤600, website regex), wired `error` props through to the Tagline / About / Website Inputs, added a JSON-stringify `isDirty` guard that disables Save until the form has actually changed, and clear-field-error-on-edit so sticky errors don't fight the user. **Events Near Me**: added `nearMe?: boolean` to EventFilters + `userCoords` to AppContext; new `src/utils/geo.ts` with haversine + `NEAR_ME_RADIUS_KM = 5`; chip on the feed between header and list with three visual states (off / on / busy); first tap requests `expo-location` permission, caches coords, sets filter; client-side haversine in `visibleEvents` filters events with valid lat/lng (no-lat events pass through silently rather than disappearing); empty-state copy switches to "Nothing within 5 km — try expanding" when the filter is on. Chip renders correctly in preview; runtime permission grant is OS-mediated. Visual Figma match on Edit Profile carved off as a separate item pending the Whole-app styling audit. Branch: `funny-kare-983d2c`.
 - **2026-06-08 — Feed list non-visual lint pass: 6 magic numbers → theme tokens.** Figma MCP still rate-limited (View seat on Professional plan), so I split the visual half of the Per-screen Feed sub-audit off as its own follow-up and shipped the structural half — the lint pass that doesn't strictly require Figma access. Audited the 4 Feed surface files (`app/(tabs)/feed/index.tsx`, `src/components/feed/FeedHeader.tsx`, `EventCard.tsx`, `SearchFilterBar.tsx`) for hex literals and magic font/radius numbers. `feed/index.tsx` and `FeedHeader.tsx` came back clean — all colour/spacing/font-size references already go through `colors.*` / `spacing.*` / `typography.*`. `EventCard.tsx`: `borderRadius: 8` → `radius.sm`, `fontSize: 20` → `typography.fontSize.lg`. `SearchFilterBar.tsx`: `fontSize: 17` ×2 → `typography.fontSize.md`, `fontSize: 15` → `typography.fontSize.base`, `fontWeight: '400'` → `typography.fontWeight.regular`. Each swap is byte-equivalent (the token literal values match the inline ones) so no visual change is possible. Remaining inline values are intentional Figma-specific gaps that don't map to existing tokens: `fontSize: 14` ×2 (between `sm: 13` and `base: 15`), `borderRadius: 18` and `borderRadius: 28` (no exact match in the radius scale), and the universal `shadowColor: '#000'` pattern (kept inline because the brand `colors.black` is `#0D0D0D`, not pure black). Visual comparison against Figma waits on the MCP rate limit reset — that piece stays in UP NEXT. Typecheck clean. Branch: `funny-kare-983d2c`.
 - **2026-06-08 — Error boundaries on every top-level route.** New `src/components/ui/ErrorBoundary.tsx` exposes two surfaces: an `ErrorBoundary` class component for explicit subtree wrapping, plus a `makeRouteErrorBoundary(name)` factory that plugs straight into expo-router's per-route `export const ErrorBoundary = ...` mechanism. The same `DefaultFallback` view backs both — centred alert icon, "Something went wrong" headline, body copy, dev-only error.message under the body, chocolate "Try again" button that resets the boundary state. A short Node script swept 21 routes (`(auth)` × 4, `(tabs)` × 11, plus event/user/profile-edit/ticket/location detail screens) and added `import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary'; export const ErrorBoundary = makeRouteErrorBoundary('<slug>');` to each. Slugs are short and grep-friendly (`feed-list`, `event-detail`, `messages-circle`, etc.) so a future Sentry/Bugsnag wiring can group by them. First-pass script bug: my insertion heuristic put the new import on a blank line in the middle of multi-line imports, breaking syntax — fixed by a second-pass script that strips every occurrence and re-inserts after the last completed `from '…'` line. Verified the fallback by injecting a temporary `if (window.location.search.includes('crash=1')) throw …` into the feed screen and loading `/feed?crash=1`: fallback rendered exactly as designed, error detail visible in __DEV__, the bottom nav stayed functional (the rest of the app keeps working when one screen crashes), and the console got the tagged `[ErrorBoundary:feed-list]` payload. Temporary throw reverted before commit. Sentry/Bugsnag wiring stays a P2 follow-up. Branch: `funny-kare-983d2c`.
