@@ -24,6 +24,7 @@ import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { signInWithGoogle } from '@/services/auth.service';
 import { isValidEmail, isValidPassword } from '@/utils/validators';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma tokens — Sign Up Flow Screen 1.1 (node 5013:10790)
 const CHOCOLATE = '#2B2A27';
@@ -73,7 +74,7 @@ export default function SignUpScreen() {
       // OAuth users skip onboarding (per design) — they land straight on
       // the feed via the (auth) layout's session redirect.
       if (Platform.OS !== 'web') {
-        router.replace('/(tabs)/feed');
+        router.replace('/location' as never);
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Google sign-in failed.';
@@ -272,3 +273,5 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('auth-signup');

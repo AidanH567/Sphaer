@@ -6,6 +6,7 @@ import { ProfileForm, type ProfileFormValues } from '@/components/profile/Profil
 import { colors, typography, spacing } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { updateProfile } from '@/services/profile.service';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
  * First-run profile setup. Renders the shared <ProfileForm /> in onboarding
@@ -47,7 +48,10 @@ export default function OnboardingScreen() {
         avatar_url: values.avatar_url,
       });
       setProfile(updated);
-      router.replace('/(tabs)/feed');
+      // Hand off to the location-onboarding flow; it'll send the user to
+      // the feed once they share location (or skip) and write the
+      // onboarding_completed flag from there.
+      router.replace('/location' as never);
     } catch (e: unknown) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Try again.');
     }
@@ -91,3 +95,5 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('auth-onboarding');

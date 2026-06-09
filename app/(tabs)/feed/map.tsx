@@ -1,14 +1,17 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Text, Image, Platform } from 'react-native';
+import { View, StyleSheet, Text, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAppContext } from '@/context/AppContext';
 import { useEvents } from '@/hooks/useEvents';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { config } from '@/constants/config';
+import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import type { EventWithRelations } from '@/types/event.types';
 import { formatEventDateShort } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // react-native-maps is iOS/Android only — lazy-require so the web bundle
 // doesn't choke. (The web build is provided by map.web.tsx alongside this.)
@@ -57,9 +60,15 @@ export default function MapScreen() {
         if (!haystack.includes(q)) return false;
       }
       if (hood.length > 0) {
-        if (e.neighbourhood) {
-          if (e.neighbourhood.toLowerCase() !== hood) return false;
-        } else {
+        // Two-level Berlin hierarchy — see app/(tabs)/feed/index.tsx for
+        // the prose. Bezirk-level filters match every event in any of
+        // the borough's constituent Ortsteils.
+        const structured = eventMatchesLocationFilter(feedFilters.neighborhood ?? '', {
+          borough: e.borough ?? null,
+          neighbourhood: e.neighbourhood ?? null,
+        });
+        if (structured === false) return false;
+        if (structured === null) {
           const locHaystack = `${e.address ?? ''} ${e.location_name ?? ''}`.toLowerCase();
           if (!locHaystack.includes(hood)) return false;
         }
@@ -209,3 +218,5 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('feed-map');

@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -12,9 +11,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { CircleCard } from '@/components/circles/CircleCard';
 import { CircleJoinSheet } from '@/components/circles/CircleJoinSheet';
 import { SearchFilterBar } from '@/components/feed/SearchFilterBar';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CircleCardSkeleton } from '@/components/ui/skeletons/CircleCardSkeleton';
 import { useCircles } from '@/hooks/useCircles';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { CircleWithCounts } from '@/types/circle.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
  * Browse circles. Uses the same SearchFilterBar component as the Activity
@@ -109,17 +111,43 @@ export default function CirclesScreen() {
       />
 
       {isLoading && circles.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+        >
+          {[0, 1].map((sectionIdx) => (
+            <View key={sectionIdx} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderText}>
+                  <View style={styles.skeletonHeaderTitle} />
+                  <View style={styles.skeletonHeaderSub} />
+                </View>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.row}
+              >
+                {[0, 1, 2].map((cardIdx) => (
+                  <CircleCardSkeleton key={cardIdx} index={sectionIdx * 3 + cardIdx} />
+                ))}
+              </ScrollView>
+            </View>
+          ))}
+        </ScrollView>
       ) : !hasResults ? (
         <View style={styles.center}>
-          <Ionicons name="people-outline" size={32} color={colors.text.tertiary} />
-          <Text style={styles.empty}>
-            {hasFilters
-              ? 'No circles match your filters'
-              : 'No circles yet'}
-          </Text>
+          <EmptyState
+            icon="people-outline"
+            title={hasFilters ? 'No matches' : 'No circles yet'}
+            body={
+              hasFilters
+                ? 'Try clearing a filter or searching for a different name.'
+                : 'Circles are how artists and crews stay connected. Start one or follow an artist who runs one.'
+            }
+            centered
+            spaced
+          />
         </View>
       ) : (
         <ScrollView
@@ -212,10 +240,21 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.sm,
   },
-  empty: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: typography.fontSize.base,
-    color: colors.text.tertiary,
-    textAlign: 'center',
+  // Skeleton-only header placeholders (no shimmer — just a sized block so
+  // the section header has the same visual mass as the populated one).
+  skeletonHeaderTitle: {
+    width: 120,
+    height: 18,
+    borderRadius: 4,
+    backgroundColor: '#E7E2D5',
+    marginBottom: 4,
+  },
+  skeletonHeaderSub: {
+    width: 90,
+    height: 12,
+    borderRadius: 3,
+    backgroundColor: '#EFEAE0',
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('circles-browse');

@@ -1,14 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +18,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import type { EventWithRelations } from '@/types/event.types';
 import type { Profile } from '@/types/user.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const MEMBERS_PREVIEW_LIMIT = 6;
 
@@ -149,7 +142,7 @@ export default function CircleDetailScreen() {
         {/* Banner + overlapping avatar */}
         <View style={styles.bannerWrap}>
           {circle.cover_url ? (
-            <Image source={{ uri: circle.cover_url }} style={styles.cover} resizeMode="cover" />
+            <Image source={{ uri: circle.cover_url }} style={styles.cover} contentFit="cover" />
           ) : (
             <View style={[styles.cover, styles.coverPlaceholder]} />
           )}
@@ -196,14 +189,16 @@ export default function CircleDetailScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.conversationButton}
-            activeOpacity={0.85}
-            onPress={() => Alert.alert('Coming soon', 'Circle conversations are not wired up yet.')}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
-            <Text style={styles.conversationText}>Join conversation</Text>
-          </TouchableOpacity>
+          {isMemberFlag && (
+            <TouchableOpacity
+              style={styles.conversationButton}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/messages/circle/${id}`)}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
+              <Text style={styles.conversationText}>Join conversation</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.divider} />
 
@@ -438,3 +433,5 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('circles-detail');

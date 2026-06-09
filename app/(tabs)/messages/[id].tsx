@@ -23,6 +23,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colors, typography, spacing } from '@/constants/theme';
 import { formatSeenTime } from '@/utils/date';
 import type { OptimisticMessage } from '@/types/message.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
 
@@ -49,7 +50,7 @@ export default function ConversationScreen() {
 
   useEffect(() => {
     if (!user?.id || !partnerId || !isFocused) return;
-    markRead(partnerId);
+    markRead({ kind: 'dm', partnerId });
   }, [user?.id, partnerId, isFocused, messages.length, markRead]);
 
   const display: DisplayMessage[] = useMemo(() => {
@@ -160,3 +161,5 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingVertical: spacing.base },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('messages-dm');

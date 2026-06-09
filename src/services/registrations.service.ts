@@ -43,6 +43,24 @@ export async function unregister(eventId: string, userId: string): Promise<void>
 }
 
 /** True if the user has a registration row for this event. */
+/**
+ * Fetch the full registration row (quantity + timestamp) for the ticket
+ * detail page. Returns null if the user isn't registered for this event.
+ */
+export async function getRegistration(
+  eventId: string,
+  userId: string
+): Promise<EventRegistration | null> {
+  const { data, error } = await supabase
+    .from('event_registrations')
+    .select('*')
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as EventRegistration | null) ?? null;
+}
+
 export async function isRegistered(eventId: string, userId: string): Promise<boolean> {
   const { count, error } = await supabase
     .from('event_registrations')

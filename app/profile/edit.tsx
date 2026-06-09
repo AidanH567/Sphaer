@@ -18,6 +18,7 @@ import { useAuthContext } from '@/context/AuthContext';
 import { updateProfile, getProfileImages } from '@/services/profile.service';
 import type { ProfileImage } from '@/types/user.types';
 import { colors, typography, spacing } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const INK = '#1B1B18';
 
@@ -168,3 +169,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('profile-edit');

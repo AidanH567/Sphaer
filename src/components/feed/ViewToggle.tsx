@@ -5,7 +5,7 @@ import { colors, typography } from '@/constants/theme';
 
 type FeedView = 'list' | 'map' | 'mural';
 
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 const INACTIVE = '#6F6F6F';
 
 const VIEWS: { key: FeedView; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [

@@ -16,6 +16,21 @@ export const colors = {
     placeholder: '#AAAAAA',
   },
 
+  // Figma "Neutral/*" palette — the warm-grey tier the design system uses for
+  // text, titles, and subtle borders. Promoted here so the recurring local
+  // CHOCOLATE / META / INK consts across components flow through theme rather
+  // than hardcoding hex values (CLAUDE.md rule). Names mirror the Figma layer
+  // comments exactly so designers and devs can talk in the same vocabulary.
+  neutral: {
+    chocolate: '#2B2A27',   // Neutral/chocolate — primary text & card titles
+    ink:       '#1B1B18',   // Neutral/ink — strong heading / display text
+    body:      '#363530',   // Neutral/body — body copy & price text on cards
+    cardMeta:  '#505049',   // Neutral/card-meta — date / time / location on cards
+    meta:      '#767779',   // Neutral/meta — secondary metadata text
+    neutral400:'#9E9D94',   // Neutral/neutral-400 — tertiary text / subtle borders
+    divider:   '#CFCEC9',   // Neutral/divider — hairline dividers on light bg
+  },
+
   border: '#E5E5E5',
   borderDark: '#0D0D0D',
 
@@ -131,5 +146,34 @@ export const shadow = {
   },
 } as const;
 
-export const theme = { colors, typography, spacing, radius, shadow } as const;
+// ─── Motion ──────────────────────────────────────────────────────────────────
+// Shared animation timings + spring presets so every sheet, modal, and
+// transition uses the same feel. Anything that fades, slides, or scales
+// pulls from here — no hardcoded durations in components.
+//
+// Tuned for "swift" — sheets open quickly (240ms perceived) and close even
+// faster (200ms). Spring is stiffer than React Native's spring default
+// (stiffness 220 vs default 100) so the slide-up settles without bouncing.
+export const motion = {
+  duration: {
+    swift: 200,      // close / dismiss — should always feel quicker than open
+    standard: 240,   // open / appear — the workhorse for sheets, fades, backdrops
+    slow: 320,       // ambient / large-canvas transitions
+  },
+  spring: {
+    // Slide-up sheet preset: tight, no perceptible wobble at rest.
+    sheet: {
+      damping: 22,
+      stiffness: 220,
+    },
+    // Softer spring for hero / decorative motion that benefits from a little
+    // overshoot.
+    soft: {
+      damping: 18,
+      stiffness: 160,
+    },
+  },
+} as const;
+
+export const theme = { colors, typography, spacing, radius, shadow, motion } as const;
 export type Theme = typeof theme;

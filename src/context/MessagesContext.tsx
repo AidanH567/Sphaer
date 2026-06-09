@@ -10,15 +10,31 @@ import React, {
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/context/AuthContext';
 import * as messagesService from '@/services/messages.service';
-import type { Conversation, Message } from '@/types/message.types';
+import type {
+  Conversation,
+  DMConversation,
+  EventConversation,
+  CircleConversation,
+  Message,
+} from '@/types/message.types';
 import type { Profile } from '@/types/user.types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+/**
+ * Discriminated target for marking a conversation as read. DMs key by the
+ * other user's profile id; event/circle chats key by their entity id.
+ */
+export type MarkReadTarget =
+  | { kind: 'dm'; partnerId: string }
+  | { kind: 'event'; eventId: string }
+  | { kind: 'circle'; circleId: string };
 
 interface MessagesContextValue {
   conversations: Conversation[];
   totalUnread: number;
   isLoading: boolean;
   refresh: () => Promise<void>;
-  markRead: (partnerId: string) => Promise<void>;
+  markRead: (target: MarkReadTarget) => Promise<void>;
 }
 
 const MessagesContext = createContext<MessagesContextValue>({
@@ -49,6 +65,13 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     conversationsRef.current = conversations;
   }, [conversations]);
 
+  // Map<eventId, RealtimeChannel>. Reconciled against `conversations` so that
+  // every event chat the user can see has exactly one open subscription.
+  const eventChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
+
+  // Same shape, but for circle chats.
+  const circleChannelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
+
   const refresh = useCallback(async () => {
     if (!userId) {
       setConversations([]);
@@ -65,15 +88,16 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [userId]);
 
-  const handleIncomingMessage = useCallback(
+  // Handle an incoming DM (from recipient_id=me or sender_id=me filters).
+  const handleIncomingDM = useCallback(
     async (msg: Message) => {
-      if (!userId || msg.circle_id) return;
+      if (!userId || msg.circle_id || msg.event_id) return;
       const isIncoming = msg.recipient_id === userId;
       const partnerId = isIncoming ? msg.sender_id : msg.recipient_id;
       if (!partnerId) return;
 
       const existingPartner = conversationsRef.current.find(
-        (c) => c.partner.id === partnerId
+        (c): c is DMConversation => c.kind === 'dm' && c.partner.id === partnerId
       )?.partner;
 
       let partner: Profile | null = existingPartner ?? null;
@@ -81,45 +105,223 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         partner = await fetchPartnerProfile(partnerId);
         if (!partner) return;
       }
-
       const partnerResolved = partner;
+
       setConversations((prev) => {
-        const existing = prev.find((c) => c.partner.id === partnerId);
-        const updated: Conversation = {
+        const found = prev.find(
+          (c): c is DMConversation => c.kind === 'dm' && c.partner.id === partnerId
+        );
+        const updated: DMConversation = {
+          kind: 'dm',
           partner: partnerResolved,
           last_message: msg,
           unread_count: isIncoming
-            ? (existing?.unread_count ?? 0) + 1
-            : existing?.unread_count ?? 0,
+            ? (found?.unread_count ?? 0) + 1
+            : found?.unread_count ?? 0,
         };
-        const rest = prev.filter((c) => c.partner.id !== partnerId);
+        const rest = prev.filter(
+          (c) => !(c.kind === 'dm' && c.partner.id === partnerId)
+        );
         return [updated, ...rest];
       });
     },
     [userId]
   );
 
-  const handleReadUpdate = useCallback((partnerId: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.partner.id === partnerId ? { ...c, unread_count: 0 } : c
-      )
-    );
-  }, []);
+  // Handle an incoming event message. Fired from a per-event channel filtered
+  // by event_id=eq.<eventId>, so we trust msg.event_id is set. Looks up the
+  // event metadata from the current conversations list (it's always there
+  // because we only subscribe to events we have a row for).
+  const handleIncomingEventMessage = useCallback(
+    (msg: Message) => {
+      if (!userId || !msg.event_id) return;
+      const eventId = msg.event_id;
 
-  const markRead = useCallback(
-    async (partnerId: string) => {
-      if (!userId) return;
-      handleReadUpdate(partnerId);
-      try {
-        await messagesService.markRead(userId, partnerId);
-      } catch (err) {
-        console.error('[MessagesContext] markRead failed:', err);
-      }
+      setConversations((prev) => {
+        const existing = prev.find(
+          (c): c is EventConversation => c.kind === 'event' && c.event.id === eventId
+        );
+        if (!existing) {
+          // We subscribed to this event but it's not in our conversations
+          // yet (e.g. registered just now, refresh in flight). Trigger one.
+          refresh();
+          return prev;
+        }
+        const isIncoming = msg.sender_id !== userId;
+        const updated: EventConversation = {
+          kind: 'event',
+          event: existing.event,
+          last_message: msg,
+          unread_count: isIncoming ? existing.unread_count + 1 : existing.unread_count,
+        };
+        const rest = prev.filter(
+          (c) => !(c.kind === 'event' && c.event.id === eventId)
+        );
+        return [updated, ...rest];
+      });
     },
-    [userId, handleReadUpdate]
+    [userId, refresh]
   );
 
+  // Same shape as the event handler — fired from per-circle channels filtered
+  // by circle_id=eq.<circleId>.
+  const handleIncomingCircleMessage = useCallback(
+    (msg: Message) => {
+      if (!userId || !msg.circle_id) return;
+      const circleId = msg.circle_id;
+
+      setConversations((prev) => {
+        const existing = prev.find(
+          (c): c is CircleConversation => c.kind === 'circle' && c.circle.id === circleId
+        );
+        if (!existing) {
+          refresh();
+          return prev;
+        }
+        const isIncoming = msg.sender_id !== userId;
+        const updated: CircleConversation = {
+          kind: 'circle',
+          circle: existing.circle,
+          last_message: msg,
+          unread_count: isIncoming ? existing.unread_count + 1 : existing.unread_count,
+        };
+        const rest = prev.filter(
+          (c) => !(c.kind === 'circle' && c.circle.id === circleId)
+        );
+        return [updated, ...rest];
+      });
+    },
+    [userId, refresh]
+  );
+
+  // Refs to keep the per-channel callbacks invoking the latest closures.
+  const handleEventMessageRef = useRef(handleIncomingEventMessage);
+  useEffect(() => {
+    handleEventMessageRef.current = handleIncomingEventMessage;
+  }, [handleIncomingEventMessage]);
+
+  const handleCircleMessageRef = useRef(handleIncomingCircleMessage);
+  useEffect(() => {
+    handleCircleMessageRef.current = handleIncomingCircleMessage;
+  }, [handleIncomingCircleMessage]);
+
+  // Reconcile per-event channels.
+  useEffect(() => {
+    const wantedIds = new Set(
+      conversations
+        .filter((c): c is EventConversation => c.kind === 'event')
+        .map((c) => c.event.id)
+    );
+    const channels = eventChannelsRef.current;
+
+    for (const [id, ch] of Array.from(channels.entries())) {
+      if (!wantedIds.has(id)) {
+        ch.unsubscribe();
+        channels.delete(id);
+      }
+    }
+    for (const id of wantedIds) {
+      if (channels.has(id)) continue;
+      const ch = supabase
+        .channel(`event-chat:${id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `event_id=eq.${id}`,
+          },
+          (payload) => handleEventMessageRef.current(payload.new as Message)
+        )
+        .subscribe();
+      channels.set(id, ch);
+    }
+  }, [conversations]);
+
+  // Reconcile per-circle channels (same pattern as events).
+  useEffect(() => {
+    const wantedIds = new Set(
+      conversations
+        .filter((c): c is CircleConversation => c.kind === 'circle')
+        .map((c) => c.circle.id)
+    );
+    const channels = circleChannelsRef.current;
+
+    for (const [id, ch] of Array.from(channels.entries())) {
+      if (!wantedIds.has(id)) {
+        ch.unsubscribe();
+        channels.delete(id);
+      }
+    }
+    for (const id of wantedIds) {
+      if (channels.has(id)) continue;
+      const ch = supabase
+        .channel(`circle-chat:${id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `circle_id=eq.${id}`,
+          },
+          (payload) => handleCircleMessageRef.current(payload.new as Message)
+        )
+        .subscribe();
+      channels.set(id, ch);
+    }
+  }, [conversations]);
+
+  const markRead = useCallback(
+    async (target: MarkReadTarget) => {
+      if (!userId) return;
+      if (target.kind === 'dm') {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.kind === 'dm' && c.partner.id === target.partnerId
+              ? { ...c, unread_count: 0 }
+              : c
+          )
+        );
+        try {
+          await messagesService.markRead(userId, target.partnerId);
+        } catch (err) {
+          console.error('[MessagesContext] markRead (dm) failed:', err);
+        }
+      } else if (target.kind === 'event') {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.kind === 'event' && c.event.id === target.eventId
+              ? { ...c, unread_count: 0 }
+              : c
+          )
+        );
+        try {
+          await messagesService.markEventRead(userId, target.eventId);
+        } catch (err) {
+          console.error('[MessagesContext] markRead (event) failed:', err);
+        }
+      } else {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.kind === 'circle' && c.circle.id === target.circleId
+              ? { ...c, unread_count: 0 }
+              : c
+          )
+        );
+        try {
+          await messagesService.markCircleRead(userId, target.circleId);
+        } catch (err) {
+          console.error('[MessagesContext] markRead (circle) failed:', err);
+        }
+      }
+    },
+    [userId]
+  );
+
+  // Global subscriptions: DM events, DM read state, event read state, and
+  // registration changes (so we know when to refresh the event chat list).
   useEffect(() => {
     if (!userId) {
       setConversations([]);
@@ -139,7 +341,7 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
           table: 'messages',
           filter: `recipient_id=eq.${userId}`,
         },
-        (payload) => handleIncomingMessage(payload.new as Message)
+        (payload) => handleIncomingDM(payload.new as Message)
       )
       .on(
         'postgres_changes',
@@ -149,7 +351,13 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
           table: 'messages',
           filter: `sender_id=eq.${userId}`,
         },
-        (payload) => handleIncomingMessage(payload.new as Message)
+        (payload) => {
+          // Only DM-shape; circle/event messages I sent are handled by their
+          // own per-event channels (avoids double-counting).
+          const msg = payload.new as Message;
+          if (msg.circle_id || msg.event_id) return;
+          handleIncomingDM(msg);
+        }
       )
       .on(
         'postgres_changes',
@@ -161,15 +369,100 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         },
         (payload) => {
           const row = (payload.new ?? payload.old) as { partner_id?: string } | null;
-          if (row?.partner_id) handleReadUpdate(row.partner_id);
+          if (!row?.partner_id) return;
+          const pid = row.partner_id;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.kind === 'dm' && c.partner.id === pid
+                ? { ...c, unread_count: 0 }
+                : c
+            )
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_message_reads',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { event_id?: string } | null;
+          if (!row?.event_id) return;
+          const eid = row.event_id;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.kind === 'event' && c.event.id === eid
+                ? { ...c, unread_count: 0 }
+                : c
+            )
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_registrations',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // Registration added/removed → conversation list might change.
+          // Re-fetch; the reconcile effect will then add/remove channels.
+          refresh();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'circle_message_reads',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { circle_id?: string } | null;
+          if (!row?.circle_id) return;
+          const cid = row.circle_id;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.kind === 'circle' && c.circle.id === cid
+                ? { ...c, unread_count: 0 }
+                : c
+            )
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'circle_members',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // Joined/left a circle → refresh to pick up new/removed circle chats.
+          refresh();
         }
       )
       .subscribe();
 
     return () => {
       channel.unsubscribe();
+      for (const ch of eventChannelsRef.current.values()) {
+        ch.unsubscribe();
+      }
+      eventChannelsRef.current.clear();
+      for (const ch of circleChannelsRef.current.values()) {
+        ch.unsubscribe();
+      }
+      circleChannelsRef.current.clear();
     };
-  }, [userId, refresh, handleIncomingMessage, handleReadUpdate]);
+  }, [userId, refresh, handleIncomingDM]);
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unread_count, 0),

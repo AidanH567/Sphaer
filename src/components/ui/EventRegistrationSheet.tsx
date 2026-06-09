@@ -13,20 +13,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, motion } from '@/constants/theme';
 import type { EventWithRelations } from '@/types/event.types';
 
 // Exact colours from the Figma SVG export.
-const CHOCOLATE = '#2B2A27';
-const INK = '#1B1B18';
+const CHOCOLATE = colors.neutral.chocolate;
+const INK = colors.neutral.ink;
 const GREY = '#B6B6AF';
-const DIVIDER = '#CFCEC9';
+const DIVIDER = colors.neutral.divider;
 const BADGE_RED = '#B93D36';
 const BADGE_TEXT = '#FAF9F5';
 const SECONDARY = 'rgba(30,30,30,0.6)';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = motion.duration.standard;
 
 export interface RegistrationDetails {
   eventId: string;
@@ -89,8 +89,7 @@ export function EventRegistrationSheet({
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          damping: 22,
-          stiffness: 180,
+          ...motion.spring.sheet,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {

@@ -109,6 +109,7 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
         sender_id: userId,
         recipient_id: partnerId,
         circle_id: null,
+        event_id: null,
         content: trimmed,
         created_at: new Date().toISOString(),
         sender: null,

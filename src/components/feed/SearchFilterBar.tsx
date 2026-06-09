@@ -209,15 +209,15 @@ const styles = StyleSheet.create({
 
   searchPlaceholder: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 17,
+    fontSize: typography.fontSize.md,
     color: colors.text.tertiary,
-    fontWeight: '400',
+    fontWeight: typography.fontWeight.regular,
   },
 
   searchInput: {
     flex: 1,
     fontFamily: typography.fontFamily.ui,
-    fontSize: 17,
+    fontSize: typography.fontSize.md,
     color: colors.text.primary,
     paddingVertical: 0,
     minWidth: 0,
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 15,
+    fontSize: typography.fontSize.base,
     color: colors.black,
     fontWeight: typography.fontWeight.medium,
   },

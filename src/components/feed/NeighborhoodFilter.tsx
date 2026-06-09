@@ -9,7 +9,31 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius } from '@/constants/theme';
-import { BERLIN_NEIGHBORHOODS } from '@/constants/berlinNeighborhoods';
+import { BERLIN_BOROUGHS, BERLIN_NEIGHBORHOODS } from '@/constants/berlinNeighborhoods';
+
+// Combined suggestion list: Bezirks first (broader scope is usually more
+// useful as an initial filter), then Ortsteils. Names that appear in
+// both lists (e.g. "Mitte", "Pankow", "Spandau", "Neukölln",
+// "Lichtenberg", "Reinickendorf") are deduplicated — when the user picks
+// one of these, eventMatchesLocationFilter treats it as a Bezirk
+// (broader semantics — matches every event in the borough).
+const ALL_LOCATION_OPTIONS = (() => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const b of BERLIN_BOROUGHS) {
+    if (!seen.has(b.toLowerCase())) {
+      seen.add(b.toLowerCase());
+      out.push(b);
+    }
+  }
+  for (const n of BERLIN_NEIGHBORHOODS) {
+    if (!seen.has(n.toLowerCase())) {
+      seen.add(n.toLowerCase());
+      out.push(n);
+    }
+  }
+  return out;
+})();
 
 interface NeighborhoodFilterProps {
   /** Currently selected neighbourhood, or `null` for no filter. */
@@ -32,8 +56,8 @@ export function NeighborhoodFilter({ value, onChange }: NeighborhoodFilterProps)
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q.length === 0) return BERLIN_NEIGHBORHOODS.slice(0, 8);
-    return BERLIN_NEIGHBORHOODS.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
+    if (q.length === 0) return ALL_LOCATION_OPTIONS.slice(0, 8);
+    return ALL_LOCATION_OPTIONS.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
   }, [query]);
 
   // Selected → chip-only view
@@ -115,7 +139,7 @@ export function NeighborhoodFilter({ value, onChange }: NeighborhoodFilterProps)
   );
 }
 
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm },

@@ -5,14 +5,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
-import { ProfileIncompleteBanner } from '@/components/profile/ProfileIncompleteBanner';
+import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCard';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
+import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
+import { computeProfileCompletion } from '@/utils/profile-completion';
 import { getMockProfileById, CURRENT_USER_PROFILE_ID } from '@/data/mockProfiles';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
 import {
@@ -23,6 +24,7 @@ import {
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
+import { getSavedEvents } from '@/services/events.service';
 import { signOut } from '@/services/auth.service';
 import { useAuthContext } from '@/context/AuthContext';
 import type { Profile, ProfileImage } from '@/types/user.types';
@@ -30,6 +32,7 @@ import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { colors, typography, spacing } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const INK = '#1B1B18';
 const META = '#767779';
@@ -57,16 +60,25 @@ export default function ProfileScreen() {
   const [gallery, setGallery] = useState<ProfileImage[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(true);
 
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
 
-  // Stats popups — exactly one open at a time via a single discriminator
-  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
+  // Stats popups — exactly one open at a time via a single discriminator.
+  // 'saved' and 'tickets' aren't public stats but use the same sheet machinery.
+  type OpenSheet =
+    | 'followers'
+    | 'following'
+    | 'circles'
+    | 'activities'
+    | 'saved'
+    | 'tickets'
+    | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
   const [myCircles, setMyCircles] = useState<CircleWithCounts[]>([]);
   const [myActivities, setMyActivities] = useState<EventWithRelations[]>([]);
+  const [mySaved, setMySaved] = useState<EventWithRelations[]>([]);
+  const [myTickets, setMyTickets] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
 
   // Fetch data lazily when a stats popup opens. Re-runs each open so the
@@ -83,6 +95,10 @@ export default function ProfileScreen() {
         ? getFollowing(user.id).then((data) => active && setFollowing(data))
         : openSheet === 'circles'
         ? getMyCircles(user.id).then((data) => active && setMyCircles(data))
+        : openSheet === 'saved'
+        ? getSavedEvents(user.id).then((data) => active && setMySaved(data))
+        : openSheet === 'tickets'
+        ? getMyRegisteredEvents(user.id).then((data) => active && setMyTickets(data))
         : getMyRegisteredEvents(user.id).then((data) => active && setMyActivities(data));
 
     fetcher
@@ -91,6 +107,8 @@ export default function ProfileScreen() {
           if (openSheet === 'followers') setFollowers([]);
           else if (openSheet === 'following') setFollowing([]);
           else if (openSheet === 'circles') setMyCircles([]);
+          else if (openSheet === 'saved') setMySaved([]);
+          else if (openSheet === 'tickets') setMyTickets([]);
           else setMyActivities([]);
         }
       })
@@ -167,9 +185,8 @@ export default function ProfileScreen() {
   if (authLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.center}>
-          <ActivityIndicator color={INK} />
-        </View>
+        <TopBar onSignOut={handleSignOut} />
+        <ProfileSkeleton />
       </SafeAreaView>
     );
   }
@@ -233,6 +250,29 @@ export default function ProfileScreen() {
         emptyMessage="No activities yet — create one or register from the feed."
         onClose={() => setOpenSheet(null)}
       />
+      <EntityListSheet
+        visible={openSheet === 'saved'}
+        title="Saved"
+        subtitle={`${mySaved.length.toLocaleString('en-US')} activities saved`}
+        type="activity"
+        items={mySaved}
+        withTimeTabs
+        isLoading={sheetLoading && openSheet === 'saved'}
+        emptyMessage="No saved activities yet — tap the bookmark on any activity to save it for later."
+        onClose={() => setOpenSheet(null)}
+      />
+      <EntityListSheet
+        visible={openSheet === 'tickets'}
+        title="Tickets"
+        subtitle={`${myTickets.length.toLocaleString('en-US')} active`}
+        type="activity"
+        items={myTickets}
+        withTimeTabs
+        routeAsTicket
+        isLoading={sheetLoading && openSheet === 'tickets'}
+        emptyMessage="No tickets yet — register for an activity from the feed."
+        onClose={() => setOpenSheet(null)}
+      />
     </>
   ) : null;
 
@@ -254,25 +294,20 @@ export default function ProfileScreen() {
 
   // ── Real authed user ─────────────────────────────────────────────────────
   const displayProfile = adaptProfileToDisplay(user.id, profile, counts, gallery);
-  const missing = computeMissing(profile);
-  const showBanner = missing.length > 0 && !bannerDismissed;
+  const completion = computeProfileCompletion(profile);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <TopBar onSignOut={handleSignOut} />
 
-      {showBanner && (
-        <ProfileIncompleteBanner
-          missing={missing}
-          onDismiss={() => setBannerDismissed(true)}
-          onEditPress={handleEdit}
-        />
-      )}
+      <ProfileCompletionCard
+        percentage={completion.percentage}
+        missing={completion.missing}
+        onEditPress={handleEdit}
+      />
 
       {extrasLoading && gallery.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={INK} />
-        </View>
+        <ProfileSkeleton />
       ) : (
         <ProfileView
           profile={displayProfile}
@@ -282,6 +317,8 @@ export default function ProfileScreen() {
           onFollowingPress={() => setOpenSheet('following')}
           onCirclesPress={() => setOpenSheet('circles')}
           onActivitiesPress={() => setOpenSheet('activities')}
+          onSavedPress={() => setOpenSheet('saved')}
+          onTicketsPress={() => setOpenSheet('tickets')}
           trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}
         />
       )}
@@ -323,7 +360,15 @@ function AvailableForWorkBar({ location }: { location: string }) {
       <TouchableOpacity
         style={styles.getInTouchButton}
         onPress={() =>
-          Alert.alert('Coming soon', 'DMs are not wired up yet — sit tight.')
+          // DMs ARE wired up — this bar's "Get in touch" is the placeholder
+          // for what will eventually be the OTHER-user-profile messaging
+          // entry once the "Available for work" toggle ships (Profile v2 #2).
+          // On the own-profile we keep the bar visible as a demo of the
+          // shape, but the button has no honest action yet.
+          Alert.alert(
+            'Coming soon',
+            'The "Available for work" toggle ships in Profile v2 — this bar will appear on other artists\' profiles when they mark themselves available.'
+          )
         }
         activeOpacity={0.85}
       >
@@ -331,21 +376,6 @@ function AvailableForWorkBar({ location }: { location: string }) {
       </TouchableOpacity>
     </View>
   );
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * What's missing from the profile for the soft-gate banner. The banner only
- * shows when this list is non-empty.
- */
-function computeMissing(profile: Profile | null): string[] {
-  if (!profile) return [];
-  const missing: string[] = [];
-  if (!profile.avatar_url) missing.push('a profile photo');
-  if (!profile.bio || profile.bio.trim().length === 0) missing.push('a tagline');
-  if (!profile.about || profile.about.trim().length === 0) missing.push('an about section');
-  return missing;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -422,3 +452,5 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('profile-own');

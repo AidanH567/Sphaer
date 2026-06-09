@@ -4,14 +4,23 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
-import { getProfile, getProfileImages, getFollowers, getFollowing } from '@/services/profile.service';
+import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
+import { useAuthContext } from '@/context/AuthContext';
+import {
+  getProfile,
+  getProfileImages,
+  getFollowers,
+  getFollowing,
+  isFollowing as isFollowingService,
+  followUser,
+  unfollowUser,
+} from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
@@ -20,6 +29,7 @@ import { colors, typography, spacing } from '@/constants/theme';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
  * Public profile screen reached via /user/[id]. Reads the id from the route,
@@ -33,9 +43,64 @@ import type { EventWithRelations } from '@/types/event.types';
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuthContext();
+  const isOwnProfile = Boolean(user?.id && id && user.id === id);
 
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found'>('loading');
+
+  // Follow state for the displayed user — loaded on mount, persisted on toggle.
+  // followBusy guards against double-tap while the network call is in flight.
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id || !id || isOwnProfile) {
+      setIsFollowingUser(false);
+      return;
+    }
+    let cancelled = false;
+    isFollowingService(user.id, id)
+      .then((result) => {
+        if (!cancelled) setIsFollowingUser(result);
+      })
+      .catch((err) => console.error('[user/[id]] isFollowing failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, id, isOwnProfile]);
+
+  async function handleToggleFollow() {
+    if (!user?.id || !id || isOwnProfile || followBusy) return;
+    const wasFollowing = isFollowingUser;
+    // Optimistic flip + follower-count bump on the displayed profile so
+    // the UI doesn't lag a network round trip.
+    setIsFollowingUser(!wasFollowing);
+    setDisplayProfile((prev) =>
+      prev
+        ? { ...prev, followersCount: Math.max(0, prev.followersCount + (wasFollowing ? -1 : 1)) }
+        : prev
+    );
+    setFollowBusy(true);
+    try {
+      if (wasFollowing) {
+        await unfollowUser(user.id, id);
+      } else {
+        await followUser(user.id, id);
+      }
+    } catch (err) {
+      console.error('[user/[id]] toggle follow failed:', err);
+      // Revert both pieces of optimistic state.
+      setIsFollowingUser(wasFollowing);
+      setDisplayProfile((prev) =>
+        prev
+          ? { ...prev, followersCount: Math.max(0, prev.followersCount + (wasFollowing ? 1 : -1)) }
+          : prev
+      );
+    } finally {
+      setFollowBusy(false);
+    }
+  }
 
   // Stats popup state — same model as /profile
   type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
@@ -123,11 +188,7 @@ export default function UserProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {status === 'loading' && (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
-      )}
+      {status === 'loading' && <ProfileSkeleton />}
 
       {status === 'not_found' && (
         <View style={styles.center}>
@@ -143,6 +204,13 @@ export default function UserProfileScreen() {
         <>
           <ProfileView
             profile={displayProfile}
+            isOwnProfile={isOwnProfile}
+            isFollowing={isOwnProfile ? undefined : isFollowingUser}
+            onToggleFollow={isOwnProfile ? undefined : handleToggleFollow}
+            followBusy={followBusy}
+            onMessagePress={
+              isOwnProfile ? undefined : () => router.push(`/messages/${id}`)
+            }
             onFollowersPress={() => setOpenSheet('followers')}
             onFollowingPress={() => setOpenSheet('following')}
             onCirclesPress={() => setOpenSheet('circles')}
@@ -256,3 +324,5 @@ const styles = StyleSheet.create({
     marginTop: -spacing.sm,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('user-profile');

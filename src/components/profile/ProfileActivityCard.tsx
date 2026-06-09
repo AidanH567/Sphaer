@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { colors, typography } from '@/constants/theme';
 import type { ProfileActivity } from '@/data/mockProfiles';
 
@@ -8,9 +9,9 @@ interface ProfileActivityCardProps {
 }
 
 // Figma tokens
-const CHOCOLATE = '#2B2A27';
-const CARD_META = '#505049';
-const BODY = '#363530';
+const CHOCOLATE = colors.neutral.chocolate;
+const CARD_META = colors.neutral.cardMeta;
+const BODY = colors.neutral.body;
 
 /**
  * Activity card used on the profile page — title on the left, date / time /
@@ -35,7 +36,7 @@ export function ProfileActivityCard({ activity }: ProfileActivityCardProps) {
         </View>
       </View>
 
-      <Image source={{ uri: activity.image }} style={styles.poster} resizeMode="cover" />
+      <Image source={{ uri: activity.image }} style={styles.poster} contentFit="cover" />
     </View>
   );
 }

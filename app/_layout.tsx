@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/context/AuthContext';
 import { AppProvider } from '@/context/AppContext';
 import { MessagesProvider } from '@/context/MessagesContext';
+import { motion } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,16 +41,38 @@ export default function RootLayout() {
         <AppProvider>
           <MessagesProvider>
             <StatusBar style="dark" />
-            <Stack screenOptions={{ headerShown: false }}>
+            {/*
+              Stack-level screenOptions = the swift defaults for every push:
+              slide_from_right matches iOS/Android conventions, and
+              animationDuration pulls from the shared motion token so the
+              entire app changes pace from one place.
+
+              Per-screen overrides:
+              - location onboarding slides up from the bottom — semantically
+                modal, signals "complete this before continuing"
+              - (auth) / (tabs) are group entries; they keep the same
+                slide direction, but the initial mount is animationless
+                by default (RN never animates the very first screen)
+            */}
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                animationDuration: motion.duration.standard,
+              }}
+            >
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="event/[id]" options={{ presentation: 'card' }} />
+              <Stack.Screen name="user/[id]" options={{ presentation: 'card' }} />
+              <Stack.Screen name="ticket/[id]" options={{ presentation: 'card' }} />
               <Stack.Screen
-                name="event/[id]"
-                options={{ presentation: 'card', headerShown: false }}
-              />
-              <Stack.Screen
-                name="user/[id]"
-                options={{ presentation: 'card', headerShown: false }}
+                name="location"
+                options={{
+                  presentation: 'card',
+                  gestureEnabled: false,
+                  animation: 'slide_from_bottom',
+                }}
               />
             </Stack>
           </MessagesProvider>

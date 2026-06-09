@@ -1,16 +1,6 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  Linking,
-  Share,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Share, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,8 +10,17 @@ import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
 import { useEvent } from '@/hooks/useEvents';
+import { EventMapPreview } from '@/components/events/EventMapPreview';
+import { EventDetailSkeleton } from '@/components/ui/skeletons/EventDetailSkeleton';
 import { useAuthContext } from '@/context/AuthContext';
+import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
+import {
+  isEventSaved as isEventSavedService,
+  saveEvent,
+  unsaveEvent,
+} from '@/services/events.service';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,11 +29,52 @@ export default function EventDetailScreen() {
 
   const { event, isLoading } = useEvent(id);
   const { user } = useAuthContext();
+  const { conversations } = useMessagesContext();
+
+  // Chat is available to the creator (always) + anyone with the event in
+  // their conversations list (i.e. registered, since the RPC includes every
+  // event the user is registered for, even when there are no messages yet).
+  const canAccessChat = Boolean(
+    id &&
+      user?.id &&
+      (event?.creator_id === user.id ||
+        conversations.some((c) => c.kind === 'event' && c.event.id === id))
+  );
 
   const [isSaved, setIsSaved] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+
+  // Hydrate the bookmark icon state from the DB on mount.
+  useEffect(() => {
+    if (!user?.id || !id) return;
+    let cancelled = false;
+    isEventSavedService(user.id, id)
+      .then((saved) => {
+        if (!cancelled) setIsSaved(saved);
+      })
+      .catch((err) => console.error('[EventDetail] load isSaved failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, id]);
+
+  async function handleToggleSave() {
+    if (!user?.id || !id) return;
+    const wasSaved = isSaved;
+    setIsSaved(!wasSaved);
+    try {
+      if (wasSaved) {
+        await unsaveEvent(user.id, id);
+      } else {
+        await saveEvent(user.id, id);
+      }
+    } catch (err) {
+      console.error('[EventDetail] toggleSave failed:', err);
+      setIsSaved(wasSaved);
+    }
+  }
 
   // Loading state — covers initial fetch
   if (isLoading) {
@@ -45,9 +85,7 @@ export default function EventDetailScreen() {
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
+        <EventDetailSkeleton />
       </SafeAreaView>
     );
   }
@@ -98,10 +136,28 @@ export default function EventDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.navRight}>
+          {canAccessChat && (
+            <TouchableOpacity
+              onPress={() => router.push(`/ticket/${id}`)}
+              style={styles.navButton}
+              accessibilityLabel="View ticket"
+            >
+              <Ionicons name="ticket-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
+          {canAccessChat && (
+            <TouchableOpacity
+              onPress={() => router.push(`/messages/event/${id}`)}
+              style={styles.navButton}
+              accessibilityLabel="Open event chat"
+            >
+              <Ionicons name="chatbubble-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={handleShare} style={styles.navButton}>
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setIsSaved((v) => !v)} style={styles.navButton}>
+          <TouchableOpacity onPress={handleToggleSave} style={styles.navButton}>
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={22}
@@ -117,7 +173,7 @@ export default function EventDetailScreen() {
       >
         {/* Hero image */}
         {event.poster_url ? (
-          <Image source={{ uri: event.poster_url }} style={styles.hero} resizeMode="cover" />
+          <Image source={{ uri: event.poster_url }} style={styles.hero} contentFit="cover" />
         ) : (
           <View style={[styles.hero, styles.heroPlaceholder]} />
         )}
@@ -211,16 +267,27 @@ export default function EventDetailScreen() {
             <Text style={styles.address}>Location TBA</Text>
           )}
 
-          <TouchableOpacity
-            style={styles.mapBox}
-            onPress={openInMaps}
-            activeOpacity={0.85}
-          >
-            <View style={styles.mapPin}>
-              <Ionicons name="location" size={26} color={colors.white} />
+          {/* Map preview — real interactive Google Map (react-native-maps
+              on native, @vis.gl/react-google-maps on web). User can pinch-
+              zoom / pan inside the embed; the "Open in Maps" pill in the
+              corner is the explicit affordance for launching Apple/Google
+              Maps externally. When the event has no coordinates we fall
+              back to the original gray tile. */}
+          {event.lat != null && event.lng != null ? (
+            <EventMapPreview
+              lat={event.lat}
+              lng={event.lng}
+              title={event.location_name ?? undefined}
+              onOpenInMaps={openInMaps}
+            />
+          ) : (
+            <View style={styles.mapBox}>
+              <View style={styles.mapPin}>
+                <Ionicons name="location" size={26} color={colors.text.tertiary} />
+              </View>
+              <Text style={styles.mapHint}>Location coordinates unavailable</Text>
             </View>
-            <Text style={styles.mapHint}>Open in Maps</Text>
-          </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
@@ -462,3 +529,5 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('event-detail');

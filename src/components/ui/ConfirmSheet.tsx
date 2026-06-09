@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, radius } from '@/constants/theme';
+import { colors, spacing, typography, radius, motion } from '@/constants/theme';
 
 interface ConfirmSheetProps {
   visible: boolean;
@@ -37,7 +37,7 @@ interface ConfirmSheetProps {
 }
 
 const SHEET_OFFSET = 400; // off-screen translate distance
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = motion.duration.standard;
 
 /**
  * Slide-up confirm dialog matching CreateMenuSheet's visual chrome
@@ -73,8 +73,7 @@ export function ConfirmSheet({
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          damping: 20,
-          stiffness: 180,
+          ...motion.spring.sheet,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
@@ -188,7 +187,7 @@ export function ConfirmSheet({
   );
 }
 
-const CHOCOLATE = '#2B2A27';
+const CHOCOLATE = colors.neutral.chocolate;
 const DESTRUCTIVE_RED = colors.badge.red; // '#E53935'
 
 const styles = StyleSheet.create({

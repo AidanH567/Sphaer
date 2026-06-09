@@ -11,12 +11,14 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { MockConversation } from '@/data/mockMessages';
 import { typography } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { formatMessageTime } from '@/utils/date';
 import type { Conversation } from '@/types/message.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // NOTE: real Supabase data via `useMessagesContext()`. Each row is mapped
 // into the legacy `MockConversation` shape so the existing Figma-styled
@@ -32,31 +34,136 @@ const CHIP_BG = '#FCFCF9';
 const CHIP_ACTIVE_BG = '#E7E7E7';
 const LINK = '#829CC2';
 
-type FilterKey = 'all' | 'unread' | 'favourites' | 'circles';
+type FilterKey =
+  | 'all'
+  | 'unread'
+  | 'favourites'
+  | 'direct'
+  | 'activities'
+  | 'circles';
+
+// Order: catch-all first, then cross-kind filters, then per-kind filters
+// grouped together (Direct → Activities → Circles).
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'favourites', label: 'Favourites' },
+  { key: 'direct', label: 'Direct' },
+  { key: 'activities', label: 'Activities' },
   { key: 'circles', label: 'Circles' },
 ];
 
-function toMockRow(conv: Conversation, ownUserId: string | undefined): MockConversation {
-  const partner = conv.partner;
+/** Tab-aware empty-state copy for the inbox. */
+function emptyCopyForFilter(
+  filter: FilterKey
+): { icon: 'chatbubbles-outline' | 'mail-open-outline' | 'star-outline'; title: string; body: string } {
+  switch (filter) {
+    case 'unread':
+      return {
+        icon: 'mail-open-outline',
+        title: "You're all caught up",
+        body: 'Nothing unread — new messages will show up here.',
+      };
+    case 'favourites':
+      return {
+        icon: 'star-outline',
+        title: 'No favourites yet',
+        body: 'Star a conversation to keep it pinned to this tab.',
+      };
+    case 'direct':
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No direct messages yet',
+        body: 'Message an artist from their profile to start a chat.',
+      };
+    case 'activities':
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No activity chats yet',
+        body: 'Register for an event to join its group chat.',
+      };
+    case 'circles':
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No circle chats yet',
+        body: 'Join a circle to chat with its members.',
+      };
+    default:
+      return {
+        icon: 'chatbubbles-outline',
+        title: 'No conversations yet',
+        body: 'Message an artist from their profile, or join a circle to start chatting.',
+      };
+  }
+}
+
+interface RowWithRoute {
+  row: MockConversation;
+  route: string;
+}
+
+function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute {
   const lastMsg = conv.last_message;
+  if (conv.kind === 'event') {
+    const e = conv.event;
+    return {
+      row: {
+        id: e.id,
+        name: e.title,
+        avatar: e.poster_url ?? `https://picsum.photos/seed/${e.id}/150/150`,
+        type: 'circle', // closest existing semantic — group chat, not 1:1
+        preview: lastMsg?.content ?? 'No messages yet',
+        previewKind: 'text',
+        isOwn: lastMsg?.sender_id === ownUserId,
+        status: 'delivered',
+        timestamp: formatMessageTime(lastMsg?.created_at),
+        isPinned: false,
+        hasMention: false,
+        unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+        hasStoryRing: false,
+      },
+      route: `/messages/event/${e.id}`,
+    };
+  }
+  if (conv.kind === 'circle') {
+    const c = conv.circle;
+    return {
+      row: {
+        id: c.id,
+        name: c.name,
+        avatar: c.avatar_url ?? `https://picsum.photos/seed/${c.id}/150/150`,
+        type: 'circle',
+        preview: lastMsg?.content ?? 'No messages yet',
+        previewKind: 'text',
+        isOwn: lastMsg?.sender_id === ownUserId,
+        status: 'delivered',
+        timestamp: formatMessageTime(lastMsg?.created_at),
+        isPinned: false,
+        hasMention: false,
+        unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+        hasStoryRing: false,
+      },
+      route: `/messages/circle/${c.id}`,
+    };
+  }
+  const partner = conv.partner;
   return {
-    id: partner.id, // UUID — used for navigation to /messages/[id]
-    name: partner.display_name ?? partner.username ?? 'Unknown',
-    avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`,
-    type: 'user',
-    preview: lastMsg?.content ?? '',
-    previewKind: 'text',
-    isOwn: lastMsg?.sender_id === ownUserId,
-    status: 'delivered',
-    timestamp: formatMessageTime(lastMsg?.created_at),
-    isPinned: false,
-    hasMention: false,
-    unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
-    hasStoryRing: false,
+    row: {
+      id: partner.id,
+      name: partner.display_name ?? partner.username ?? 'Unknown',
+      avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`,
+      type: 'user',
+      preview: lastMsg?.content ?? '',
+      previewKind: 'text',
+      isOwn: lastMsg?.sender_id === ownUserId,
+      status: 'delivered',
+      timestamp: formatMessageTime(lastMsg?.created_at),
+      isPinned: false,
+      hasMention: false,
+      unreadCount: conv.unread_count > 0 ? conv.unread_count : undefined,
+      hasStoryRing: false,
+    },
+    route: `/messages/${partner.id}`,
   };
 }
 
@@ -66,20 +173,24 @@ export default function MessagesScreen() {
   const { conversations, isLoading } = useMessagesContext();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
-  const rows = useMemo(() => {
+  const rows: RowWithRoute[] = useMemo(() => {
     const filtered = (() => {
       switch (activeFilter) {
         case 'unread':
           return conversations.filter((c) => c.unread_count > 0);
         case 'favourites':
           return []; // not implemented yet
+        case 'direct':
+          return conversations.filter((c) => c.kind === 'dm');
+        case 'activities':
+          return conversations.filter((c) => c.kind === 'event');
         case 'circles':
-          return []; // circle group chats deferred to a later iteration
+          return conversations.filter((c) => c.kind === 'circle');
         default:
           return conversations;
       }
     })();
-    return filtered.map((c) => toMockRow(c, user?.id));
+    return filtered.map((c) => toRow(c, user?.id));
   }, [conversations, activeFilter, user?.id]);
 
   return (
@@ -103,21 +214,8 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Title section — Chat/Circles toggle + filter chips */}
+      {/* Title section — filter chips */}
       <View style={styles.titleSection}>
-        <View style={styles.toggleOuter}>
-          <View style={[styles.toggleItem, styles.toggleItemActive]}>
-            <Text style={[styles.toggleText, styles.toggleTextActive]}>Chat</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.toggleItem}
-            onPress={() => router.push('/(tabs)/circles')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.toggleText}>Circles</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.filtersRow}>
           {FILTERS.map((f) => (
             <TouchableOpacity
@@ -161,16 +259,16 @@ export default function MessagesScreen() {
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No conversations to show</Text>
+          <EmptyState {...emptyCopyForFilter(activeFilter)} centered spaced />
         </View>
       ) : (
         <FlatList
           data={rows}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.row.id}
           renderItem={({ item }) => (
             <ConversationRow
-              conversation={item}
-              onPress={() => router.push(`/messages/${item.id}`)}
+              conversation={item.row}
+              onPress={() => router.push(item.route as never)}
             />
           )}
           contentContainerStyle={styles.list}
@@ -205,41 +303,13 @@ const styles = StyleSheet.create({
     backgroundColor: INK,
   },
 
-  // Title section (toggle + filters)
+  // Title section (filter chips)
   titleSection: {
     paddingLeft: 20,
     paddingRight: 16,
     paddingTop: 4,
     paddingBottom: 8,
     gap: 12,
-  },
-  toggleOuter: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    height: 38,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-    backgroundColor: INK,
-    borderRadius: 30,
-  },
-  toggleItem: {
-    height: 34,
-    paddingHorizontal: 18,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleItemActive: {
-    backgroundColor: CREAM,
-  },
-  toggleText: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: 14,
-    fontWeight: typography.fontWeight.semibold,
-    color: CREAM,
-  },
-  toggleTextActive: {
-    color: INK,
   },
 
   filtersRow: {
@@ -302,9 +372,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
-    color: META,
-  },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('messages-inbox');

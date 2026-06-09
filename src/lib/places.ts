@@ -19,7 +19,13 @@
  */
 
 import { config } from '@/constants/config';
-import { matchBerlinNeighborhood } from '@/constants/berlinNeighborhoods';
+import {
+  matchBerlinBorough,
+  matchBerlinNeighborhood,
+  ORTSTEIL_TO_BEZIRK,
+  type BerlinBorough,
+  type BerlinNeighborhood,
+} from '@/constants/berlinNeighborhoods';
 
 export interface PlaceSuggestion {
   place_id: string;
@@ -40,6 +46,10 @@ export interface PlaceDetails {
   lng: number;
   /** Best Berlin Ortsteil match from our 26-neighborhood list, or null. */
   neighbourhood: string | null;
+  /** Berlin Bezirk (borough) — broader than neighbourhood. Filled even
+   *  when neighbourhood is null (e.g. Google only resolved that point to
+   *  "Friedrichshain-Kreuzberg" without a specific sub-area). */
+  borough: string | null;
 }
 
 const BERLIN_CENTER = { latitude: 52.52, longitude: 13.405 };
@@ -149,13 +159,15 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     // Strip "name" when Google just echoes the address (plain street results).
     const venueName = displayName && !formatted.startsWith(displayName) ? displayName : null;
 
+    const { ortsteil, bezirk } = extractBerlinLocation(json.addressComponents ?? []);
     return {
       place_id: json.id ?? placeId,
       formatted_address: formatted,
       name: venueName,
       lat: loc.latitude,
       lng: loc.longitude,
-      neighbourhood: extractNeighbourhood(json.addressComponents ?? []),
+      neighbourhood: ortsteil,
+      borough: bezirk,
     };
   } catch (e) {
     console.warn('[places] details fetch failed', e);
@@ -171,21 +183,46 @@ interface AddressComponentNew {
   types: string[];
 }
 
-function extractNeighbourhood(components: AddressComponentNew[]): string | null {
-  const candidateTypes = [
-    'sublocality_level_1',
-    'sublocality',
-    'neighborhood',
-    'political',
-    'administrative_area_level_3',
-  ];
-  for (const t of candidateTypes) {
-    const match = components.find((c) => c.types.includes(t));
-    if (!match) continue;
-    const canonical = matchBerlinNeighborhood(match.longText);
-    if (canonical) return canonical;
+/**
+ * Pulls Berlin Ortsteil + Bezirk from Google's address_components.
+ *
+ * Why both passes:
+ *   - `sublocality_level_1` and `neighborhood` are Google's tags for the
+ *     finer Ortsteil ("Kreuzberg"). When present, we try to match against
+ *     our canonical 26-item list.
+ *   - `sublocality` (without _level_1) is usually the Bezirk
+ *     ("Friedrichshain-Kreuzberg"). `administrative_area_level_2` also
+ *     sometimes carries the Bezirk depending on the address.
+ *
+ * If we got an Ortsteil but Google didn't tag a Bezirk separately, we
+ * fill it via the static ORTSTEIL_TO_BEZIRK map so callers always have
+ * the broader level too.
+ */
+function extractBerlinLocation(
+  components: AddressComponentNew[]
+): { ortsteil: BerlinNeighborhood | null; bezirk: BerlinBorough | null } {
+  let ortsteil: BerlinNeighborhood | null = null;
+  let bezirk: BerlinBorough | null = null;
+
+  for (const c of components) {
+    if (!ortsteil && (c.types.includes('sublocality_level_1') || c.types.includes('neighborhood'))) {
+      ortsteil = matchBerlinNeighborhood(c.longText);
+    }
+    if (!bezirk && (c.types.includes('sublocality') || c.types.includes('administrative_area_level_2'))) {
+      // `sublocality` covers both Ortsteil and Bezirk granularities in
+      // Google's data; matchBerlinBorough only returns a hit on the
+      // canonical 12 Bezirk names, so it's safe to call here.
+      bezirk = matchBerlinBorough(c.longText);
+    }
   }
-  return null;
+
+  // Backfill: if we resolved an Ortsteil but Google didn't surface a
+  // Bezirk component, derive it from our static map.
+  if (ortsteil && !bezirk) {
+    bezirk = ORTSTEIL_TO_BEZIRK[ortsteil];
+  }
+
+  return { ortsteil, bezirk };
 }
 
 interface AutocompleteResponse {

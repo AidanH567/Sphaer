@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SphaerIcon } from '@/components/SphaerLogo';
 import { Button } from '@/components/ui/Button';
 import { colors, typography, spacing } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const { height } = Dimensions.get('window');
 
@@ -50,9 +51,6 @@ export default function LandingScreen() {
       >
         <Button label="Get Started" onPress={() => router.push('/(auth)/signup')} variant="primary" />
         <Button label="Log In" onPress={() => router.push('/(auth)/login')} variant="secondary" />
-        {__DEV__ && (
-          <Button label="Skip (dev)" onPress={() => router.replace('/(tabs)/feed')} variant="secondary" />
-        )}
       </Animated.View>
 
       <Text style={styles.version}>Version 1.0</Text>
@@ -95,3 +93,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('auth-landing');

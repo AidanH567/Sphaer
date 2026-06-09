@@ -1,22 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  Animated,
-  StyleSheet,
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  Dimensions,
-} from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, Animated, StyleSheet, ActivityIndicator, ScrollView, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography, radius } from '@/constants/theme';
+import { colors, spacing, typography, radius, motion } from '@/constants/theme';
 import type { Profile } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
@@ -56,6 +44,9 @@ interface ActivityListProps extends BaseProps {
   items: EventWithRelations[];
   /** Activities only — render Upcoming / Past tabs that split items by start time. */
   withTimeTabs?: boolean;
+  /** When true, rows route to /ticket/<id> instead of /event/<id>. Used by
+   *  the Tickets sheet on the profile screen. */
+  routeAsTicket?: boolean;
 }
 
 export type EntityListSheetProps = UserListProps | CircleListProps | ActivityListProps;
@@ -63,7 +54,7 @@ export type EntityListSheetProps = UserListProps | CircleListProps | ActivityLis
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const SHEET_HEIGHT = Math.round(Dimensions.get('window').height * 0.85);
-const ANIMATION_DURATION = 280;
+const ANIMATION_DURATION = motion.duration.standard;
 
 /**
  * Reusable slide-up bottom sheet that lists users, circles, or activities.
@@ -101,8 +92,7 @@ export function EntityListSheet(props: EntityListSheetProps) {
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          damping: 22,
-          stiffness: 180,
+          ...motion.spring.sheet,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
@@ -193,11 +183,13 @@ export function EntityListSheet(props: EntityListSheetProps) {
       );
     }
     const e = item as EventWithRelations;
+    const activityProps = props as ActivityListProps;
+    const target = activityProps.routeAsTicket ? `/ticket/${e.id}` : `/event/${e.id}`;
     return (
       <ActivityRow
         key={e.id}
         event={e}
-        onPress={() => handleRowPress(`/event/${e.id}`)}
+        onPress={() => handleRowPress(target)}
         showDivider={index < filteredItems.length - 1}
       />
     );
@@ -499,8 +491,8 @@ function defaultEmptyMessage(type: 'user' | 'circle' | 'activity'): string {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const CHOCOLATE = '#2B2A27';
-const META = '#767779';
+const CHOCOLATE = colors.neutral.chocolate;
+const META = colors.neutral.meta;
 
 const styles = StyleSheet.create({
   backdrop: {

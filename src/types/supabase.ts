@@ -213,6 +213,10 @@ export type Database = {
       events: {
         Row: {
           address: string | null
+          // Berlin Bezirk (borough) — broader than neighbourhood. Some
+          // Google geocoder results only resolve this level. Added in
+          // 20260601300000_events_borough.sql.
+          borough: string | null
           categories: string[] | null
           circle_id: string | null
           created_at: string | null
@@ -224,6 +228,8 @@ export type Database = {
           lat: number | null
           lng: number | null
           location_name: string | null
+          // Berlin Ortsteil — more specific. May be null when the
+          // geocoder only knew the borough.
           neighbourhood: string | null
           poster_url: string | null
           price: number | null
@@ -233,6 +239,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          borough?: string | null
           categories?: string[] | null
           circle_id?: string | null
           created_at?: string | null
@@ -253,6 +260,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          borough?: string | null
           categories?: string[] | null
           circle_id?: string | null
           created_at?: string | null
@@ -326,6 +334,10 @@ export type Database = {
           circle_id: string | null
           content: string
           created_at: string | null
+          // Added in 20260601100000_event_chats.sql — event group chat target.
+          // CHECK constraint enforces exactly one of recipient_id / circle_id /
+          // event_id is non-null.
+          event_id: string | null
           id: string
           recipient_id: string | null
           sender_id: string
@@ -334,6 +346,7 @@ export type Database = {
           circle_id?: string | null
           content: string
           created_at?: string | null
+          event_id?: string | null
           id?: string
           recipient_id?: string | null
           sender_id: string
@@ -342,6 +355,7 @@ export type Database = {
           circle_id?: string | null
           content?: string
           created_at?: string | null
+          event_id?: string | null
           id?: string
           recipient_id?: string | null
           sender_id?: string
@@ -355,6 +369,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "messages_recipient_id_fkey"
             columns: ["recipient_id"]
             isOneToOne: false
@@ -364,6 +385,72 @@ export type Database = {
           {
             foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_message_reads: {
+        Row: {
+          event_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          event_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          event_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_message_reads_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_message_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      circle_message_reads: {
+        Row: {
+          circle_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          circle_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          circle_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_message_reads_circle_id_fkey"
+            columns: ["circle_id"]
+            isOneToOne: false
+            referencedRelation: "circles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_message_reads_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -453,6 +540,7 @@ export type Database = {
           id: string
           location: string | null
           neighborhood: string | null
+          onboarding_completed: boolean
           username: string | null
           website: string | null
         }
@@ -468,6 +556,7 @@ export type Database = {
           id: string
           location?: string | null
           neighborhood?: string | null
+          onboarding_completed?: boolean
           username?: string | null
           website?: string | null
         }
@@ -483,6 +572,7 @@ export type Database = {
           id?: string
           location?: string | null
           neighborhood?: string | null
+          onboarding_completed?: boolean
           username?: string | null
           website?: string | null
         }
@@ -526,13 +616,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      // Updated in 20260601100000_event_chats.sql — polymorphic over DMs and
+      // event chats. `kind` discriminates: for 'dm' the partner is a Profile,
+      // for 'event' the partner is an event row. `last_message` is nullable
+      // for empty event chats (you registered but no one has posted yet).
       get_conversations: {
         Args: { p_user_id: string }
         Returns: {
-          last_message: Json
-          partner: Json
+          kind: 'dm' | 'event' | 'circle'
           partner_id: string
+          partner: Json
+          last_message: Json | null
           unread_count: number
+          sort_at: string
         }[]
       }
     }

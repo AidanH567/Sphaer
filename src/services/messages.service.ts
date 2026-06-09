@@ -6,16 +6,37 @@ import type {
   Conversation,
 } from '@/types/message.types';
 import type { Profile } from '@/types/user.types';
+import type { Event } from '@/types/event.types';
+import type { Circle } from '@/types/circle.types';
 
 export async function getConversations(userId: string): Promise<Conversation[]> {
   const { data, error } = await supabase.rpc('get_conversations', { p_user_id: userId });
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
-    partner: row.partner as unknown as Profile,
-    last_message: row.last_message as unknown as Message,
-    unread_count: Number(row.unread_count ?? 0),
-  }));
+  return (data ?? []).map((row): Conversation => {
+    if (row.kind === 'event') {
+      return {
+        kind: 'event',
+        event: row.partner as unknown as Event,
+        last_message: row.last_message as unknown as Message | null,
+        unread_count: Number(row.unread_count ?? 0),
+      };
+    }
+    if (row.kind === 'circle') {
+      return {
+        kind: 'circle',
+        circle: row.partner as unknown as Circle,
+        last_message: row.last_message as unknown as Message | null,
+        unread_count: Number(row.unread_count ?? 0),
+      };
+    }
+    return {
+      kind: 'dm',
+      partner: row.partner as unknown as Profile,
+      last_message: row.last_message as unknown as Message | null,
+      unread_count: Number(row.unread_count ?? 0),
+    };
+  });
 }
 
 export async function getMessages(
@@ -29,6 +50,7 @@ export async function getMessages(
       `and(sender_id.eq.${userId},recipient_id.eq.${partnerId}),and(sender_id.eq.${partnerId},recipient_id.eq.${userId})`
     )
     .is('circle_id', null)
+    .is('event_id', null)
     .order('created_at', { ascending: true });
 
   if (error) throw error;
@@ -72,6 +94,50 @@ export async function getPartnerLastRead(
   return data?.last_read_at ?? null;
 }
 
+// ── Event group chats ────────────────────────────────────────────────────────
+
+export async function getEventMessages(eventId: string): Promise<MessageWithSender[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select(`*, sender:profiles!messages_sender_id_fkey(*)`)
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as MessageWithSender[]) ?? [];
+}
+
+export async function sendEventMessage(
+  senderId: string,
+  eventId: string,
+  content: string
+): Promise<MessageWithSender> {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      sender_id: senderId,
+      event_id: eventId,
+      recipient_id: null,
+      circle_id: null,
+      content,
+    })
+    .select(`*, sender:profiles!messages_sender_id_fkey(*)`)
+    .single();
+  if (error) throw error;
+  return data as MessageWithSender;
+}
+
+export async function markEventRead(userId: string, eventId: string): Promise<void> {
+  const { error } = await supabase
+    .from('event_message_reads')
+    .upsert(
+      { user_id: userId, event_id: eventId, last_read_at: new Date().toISOString() },
+      { onConflict: 'user_id,event_id' }
+    );
+  if (error) throw error;
+}
+
+// ── Circle group chats ───────────────────────────────────────────────────────
+
 export async function getCircleMessages(circleId: string): Promise<MessageWithSender[]> {
   const { data, error } = await supabase
     .from('messages')
@@ -81,4 +147,34 @@ export async function getCircleMessages(circleId: string): Promise<MessageWithSe
 
   if (error) throw error;
   return (data as MessageWithSender[]) ?? [];
+}
+
+export async function sendCircleMessage(
+  senderId: string,
+  circleId: string,
+  content: string
+): Promise<MessageWithSender> {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      sender_id: senderId,
+      circle_id: circleId,
+      recipient_id: null,
+      event_id: null,
+      content,
+    })
+    .select(`*, sender:profiles!messages_sender_id_fkey(*)`)
+    .single();
+  if (error) throw error;
+  return data as MessageWithSender;
+}
+
+export async function markCircleRead(userId: string, circleId: string): Promise<void> {
+  const { error } = await supabase
+    .from('circle_message_reads')
+    .upsert(
+      { user_id: userId, circle_id: circleId, last_read_at: new Date().toISOString() },
+      { onConflict: 'user_id,circle_id' }
+    );
+  if (error) throw error;
 }

@@ -1,26 +1,20 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Linking,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/constants/theme';
 import { ProfileActivityCard } from './ProfileActivityCard';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { MockProfile } from '@/data/mockProfiles';
 
 // Figma design tokens (node 3637:4767)
-const NAME = '#1B1B18';
+const NAME = colors.neutral.ink;
 const META = '#868579';
-const CHOCOLATE = '#2B2A27';
-const BODY = '#363530';
-const DIVIDER = '#CFCEC9';
-const TESTIMONIAL_BG = '#F1F3F6';
-const TESTIMONIAL_BORDER = '#9E9D94';
+const CHOCOLATE = colors.neutral.chocolate;
+const BODY = colors.neutral.body;
+const DIVIDER = colors.neutral.divider;
+const TESTIMONIAL_BG = colors.appleMail; // matches Feed bg, already a Figma token
+const TESTIMONIAL_BORDER = colors.neutral.neutral400;
 const LINK = '#3572C7';
 const SUCCESS = '#2A7E3B';
 const BORDER = '#CCD0D7';
@@ -31,12 +25,41 @@ interface ProfileViewProps {
   isOwnProfile?: boolean;
   /** Fires when the user taps Edit Profile (only shown when isOwnProfile). */
   onEditPress?: () => void;
+  /**
+   * Fires when the user taps Message (only rendered when not isOwnProfile
+   * and a handler is provided). The handler is responsible for navigating
+   * to the chat screen.
+   */
+  onMessagePress?: () => void;
   /** Tappable stat callbacks. Each stat becomes pressable when its handler
    * is provided; otherwise it renders as plain text. */
   onFollowersPress?: () => void;
   onFollowingPress?: () => void;
   onCirclesPress?: () => void;
   onActivitiesPress?: () => void;
+  /**
+   * Real follow state for non-own profiles. When provided alongside
+   * onToggleFollow, the Follow button reflects + persists this value
+   * instead of the legacy local-only toggle. Both must be provided for
+   * the persistent path to activate.
+   */
+  isFollowing?: boolean;
+  /** Fires when the user taps Follow / Following. Caller persists. */
+  onToggleFollow?: () => void;
+  /** Disables the Follow button (in-flight network call). */
+  followBusy?: boolean;
+  /**
+   * Opens the saved events sheet. Rendered as a dedicated button below the
+   * stats row, above Edit Profile — but only when isOwnProfile is true and
+   * a handler is provided. Other users never see this button.
+   */
+  onSavedPress?: () => void;
+  /**
+   * Opens the tickets sheet — events the user has registered for. Same
+   * own-profile-only treatment as onSavedPress; sits beside or near the
+   * Saved button.
+   */
+  onTicketsPress?: () => void;
   /**
    * Trailing slot rendered after the Images section. Used to inject the
    * "Available for work" placeholder bar on the own-profile tab without
@@ -54,13 +77,23 @@ export function ProfileView({
   profile,
   isOwnProfile = false,
   onEditPress,
+  onMessagePress,
   onFollowersPress,
   onFollowingPress,
   onCirclesPress,
   onActivitiesPress,
+  onSavedPress,
+  onTicketsPress,
+  isFollowing,
+  onToggleFollow,
+  followBusy,
   trailingSlot,
 }: ProfileViewProps) {
-  const [following, setFollowing] = useState(false);
+  // Legacy local-only toggle. Only used when the caller didn't pass real
+  // isFollowing + onToggleFollow props (e.g. some embedded preview).
+  const [localFollowing, setLocalFollowing] = useState(false);
+  const persistent = typeof isFollowing === 'boolean' && typeof onToggleFollow === 'function';
+  const following = persistent ? (isFollowing as boolean) : localFollowing;
   const [aboutExpanded, setAboutExpanded] = useState(false);
 
   // Empty-state helpers — for a real, just-signed-up user most arrays will be
@@ -112,27 +145,76 @@ export function ProfileView({
         </View>
 
         {isOwnProfile ? (
-          <TouchableOpacity
-            style={[styles.followButton, styles.editButton]}
-            onPress={onEditPress}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
-            <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
-          </TouchableOpacity>
+          <>
+            {(onSavedPress || onTicketsPress) && (
+              <View style={styles.ownActionsRow}>
+                {onSavedPress && (
+                  <TouchableOpacity
+                    style={[styles.followButton, styles.savedButton, styles.ownActionItem]}
+                    onPress={onSavedPress}
+                    activeOpacity={0.85}
+                    accessibilityLabel="View saved activities"
+                  >
+                    <Ionicons name="bookmark-outline" size={16} color={CHOCOLATE} />
+                    <Text style={[styles.followText, styles.editText]}>Saved</Text>
+                  </TouchableOpacity>
+                )}
+                {onTicketsPress && (
+                  <TouchableOpacity
+                    style={[styles.followButton, styles.savedButton, styles.ownActionItem]}
+                    onPress={onTicketsPress}
+                    activeOpacity={0.85}
+                    accessibilityLabel="View tickets"
+                  >
+                    <Ionicons name="ticket-outline" size={16} color={CHOCOLATE} />
+                    <Text style={[styles.followText, styles.editText]}>Tickets</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            <TouchableOpacity
+              style={[styles.followButton, styles.editButton]}
+              onPress={onEditPress}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
+              <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
+            </TouchableOpacity>
+          </>
         ) : (
-          <TouchableOpacity
-            style={[styles.followButton, following && styles.followButtonActive]}
-            onPress={() => {
-              setFollowing((v) => !v);
-              console.log('[Profile] toggle follow', profile.id);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.followText, following && styles.followTextActive]}>
-              {following ? 'Following' : 'Follow'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[
+                styles.followButton,
+                styles.actionButton,
+                following && styles.followButtonActive,
+                followBusy && styles.followButtonBusy,
+              ]}
+              onPress={() => {
+                if (persistent) {
+                  onToggleFollow?.();
+                } else {
+                  setLocalFollowing((v) => !v);
+                }
+              }}
+              activeOpacity={0.85}
+              disabled={followBusy}
+            >
+              <Text style={[styles.followText, following && styles.followTextActive]}>
+                {following ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+            {onMessagePress && (
+              <TouchableOpacity
+                style={[styles.followButton, styles.actionButton, styles.messageButton]}
+                onPress={onMessagePress}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="chatbubble-outline" size={16} color={CHOCOLATE} />
+                <Text style={[styles.followText, styles.editText]}>Message</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -158,18 +240,25 @@ export function ProfileView({
         <>
           <View style={styles.section}>
             <SectionHeader title="About" />
-            <TouchableOpacity onPress={onEditPress} activeOpacity={0.7}>
-              <Text style={styles.emptyHint}>
-                Tell people about your work — tap Edit Profile to add an About section.
-              </Text>
-            </TouchableOpacity>
+            <EmptyState
+              body="Tell people about your work — tap Edit Profile to add an About section."
+              onPress={onEditPress}
+            />
           </View>
           <Divider />
         </>
       ) : null}
 
       {/* ── Activity ─────────────────────────────────────── */}
-      {hasActivities && (
+      {/*
+        The list is only populated for the own-profile path (we don't fetch
+        timeline events on /user/[id]); the stats row shows the count
+        instead, and tapping "Activities" opens the full list in a sheet.
+        Show the empty placeholder only when the COUNT is also zero —
+        otherwise we'd be lying ("Anke Peters hasn't shared any activities
+        yet" when stats says Activities: 1).
+      */}
+      {hasActivities ? (
         <>
           <View style={styles.section}>
             <SectionHeader title="Activity" />
@@ -181,7 +270,17 @@ export function ProfileView({
           </View>
           <Divider />
         </>
-      )}
+      ) : !isOwnProfile && profile.activitiesCount === 0 ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Activity" />
+            <EmptyState
+              body={`${profile.displayName} hasn't shared any activities yet.`}
+            />
+          </View>
+          <Divider />
+        </>
+      ) : null}
 
       {/* ── Experience ───────────────────────────────────── */}
       {hasExperience ? (
@@ -205,15 +304,24 @@ export function ProfileView({
         <>
           <View style={styles.section}>
             <SectionHeader title="Experience" />
-            <TouchableOpacity onPress={onEditPress} activeOpacity={0.7}>
-              <Text style={styles.emptyHint}>
-                Add roles, residencies, and projects from Edit Profile.
-              </Text>
-            </TouchableOpacity>
+            <EmptyState
+              body="Add roles, residencies, and projects from Edit Profile."
+              onPress={onEditPress}
+            />
           </View>
           <Divider />
         </>
-      ) : null}
+      ) : (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Experience" />
+            <EmptyState
+              body={`${profile.displayName} hasn't added any experience yet.`}
+            />
+          </View>
+          <Divider />
+        </>
+      )}
 
       {/* ── Testimonials ─────────────────────────────────── */}
       <View style={styles.section}>
@@ -227,13 +335,15 @@ export function ProfileView({
               </View>
             ))}
           </View>
+        ) : isOwnProfile ? (
+          <EmptyState body="No testimonials yet — these arrive as people you've worked with leave them." />
         ) : (
-          <Text style={styles.emptyHint}>No testimonials yet</Text>
+          <EmptyState body={`${profile.displayName} hasn't received any testimonials yet.`} />
         )}
       </View>
 
       {/* ── Images ───────────────────────────────────────── */}
-      {hasImages && (
+      {hasImages ? (
         <View style={styles.section}>
           <SectionHeader title="Images" />
           <View style={styles.imageGrid}>
@@ -242,10 +352,27 @@ export function ProfileView({
                 key={`${src}-${i}`}
                 source={{ uri: src }}
                 style={styles.imageTile}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ))}
           </View>
+        </View>
+      ) : isOwnProfile ? (
+        <View style={styles.section}>
+          <SectionHeader title="Images" />
+          <EmptyState
+            body="Show your work — add photos from Edit Profile."
+            onPress={onEditPress}
+            centered
+          />
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <SectionHeader title="Images" />
+          <EmptyState
+            body={`${profile.displayName} hasn't uploaded any photos yet.`}
+            centered
+          />
         </View>
       )}
 
@@ -378,6 +505,18 @@ const styles = StyleSheet.create({
     backgroundColor: DIVIDER,
   },
 
+  // Action row (Follow + Message side-by-side on other people's profiles)
+  actionRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  actionButton: {
+    flex: 1,
+    marginTop: 0,
+  },
+
   // Follow button
   followButton: {
     width: '100%',
@@ -393,6 +532,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: BORDER,
   },
+  followButtonBusy: { opacity: 0.55 },
   followText: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 17,
@@ -409,14 +549,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  // Saved / Tickets row — own-profile only, sits above Edit Profile.
+  ownActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
+    marginTop: spacing.xs,
+  },
+  ownActionItem: {
+    flex: 1,
+    marginTop: 0,
+  },
+  // Saved/Tickets button — secondary (white + border) treatment.
+  savedButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  // Message button styled like editButton (white bg + border) so it reads
+  // as the secondary action next to the primary Follow.
+  messageButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    flexDirection: 'row',
+    gap: 8,
+  },
   editText: {
     color: CHOCOLATE,
-  },
-  emptyHint: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
-    color: META,
-    fontStyle: 'italic',
   },
 
   // Sections
