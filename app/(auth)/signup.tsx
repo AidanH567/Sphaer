@@ -55,8 +55,20 @@ export default function SignUpScreen() {
   async function handleSignUp() {
     if (!validate()) return;
     try {
-      await signUp(email, password, displayName.trim());
-      router.replace('/(auth)/onboarding');
+      const result = await signUp(email, password, displayName.trim());
+      // Branch on whether Supabase created an immediate session:
+      //   - session present   → email confirmation is OFF in the dashboard,
+      //                         user is authed, jump straight to onboarding.
+      //   - session === null  → confirmation is ON, Supabase has sent a
+      //                         verification email; show the interstitial
+      //                         that watches for SIGNED_IN.
+      if (result?.session) {
+        router.replace('/(auth)/onboarding');
+      } else {
+        router.replace(
+          `/(auth)/verify-email?email=${encodeURIComponent(email.trim())}` as never,
+        );
+      }
     } catch (e: unknown) {
       Alert.alert('Sign up failed', e instanceof Error ? e.message : 'Please try again.');
     }

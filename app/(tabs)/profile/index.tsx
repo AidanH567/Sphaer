@@ -26,6 +26,7 @@ import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { getSavedEvents } from '@/services/events.service';
 import { signOut } from '@/services/auth.service';
+import { deleteAccount } from '@/services/account.service';
 import { useAuthContext } from '@/context/AuthContext';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
@@ -61,6 +62,11 @@ export default function ProfileScreen() {
   const [extrasLoading, setExtrasLoading] = useState(true);
 
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
+  // Two-step delete: first sheet warns, second sheet is the point of no return.
+  // Splitting it into two sheets is the "double confirm" spec — a single typed
+  // "DELETE" prompt was rejected as over-engineered for a solo demo (see BACKLOG).
+  const [deleteConfirm1Visible, setDeleteConfirm1Visible] = useState(false);
+  const [deleteConfirm2Visible, setDeleteConfirm2Visible] = useState(false);
 
   // Stats popups — exactly one open at a time via a single discriminator.
   // 'saved' and 'tickets' aren't public stats but use the same sheet machinery.
@@ -174,6 +180,33 @@ export default function ProfileScreen() {
     router.replace('/');
   }
 
+  function handleDeleteAccount() {
+    setDeleteConfirm1Visible(true);
+  }
+
+  function advanceToFinalDeleteConfirm() {
+    setDeleteConfirm1Visible(false);
+    // Small RAF-style gap so the first sheet's exit animation isn't
+    // interrupted mid-slide by the second sheet mounting.
+    setTimeout(() => setDeleteConfirm2Visible(true), 240);
+  }
+
+  async function performDeleteAccount() {
+    // The edge function deletes the auth row server-side. Once that
+    // succeeds, the local session points at a now-nonexistent user — any
+    // further Supabase call will reject. We still call signOut() to clear
+    // the local session, but swallow its failure (it commonly throws
+    // "User from sub claim in JWT does not exist" right after).
+    await deleteAccount();
+    try {
+      await signOut();
+    } catch {
+      // expected post-delete
+    }
+    setDeleteConfirm2Visible(false);
+    router.replace('/');
+  }
+
   function handleEdit() {
     // Route lives at app/profile/edit.tsx (outside tabs). The router types
     // are generated; if they haven't been regenerated for the new file the
@@ -203,6 +236,35 @@ export default function ProfileScreen() {
       onConfirm={performSignOut}
       onClose={() => setSignOutSheetVisible(false)}
     />
+  );
+
+  // Two-step delete-account confirms. The first warns; the second performs.
+  // The second sheet is the only one that calls deleteAccount(), so the user
+  // has to explicitly opt in twice before any data is touched. Mounted in both
+  // the dev-fallback and authed render paths so the UI is verifiable in
+  // preview; without a session, the edge function returns 401 and the sheet
+  // surfaces the error rather than silently no-op'ing.
+  const deleteAccountSheets = (
+    <>
+      <ConfirmSheet
+        visible={deleteConfirm1Visible}
+        title="Delete your Sphaer account?"
+        message="This will permanently remove your profile, posts, events, circles, messages, and saved items. This cannot be undone."
+        confirmLabel="Continue"
+        destructive
+        onConfirm={advanceToFinalDeleteConfirm}
+        onClose={() => setDeleteConfirm1Visible(false)}
+      />
+      <ConfirmSheet
+        visible={deleteConfirm2Visible}
+        title="Permanently delete account"
+        message="Last chance — this is final. Tap Delete account to remove everything now."
+        confirmLabel="Delete account"
+        destructive
+        onConfirm={performDeleteAccount}
+        onClose={() => setDeleteConfirm2Visible(false)}
+      />
+    </>
   );
 
   // Stats popups — only render the authed-user popups when we actually have
@@ -285,9 +347,15 @@ export default function ProfileScreen() {
         <ProfileView
           profile={mock}
           isOwnProfile
-          trailingSlot={<AvailableForWorkBar location={mock.location} />}
+          trailingSlot={
+            <>
+              <AvailableForWorkBar location={mock.location} />
+              <SettingsSection onDeletePress={handleDeleteAccount} />
+            </>
+          }
         />
         {signOutSheet}
+        {deleteAccountSheets}
       </SafeAreaView>
     );
   }
@@ -319,12 +387,18 @@ export default function ProfileScreen() {
           onActivitiesPress={() => setOpenSheet('activities')}
           onSavedPress={() => setOpenSheet('saved')}
           onTicketsPress={() => setOpenSheet('tickets')}
-          trailingSlot={<AvailableForWorkBar location={displayProfile.location} />}
+          trailingSlot={
+            <>
+              <AvailableForWorkBar location={displayProfile.location} />
+              <SettingsSection onDeletePress={handleDeleteAccount} />
+            </>
+          }
         />
       )}
 
       {signOutSheet}
       {statsSheets}
+      {deleteAccountSheets}
     </SafeAreaView>
   );
 }
@@ -373,6 +447,23 @@ function AvailableForWorkBar({ location }: { location: string }) {
         activeOpacity={0.85}
       >
         <Text style={styles.getInTouchText}>Get in touch</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Settings section — Delete account row ───────────────────────────────────
+
+function SettingsSection({ onDeletePress }: { onDeletePress: () => void }) {
+  return (
+    <View style={styles.settingsSection}>
+      <TouchableOpacity
+        style={styles.settingsRow}
+        onPress={onDeletePress}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="trash-outline" size={20} color={colors.badge.red} />
+        <Text style={styles.settingsRowTextDestructive}>Delete account</Text>
       </TouchableOpacity>
     </View>
   );
@@ -450,6 +541,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: typography.fontWeight.medium,
     color: colors.white,
+  },
+
+  settingsSection: {
+    marginTop: spacing.xl,
+    paddingTop: spacing.base,
+    paddingHorizontal: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  settingsRowTextDestructive: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.badge.red,
   },
 });
 

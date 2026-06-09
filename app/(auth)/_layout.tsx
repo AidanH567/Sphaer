@@ -6,12 +6,25 @@ import { colors, motion } from '@/constants/theme';
 export default function AuthLayout() {
   const { session, profile, isLoading } = useAuthContext();
   const segments = useSegments();
-  // True when the active route within this (auth) group is `onboarding`.
-  // Email signup explicitly navigates here after `signUp()` resolves; without
-  // this guard the session-redirect below would unmount the form before it
-  // ever painted, and the user would land on /location with only their
-  // display_name set (no bio, about, disciplines, location, or experiences).
-  const onOnboarding = segments[segments.length - 1] === 'onboarding';
+  // Routes inside (auth) that must fall through even when a session is
+  // present. `onboarding` is the post-email-signup form (covered above).
+  // `update-password` is the password-reset deep-link landing — Supabase
+  // populates a temporary recovery session by the time we mount, and we'd
+  // otherwise bounce the user to /location or /feed before they could set
+  // a new password.
+  // Cast to plain string because expo-router's generated route literal type
+  // hasn't picked up `update-password` / `verify-email` yet — the dev server
+  // regenerates it on the next reload after the file lands.
+  const lastSeg = String(segments[segments.length - 1] ?? '');
+  const onOnboarding = lastSeg === 'onboarding';
+  const onUpdatePassword = lastSeg === 'update-password';
+  // verify-email mounts WITHOUT a session — by design (the user has signed
+  // up but hasn't confirmed yet). When the email click finally lands and
+  // SIGNED_IN fires, the screen itself navigates to onboarding. So the
+  // fall-through here exists purely for the brief moment the verify-email
+  // screen is active and a session might or might not exist (Supabase's
+  // resend helper might briefly populate one).
+  const onVerifyEmail = lastSeg === 'verify-email';
 
   if (isLoading) {
     return (
@@ -34,14 +47,16 @@ export default function AuthLayout() {
     }
     // The first-time email signup flow is signup → onboarding form →
     // /location. Without this fall-through, the redirect below intercepts
-    // step 2 and the user never sees the form.
-    if (!onOnboarding) {
+    // step 2 and the user never sees the form. update-password and
+    // verify-email are also mid-flow auth screens with the same intercept
+    // problem — same fall-through.
+    if (!onOnboarding && !onUpdatePassword && !onVerifyEmail) {
       // First-timers (or anyone whose flag isn't set yet) get the flow.
       // `as never` because expo-router's generated route types are stale
       // until the dev server regenerates after we add the new file.
       return <Redirect href={'/location' as never} />;
     }
-    // Mid-onboarding — fall through to the Stack below.
+    // Mid-onboarding or mid-password-recovery — fall through.
   }
 
   return (
@@ -56,6 +71,9 @@ export default function AuthLayout() {
       <Stack.Screen name="signup" />
       <Stack.Screen name="login" />
       <Stack.Screen name="onboarding" />
+      <Stack.Screen name="reset-password" />
+      <Stack.Screen name="update-password" />
+      <Stack.Screen name="verify-email" />
     </Stack>
   );
 }

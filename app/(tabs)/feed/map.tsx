@@ -8,6 +8,7 @@ import { FeedHeader } from '@/components/feed/FeedHeader';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { config } from '@/constants/config';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
+import { applyChipFilters } from '@/utils/event-filters';
 import type { EventWithRelations } from '@/types/event.types';
 import { formatEventDateShort } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
@@ -46,7 +47,7 @@ export default function MapScreen() {
     const q = (feedFilters.search ?? '').trim().toLowerCase();
     const hood = (feedFilters.neighborhood ?? '').toLowerCase();
 
-    return events.filter((e) => {
+    const filtered = events.filter((e) => {
       if (q.length > 0) {
         const haystack = [
           e.title,
@@ -75,7 +76,19 @@ export default function MapScreen() {
       }
       return true;
     });
-  }, [events, feedFilters.search, feedFilters.neighborhood]);
+    return applyChipFilters(filtered, {
+      tonight: feedFilters.tonight,
+      thisWeekend: feedFilters.thisWeekend,
+      isFree: feedFilters.isFree,
+    });
+  }, [
+    events,
+    feedFilters.search,
+    feedFilters.neighborhood,
+    feedFilters.tonight,
+    feedFilters.thisWeekend,
+    feedFilters.isFree,
+  ]);
 
   // Only mappable events
   const eventsWithCoords = filteredEvents.filter(
