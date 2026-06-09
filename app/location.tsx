@@ -16,7 +16,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppContext } from '@/context/AppContext';
 import { useAuthContext } from '@/context/AuthContext';
 import { reverseGeocodeBerlinLocation } from '@/lib/geocoding';
+import { updateProfile } from '@/services/profile.service';
 import { colors, typography, spacing } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // State-machine view for the location-onboarding flow. The same screen
 // transitions through four visual phases via fade-in/out animations so
@@ -41,7 +43,7 @@ function storageKey(userId: string) {
 
 export default function LocationOnboardingScreen() {
   const router = useRouter();
-  const { user } = useAuthContext();
+  const { user, profile, setProfile } = useAuthContext();
   const { feedFilters, setFeedFilters } = useAppContext();
 
   const [phase, setPhase] = useState<Phase>('prompt');
@@ -62,25 +64,60 @@ export default function LocationOnboardingScreen() {
     }).start();
   }, [phase, opacity]);
 
-  // If this user already completed location onboarding once, skip the
-  // whole flow and go straight to feed. Keyed by user id so two test
-  // accounts on the same device get the prompt independently.
+  // Bail to feed if the user has already completed onboarding once. We
+  // accept either signal as proof:
+  //   - DB column `profile.onboarding_completed` — the source of truth
+  //     since the 2026-06-08 migration. Lets a reinstalled user skip
+  //     the prompt without re-doing it on a wiped device.
+  //   - Legacy AsyncStorage flag — pre-migration users have only this.
+  //     When we find it set but the DB column isn't, we upgrade the DB
+  //     so the next session's (auth) layout can skip /location entirely
+  //     without ever mounting it.
+  //
+  // The (auth) layout's gate is the first line of defense; this hook is
+  // belt-and-braces for the brief window during a fresh SIGNED_IN where
+  // the layout might have routed here against a not-yet-loaded profile.
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    AsyncStorage.getItem(storageKey(user.id)).then((flag) => {
-      if (!cancelled && flag === '1') {
-        router.replace('/(tabs)/feed');
+    (async () => {
+      const flag = await AsyncStorage.getItem(storageKey(user.id));
+      if (cancelled) return;
+      const localOnboarded = flag === '1';
+      const dbOnboarded = !!profile?.onboarding_completed;
+      if (!localOnboarded && !dbOnboarded) return;
+      // Migrate the legacy local flag to the DB if it hasn't already.
+      if (localOnboarded && !dbOnboarded) {
+        try {
+          const updated = await updateProfile(user.id, { onboarding_completed: true });
+          if (!cancelled) setProfile(updated);
+        } catch {
+          // Non-fatal — the user still gets routed to feed below.
+        }
       }
-    });
+      if (!cancelled) router.replace('/(tabs)/feed');
+    })();
     return () => {
       cancelled = true;
     };
-  }, [user?.id, router]);
+  }, [user?.id, router, profile?.onboarding_completed, setProfile]);
 
   const finishAndGoToFeed = useCallback(async () => {
     if (user?.id) {
       await AsyncStorage.setItem(storageKey(user.id), '1');
+      // Persist server-side so this user never sees /location again,
+      // even from a fresh install. Save neighbourhood at the same time
+      // so it survives the AppContext (which is in-memory only).
+      try {
+        const updated = await updateProfile(user.id, {
+          onboarding_completed: true,
+          neighborhood: neighbourhood || profile?.neighborhood || null,
+        });
+        setProfile(updated);
+      } catch {
+        // Non-fatal — AsyncStorage flag is the legacy fallback, and the
+        // next session will retry the write via the migration block above.
+      }
     }
     setPhase('blackout');
     // Fade backdrop to full black, then navigate.
@@ -92,7 +129,7 @@ export default function LocationOnboardingScreen() {
     }).start(() => {
       router.replace('/(tabs)/feed');
     });
-  }, [user?.id, router, blackoutOpacity]);
+  }, [user?.id, router, blackoutOpacity, neighbourhood, profile?.neighborhood, setProfile]);
 
   // "We Found You" auto-advances to the reveal after a brief hold.
   useEffect(() => {
@@ -385,3 +422,5 @@ const styles = StyleSheet.create({
 
   blackout: { backgroundColor: INK },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('location-onboarding');

@@ -25,6 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Bootstrap: read whatever session is persisted in storage and (if any)
+    // fetch the matching profile. The finally inside fetchProfile flips
+    // isLoading to false; the no-session branch flips it here.
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (data.session?.user) {
@@ -34,14 +37,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    // Subsequent auth transitions. We discriminate on event type so a
+    // SIGNED_IN flips isLoading back to true while the profile is being
+    // refetched — without this, the (auth) layout's gate runs against a
+    // stale `profile?.onboarding_completed` and routes a returning user
+    // to /location for a frame before the real profile arrives.
+    // TOKEN_REFRESHED leaves the profile alone (the row didn't change).
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
-      if (newSession?.user) {
-        fetchProfile(newSession.user.id);
-      } else {
+
+      if (!newSession?.user) {
+        // SIGNED_OUT or session went null for any other reason — clear
+        // the profile so the gate can show the landing screen.
         setProfile(null);
         setIsLoading(false);
+        return;
       }
+
+      if (event === 'SIGNED_IN') {
+        setIsLoading(true);
+        fetchProfile(newSession.user.id);
+        return;
+      }
+
+      // TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION — session
+      // changed but the profile row didn't. Leave it alone; the
+      // bootstrap above already settled isLoading.
     });
 
     return () => listener.subscription.unsubscribe();
