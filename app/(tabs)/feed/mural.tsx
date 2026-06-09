@@ -16,6 +16,7 @@ import { useMuralDimensions } from '@/hooks/useMuralDimensions';
 import { useMuralLayout } from '@/hooks/useMuralLayout';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { colors, spacing, typography } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
  * Mural — the third view of the feed, alongside list (index.tsx) and map.
@@ -315,3 +316,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2A',
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('feed-mural');

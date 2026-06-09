@@ -1,14 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Alert,
-  TextInput,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +18,7 @@ import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { AddressAutocompleteInput, type SelectedAddress } from '@/components/ui/AddressAutocompleteInput';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 import type { CircleWithCounts } from '@/types/circle.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function CreateScreen() {
   const router = useRouter();
@@ -354,7 +347,7 @@ export default function CreateScreen() {
 
         <TouchableOpacity style={styles.posterPicker} onPress={pickPoster}>
           {posterUri ? (
-            <Image source={{ uri: posterUri }} style={styles.posterPreview} resizeMode="cover" />
+            <Image source={{ uri: posterUri }} style={styles.posterPreview} contentFit="cover" />
           ) : (
             <View style={styles.posterPlaceholder}>
               <Ionicons name="image-outline" size={32} color={colors.text.tertiary} />
@@ -487,3 +480,5 @@ const styles = StyleSheet.create({
   posterHint: { fontSize: typography.fontSize.sm, color: colors.text.tertiary },
   cta: {},
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('create-activity');

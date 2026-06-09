@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { colors, typography } from '@/constants/theme';
 import type { ProfileActivity } from '@/data/mockProfiles';
 
@@ -35,7 +36,7 @@ export function ProfileActivityCard({ activity }: ProfileActivityCardProps) {
         </View>
       </View>
 
-      <Image source={{ uri: activity.image }} style={styles.poster} resizeMode="cover" />
+      <Image source={{ uri: activity.image }} style={styles.poster} contentFit="cover" />
     </View>
   );
 }

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatMessageTime } from '@/utils/date';
 import type { OptimisticMessage } from '@/types/message.types';

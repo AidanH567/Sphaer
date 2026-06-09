@@ -1,16 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  Linking,
-  Share,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Share, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +11,7 @@ import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
 import { useEvent } from '@/hooks/useEvents';
 import { EventMapPreview } from '@/components/events/EventMapPreview';
+import { EventDetailSkeleton } from '@/components/ui/skeletons/EventDetailSkeleton';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
@@ -29,6 +20,7 @@ import {
   saveEvent,
   unsaveEvent,
 } from '@/services/events.service';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -93,9 +85,7 @@ export default function EventDetailScreen() {
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
+        <EventDetailSkeleton />
       </SafeAreaView>
     );
   }
@@ -183,7 +173,7 @@ export default function EventDetailScreen() {
       >
         {/* Hero image */}
         {event.poster_url ? (
-          <Image source={{ uri: event.poster_url }} style={styles.hero} resizeMode="cover" />
+          <Image source={{ uri: event.poster_url }} style={styles.hero} contentFit="cover" />
         ) : (
           <View style={[styles.hero, styles.heroPlaceholder]} />
         )}
@@ -539,3 +529,5 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('event-detail');

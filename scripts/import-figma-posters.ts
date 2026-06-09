@@ -28,6 +28,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import sharp from 'sharp';
 
 // Load env the same way seed-demo-data.ts does.
 const projectRoot = path.resolve(__dirname, '..');
@@ -230,13 +231,23 @@ async function downloadFigmaAsset(uuid: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer);
 }
 
-async function uploadPoster(
-  eventId: string,
-  bytes: Buffer
-): Promise<string> {
-  const objectPath = `${PREFIX}/${eventId}.png`;
+/**
+ * Compress a PNG buffer to WebP at quality 80 — ~10× smaller than the
+ * original with no visible quality loss at the sizes we render at (mural
+ * bands are at most ~180px tall on a phone viewport, the source images
+ * are 1024+ px wide).
+ */
+async function compressToWebP(bytes: Buffer): Promise<Buffer> {
+  return sharp(bytes).webp({ quality: 80 }).toBuffer();
+}
+
+async function uploadPoster(eventId: string, bytes: Buffer): Promise<string> {
+  // .webp extension matches the actual encoded format. Old .png paths from a
+  // previous run stay in Storage but stop being referenced once mockEvents.ts
+  // is updated to the .webp URLs — cleanup is a separate follow-up.
+  const objectPath = `${PREFIX}/${eventId}.webp`;
   const { error } = await supabase.storage.from(BUCKET).upload(objectPath, bytes, {
-    contentType: 'image/png',
+    contentType: 'image/webp',
     upsert: true,
     cacheControl: '31536000', // 1 year — these are stable seed assets
   });
@@ -255,23 +266,43 @@ async function main() {
   fs.mkdirSync(cacheDir, { recursive: true });
 
   const results: Record<string, string> = {};
+  let totalPng = 0;
+  let totalWebp = 0;
   for (const mapping of POSTER_MAPPINGS) {
     const cachePath = path.join(cacheDir, `${mapping.figmaAssetUuid}.png`);
     let bytes: Buffer;
 
     if (fs.existsSync(cachePath)) {
       bytes = fs.readFileSync(cachePath);
-      console.log(`  ${mapping.eventId} ← cached`);
+      console.log(`  ${mapping.eventId} ← cached (${bytes.length} bytes)`);
     } else {
       bytes = await downloadFigmaAsset(mapping.figmaAssetUuid);
       fs.writeFileSync(cachePath, bytes);
       console.log(`  ${mapping.eventId} ← downloaded (${bytes.length} bytes)`);
     }
 
-    const publicUrl = await uploadPoster(mapping.eventId, bytes);
+    const webp = await compressToWebP(bytes);
+    const ratio = ((webp.length / bytes.length) * 100).toFixed(1);
+    console.log(
+      `  ${mapping.eventId} → webp ${webp.length} bytes (${ratio}% of source)`
+    );
+    totalPng += bytes.length;
+    totalWebp += webp.length;
+
+    const publicUrl = await uploadPoster(mapping.eventId, webp);
     results[mapping.eventId] = publicUrl;
-    console.log(`  ${mapping.eventId} → ${publicUrl}`);
+    console.log(`  ${mapping.eventId} ↗ ${publicUrl}`);
   }
+
+  const pngMB = (totalPng / 1024 / 1024).toFixed(2);
+  const webpMB = (totalWebp / 1024 / 1024).toFixed(2);
+  const savedMB = ((totalPng - totalWebp) / 1024 / 1024).toFixed(2);
+  console.log(
+    `\nTotal: ${pngMB} MB PNG → ${webpMB} MB WebP (saved ${savedMB} MB, ${(
+      (totalWebp / totalPng) *
+      100
+    ).toFixed(1)}% of original)`
+  );
 
   // Emit a paste-ready mapping for mockEvents.ts.
   console.log('\n─── Paste into mockEvents.ts ───\n');

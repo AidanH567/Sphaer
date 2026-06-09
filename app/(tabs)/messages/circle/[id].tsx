@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-} from 'react-native';
+import { View, FlatList, StyleSheet, Text, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
@@ -23,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { OptimisticMessage } from '@/types/message.types';
 import type { Circle } from '@/types/circle.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
 
@@ -228,3 +220,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('messages-circle');

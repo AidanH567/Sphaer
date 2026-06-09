@@ -37,108 +37,105 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ## ▶ UP NEXT
 
-### 1. Login → location-onboarding glitch
+### 1. Whole-app Figma styling audit (BLOCKED on Figma MCP rate limit; user may need to bump the seat or paste node IDs by hand)
 
-**Why.** Existing users who already completed location onboarding sometimes get
-re-routed through `/location` after logging in. Looks broken at demo time and
-makes returning users feel like the app forgot them.
+**Why.** Investor demo will hit screens we never matched against Figma; a
+piece of visual drift on any of them — wrong padding, hex inline instead of
+a theme token, a font that doesn't match the display family — makes the
+whole app feel half-finished even if the underlying logic is sound. This
+item is a *meta* one: it kicks off per-screen sub-audits.
 
 **Approach.**
-1. Trace the routing logic in `app/(auth)/login.tsx` line 57:
-   `router.replace('/(tabs)/feed')`. The redirect to `/location` must be
-   happening *inside* `(tabs)/_layout.tsx` or a profile gate based on a
-   missing column.
-2. Inspect `app/(tabs)/_layout.tsx` and any `useEffect` in screens that calls
-   `router.replace('/location')`. Find the gate condition.
-3. Hypothesis: the gate checks `profile.location === null` instead of an
-   `onboarding_completed` boolean. OAuth signups skip onboarding entirely
-   (signup.tsx lines 73-76), so for those users `location` is null and the
-   gate fires. Confirm and fix.
-4. Fix path A (cheap): add `onboarding_completed BOOLEAN DEFAULT FALSE` to
-   `profiles`, set it to TRUE at the end of the existing onboarding flows.
-   Gate checks that column.
-5. Fix path B (cheaper): the location screen itself should bail early if
-   `profile.location` is already set, regardless of how the user got there.
-6. Test all four entry paths:
-   - Email signup → onboarding → location → feed (should work today)
-   - OAuth signup → location → feed (should work today)
-   - Email returning login (currently broken intermittently — verify)
-   - OAuth returning login (currently broken intermittently — verify)
+1. Pick the 10 in-scope screens (one sub-session each, in this order):
+   Feed list, Map, Mural, Event Detail, Profile, User Profile, Circle
+   Detail, Inbox, Chat, Settings.
+2. For each screen:
+   - Open the matching Figma frame side-by-side with the running screen.
+   - Walk top-to-bottom comparing spacing, font, color, radius, shadow,
+     icon size, alignment.
+   - Note every delta in a checklist. Trivial deltas (off-by-2 padding,
+     wrong token reference) fix inline during the same sub-session.
+     Non-trivial deltas (component restructure, missing feature) emit
+     their own backlog item.
+3. Lint pass: grep the screen's file(s) for hex literals (`#[0-9A-Fa-f]{3,8}`)
+   and any spacing/font numbers that should be coming from `theme.ts`.
+   Swap each to its token. Compare against `tailwind.config.js` to keep
+   NativeWind and theme.ts in lockstep.
+4. Each sub-session ships as its own commit referencing the screen.
 
 **Done when.**
-- [ ] Existing users who have completed onboarding NEVER see `/location`
-      again after login (Google, Apple, email — all three)
-- [ ] First-time signups still complete the onboarding flow as today
-- [ ] A migration (if path A) or a guard (if path B) is committed
-- [ ] Manual test plan covering the four entry paths documented in the PR
+- [ ] Per-screen audit completed for: Feed list, Map, Mural, Event Detail,
+      Profile, User Profile, Circle Detail, Inbox, Chat, Settings (each
+      is its own sub-session and its own ship entry)
+- [ ] Each audit produced either inline fixes or a new backlog item per
+      non-trivial delta
+- [ ] All `colors.*` and `spacing.*` references on those screens come from
+      `theme.ts` (no hex inline, no magic numbers)
 
 **Files likely touched.**
-- `app/(tabs)/_layout.tsx` (gate logic)
-- `app/location.tsx` (early-bail guard)
-- `app/(auth)/login.tsx` (possibly)
-- `supabase/migrations/<timestamp>_onboarding_completed.sql` (new — if path A)
-- `BACKLOG.md` (move to Shipped)
+- All `app/(tabs)/*` and `app/event/[id].tsx`, `app/user/[id].tsx`
+- `src/components/*` for shared components used on those screens
+- `src/constants/theme.ts` if new tokens are needed
+- `tailwind.config.js` to wire new tokens
+- `BACKLOG.md` (move each sub-audit to Shipped, promote next two)
 
-**Open questions to answer at start of build session.**
-- Path A vs B (DB column vs early-bail). Recommendation: A is more correct
-  semantically, B is faster to ship. Maybe both — early-bail today, column
-  in a follow-up.
+**Open questions.**
+- Figma source-of-truth link — current spec doesn't carry one; check with
+  the user before starting which Figma file/branch to audit against.
+- Should the audit cover the modal sheets (CircleJoinSheet, etc.) or only
+  the full screens? Default: full screens first, sheets as a follow-up.
+- Is each sub-audit billable as its own session under the chain-features
+  rule, or is the whole audit one ship? Treat each sub-audit as its own
+  ship for the BACKLOG bookkeeping, but stay in the same session unless
+  the user redirects.
 
-**Out of scope.** Reset password, email verification re-enable, account
-deletion — those are separate P1 launch-blocker items below.
+**Out of scope.** Map-marker styling (the map has its own design layer),
+typography font-file changes (the custom Martina Plantijn font is a separate
+fonts-loading item).
 
 ---
 
-### 2. Profile completion % + hide "Finish setting up profile"
+### 2. Per-screen Figma sub-audit (start with Feed list)
 
-**Why.** The "Finish setting up profile" CTA on the profile page persists
-even after a user fills out every field. Looks broken at demo time, and
-makes investors think users are stuck. Replacing it with a completion %
-bar that hides at 100% turns a bug into a polish moment.
+**Why.** Once the Figma MCP rate limit resets (or the user upgrades the seat /
+provides a node-id directly), the styling audit becomes 10 separate ship
+items per the parent meta-spec. Feed list is the natural first since most
+investor-demo eyeball-time lands there.
 
 **Approach.**
-1. Inspect the current "Finish setting up profile" component — likely lives
-   in `src/components/profile/` or `app/(tabs)/profile/index.tsx`. Find where
-   it's rendered and what data it uses.
-2. Define `profile completion` as the percentage of these fields filled:
-   `avatar_url, cover_url, bio, disciplines (≥1), location, about,
-   experiences (≥1)`. ~7 dimensions → each worth ~14%. Adjust weighting if
-   the design implies different importance.
-3. Compute the percentage client-side in a memoised helper
-   (`src/utils/profile-completion.ts`) that takes a `Profile` and returns
-   `{ percentage, missing: string[] }`.
-4. Wire the existing card to render:
-   - Nothing at 100% (just unmount)
-   - Progress bar + label "Profile {N}% complete — add {first 2 missing
-     items as readable copy}" at <100%
-5. Tap on the card → routes to Edit Profile (already exists), pre-scrolled
-   to the first missing field if feasible.
+1. Get the Figma frame URL for the Feed list (full screen — search bar,
+   Feed/Map/Mural toggle, category chips, event card list). User to provide.
+2. Pull design context via `get_design_context` MCP — Supabase-side
+   `tailwind.config.js` + `theme.ts` should be the React-side source of
+   truth.
+3. Per-element compare: spacing, font size, font weight, color, radius,
+   shadow. Note deltas.
+4. Fix trivial deltas inline (off-by-2 padding, hex → token swap). File
+   non-trivial ones to backlog.
+5. Lint pass on `app/(tabs)/feed/index.tsx`, `src/components/feed/FeedHeader.tsx`,
+   `src/components/feed/EventCard.tsx` for hex literals (`#[0-9A-Fa-f]{3,8}`)
+   and magic numbers.
 
 **Done when.**
-- [ ] `profile-completion.ts` helper exists with unit tests (or at least
-      hand-tested examples in a comment block)
-- [ ] Profile page card hides entirely at 100%
-- [ ] At <100%, the card shows percentage + readable list of missing items
-- [ ] Tap card → opens Edit Profile
-- [ ] Demo-account profile (filled in via `seed-demo-data.ts`) shows >70%
-      so the card doesn't dominate the demo profile
+- [ ] Feed list visually matches Figma at 375pt viewport (the demo width)
+- [ ] No inline hex on the touched files; all colors through `colors.*` tokens
+- [ ] Non-trivial deltas filed as separate backlog items
+- [ ] Shipped entry references the specific Figma node IDs audited
 
 **Files likely touched.**
-- `src/utils/profile-completion.ts` (new)
-- `src/components/profile/<CompletionCard or similar>` (rename + behaviour)
-- `app/(tabs)/profile/index.tsx` (gate the render)
-- `BACKLOG.md` (move to Shipped)
+- `app/(tabs)/feed/index.tsx`
+- `src/components/feed/FeedHeader.tsx`
+- `src/components/feed/EventCard.tsx`
+- `src/components/feed/SearchFilterBar.tsx`
+- `src/constants/theme.ts` (if new tokens needed)
+- `BACKLOG.md` (move to Shipped, promote next two)
 
-**Open questions to answer at start of build session.**
-- Which 7 fields exactly count toward completion? (Check Figma if it
-  specifies; otherwise the list above is the recommendation.)
-- Field weighting: equal (14% each) or weighted (avatar = 20%, bio = 15%,
-  etc.)? Recommendation: equal weights for v1, weighted in a v2 pass.
-- Does tapping the card route to Edit Profile or scroll within the profile
-  page to a specific section? Default to Edit Profile route.
+**Open questions.**
+- Which Figma frame is the canonical Feed list? User to provide URL.
+- Master flow page `2012:1670` covers many screens — we need a specific
+  child node, not the whole flow board.
 
-**Out of scope.** Edit Profile flow polish (separate P1 item below).
-Notifications / nudges when profile is incomplete (could be a P2 add).
+**Out of scope.** Map, Mural, Profile, etc. — those are separate sub-items.
 
 ---
 
@@ -147,64 +144,9 @@ Notifications / nudges when profile is incomplete (could be a P2 add).
 Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
 spec when scheduled.
 
-### Whole-app Figma styling audit
-Why: Investor demo will hit screens we never matched against Figma; visual drift makes the app feel half-finished.
-Done when:
-- [ ] Per-screen audit completed for: Feed list, Map, Mural, Event Detail, Profile, User Profile, Circle Detail, Inbox, Chat, Settings (each is a sub-session)
-- [ ] Each audit produces a list of deltas → its own backlog item if non-trivial
-- [ ] All `colors.*` and `spacing.*` references come from `theme.ts` (no hex inline)
-
-### Empty state on other users' profile gallery
-Why: Other-user profiles render nothing in the gallery tab if they have no images, which looks like a broken screen.
-Done when:
-- [ ] Empty gallery shows centered text "{display_name} hasn't uploaded any photos yet"
-- [ ] Same pattern audited and applied to other empty-list locations (testimonials, past events, etc.)
-
-### App-wide empty states audit
-Why: Empty Feed / no-match search / zero notifications / etc. probably look like bugs today. Each one needs a copy + visual that says "this is intentional."
-Done when:
-- [ ] Walk every screen with a fresh account (no follows, no events, no messages) and screenshot every empty state
-- [ ] Items emitted to backlog per missing empty state
-- [ ] One reusable `<EmptyState icon title body cta?>` component in `src/components/ui/`
-
-### Compress Figma-seed posters (perf follow-up to shipped item)
-Why: The 15 imported Figma posters total 32MB on Storage (median ~2MB, largest 8MB). On cold-cache Mural mount, dimension prefetch is slow because `Image.getSize` downloads the full image. WebP at quality 80 would shrink this ~10×.
-Done when:
-- [ ] `sharp` (or `jimp` if sharp's native build is messy) installed as dev dep
-- [ ] `scripts/import-figma-posters.ts` extended to convert each PNG to WebP before upload (output: `event-posters/figma-seed/<evt-id>.webp`)
-- [ ] `mockEvents.ts` URLs updated to `.webp`
-- [ ] Re-seed
-- [ ] Mural cold-mount feels snappy (subjective — measure first-paint timing if needed)
-
-### Add evt-startup poster (one missing seed)
-Why: `evt-startup` ("Founders Meetup: Build in Public") still uses a picsum.photos placeholder because the Figma file only had 15 distinct posters. The 16th Figma asset was a 256×256 low-res placeholder.
-Done when:
-- [ ] Designer adds a 16th poster to the Figma file (or picks an existing rectangle/frame node as a substitute)
-- [ ] Imported via `scripts/import-figma-posters.ts` (add to POSTER_MAPPINGS)
-- [ ] `evt-startup.poster_url` updated in mockEvents.ts
-- [ ] Re-seed
-
-### Loading skeletons audit
-Why: Several screens still show a raw `ActivityIndicator` mid-screen. The mural's shimmer skeleton looks better; spread the pattern.
-Done when:
-- [ ] Feed list cards have a skeleton
-- [ ] Profile loading shows a skeleton (avatar + name + grid placeholders)
-- [ ] Circles cards have a skeleton
-- [ ] Event detail page has a skeleton hero + body
-
 ---
 
 ## P0 — Real bugs
-
-(Login → location glitch is in `▶ UP NEXT`.)
-
-### Audit other auth edge cases after the glitch fix
-Why: Once the location-onboarding gate is rewritten we should sanity-check every related path.
-Done when:
-- [ ] Signup → email confirmation → first login (when email confirm is re-enabled)
-- [ ] Password reset (when shipped)
-- [ ] Session expiry → next app open → login
-- [ ] OAuth cancel mid-flow
 
 ### MOCK_EVENTS retired (already in existing Profile v2 #19 — keep there)
 
@@ -212,44 +154,10 @@ Done when:
 
 ## P1 — Core flows
 
-### Messaging v1 (Realtime + read receipts) — DETAILED SPEC PRESERVED BELOW
-
-The full Messaging v1 spec lives in the appendix at the bottom of this file
-(was originally the `▶ UP NEXT` before investor polish became priority).
-Decisions locked, ready to build when promoted back to UP NEXT.
-
-### Events Near Me (location-based filter)
-Why: User explicitly requested. A "Near me" pill on Feed/Map filters events within ~5km of current location.
+### Profile editing flow polish — Figma visual match (remaining slice)
+Why: Inline validation + dirty-state Save shipped today. The "match Figma exactly" piece still needs the MCP rate limit to lift.
 Done when:
-- [ ] `expo-location` permission flow on first tap of the pill
-- [ ] Filter chip added to Feed and Map (reuses `feedFilters` AppContext)
-- [ ] Service query: `events` within `ST_DWithin(lat,lng, user_lat, user_lng, 5000)` — or client-side haversine if PostGIS extension not enabled
-- [ ] Empty state if zero events nearby ("No events within 5km — try expanding")
-- [ ] Defaults to OFF (user has to tap to enable)
-
-### Search across events
-Why: Currently the Feed search bar filters client-side over the already-loaded set. Doesn't scale and misses events outside the loaded window.
-Done when:
-- [ ] Server-side `ilike` `.or()` query on title, description, location_name, categories
-- [ ] Debounced (~300ms) so typing doesn't hammer Supabase
-- [ ] Same client-side fallback when the search query is empty (lists newest events as today)
-- [ ] Promoted from existing Activities v2 #11 to active when shipped
-
-### Profile editing flow polish
-Why: Profile fields are editable but the flow is rough — modal feels half-designed, no inline validation, save button placement.
-Done when:
-- [ ] Edit Profile screen matches Figma exactly (compare in the styling audit)
-- [ ] Inline validation per field (display_name length, bio max chars, etc.)
-- [ ] "Save" is disabled when nothing's changed; enabled + primary when something is
-
-### Instagram-style unread message styling
-Why: User explicitly requested. Read messages look identical to unread ones. Instagram bolds the unread sender name + preview, makes them white; reads them in gray.
-Done when:
-- [ ] `ConversationRow` reads its `unread` count and applies bold/white when > 0
-- [ ] Same row reverts to medium weight + tertiary text color when unread = 0
-- [ ] Unread count pill on the right edge of the row (replaces or augments the timestamp)
-- [ ] Visual match against Instagram's exact look — reference an Instagram screenshot in the PR
-- [ ] Blocked-by: Messaging v1 ship — requires `read_at` to be wired
+- [ ] Edit Profile screen matches Figma exactly (paired with the Whole-app styling audit)
 
 ---
 
@@ -271,22 +179,6 @@ Done when:
 - [ ] Screen collects email, calls Supabase `resetPasswordForEmail()`
 - [ ] Email template in Supabase configured with a deep link back to the app
 - [ ] Deep link route `/(auth)/update-password?token=...` lets user set new password
-
-### Error boundaries on every screen
-Why: A single crashed screen currently shows a white screen of death — no recovery, no error report.
-Done when:
-- [ ] Generic `<ErrorBoundary>` component renders a "Something went wrong" view with a "Try again" button
-- [ ] Wrapped around every top-level screen in `app/`
-- [ ] Crash payload logged to console for now (Sentry is a separate P2)
-
-### Migrate from RN's `Image` to `expo-image`
-Why: We hit a real bug today where RN Web's Image hides cached images on remount (the placeholder z-index issue from the mural launch). expo-image's web fallback handles this correctly + has better caching on native.
-Done when:
-- [ ] `expo-image` installed
-- [ ] All `import { Image } from 'react-native'` replaced with `import { Image } from 'expo-image'`
-- [ ] All `resizeMode="cover"` replaced with `contentFit="cover"` (API differs)
-- [ ] Smoke test on iOS + web that posters still render correctly
-- [ ] Remove the now-unnecessary wrapper bg color workaround in `MuralPoster.tsx`
 
 ### Apple Sign In (if Google Sign In is shipped)
 Why: App Store rule — if you offer third-party sign-in (Google, Facebook), you must also offer Sign in with Apple. Otherwise reject.
@@ -363,6 +255,19 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-08 — P1 Core flows: 5 items shipped in one pass.** State discovery first — the BACKLOG significantly understated progress, so the actual remaining slice across the section was much smaller than 5 fresh items. **Messaging v1 closed out**: codebase already had migrations (`20260601*`), `messages.service`, `useMessages` with Realtime subscriptions, chat detail screen with `formatSeenTime`-driven read receipts, and the Instagram-style BottomNav unread badge — the only residual was the misleading "Coming soon — DMs are not wired up yet" Alert on the own-profile placeholder bar, which is actually a Profile v2 #2 "Available for work" toggle concern; updated the alert copy to point at that instead. The real DM entry on `/user/[id].tsx` (`onMessagePress` → `router.push('/messages/${id}')`) was already correctly wired. **Instagram unread row styling** (newly unblocked): `ConversationRow` now switches name to bold + ink and preview to semibold + ink when `unreadCount > 0`; reverts to medium + meta-grey when zero. The existing count pill stays put on the right. **Search expansion + debounce**: extended `events.service.ts`'s title-only `ilike` to a PostgREST `.or()` across `title` + `description` + `location_name` + `address`, plus a new `useDebounce` hook wired through the feed at 300ms so typing doesn't fire one Supabase round-trip per keystroke. Verified the `.or()` syntax against the live DB ("public" search returns Founders Meetup + Studio 8 Berlin). **Profile editing flow polish**: added per-field validation (bio ≤80, about ≤600, website regex), wired `error` props through to the Tagline / About / Website Inputs, added a JSON-stringify `isDirty` guard that disables Save until the form has actually changed, and clear-field-error-on-edit so sticky errors don't fight the user. **Events Near Me**: added `nearMe?: boolean` to EventFilters + `userCoords` to AppContext; new `src/utils/geo.ts` with haversine + `NEAR_ME_RADIUS_KM = 5`; chip on the feed between header and list with three visual states (off / on / busy); first tap requests `expo-location` permission, caches coords, sets filter; client-side haversine in `visibleEvents` filters events with valid lat/lng (no-lat events pass through silently rather than disappearing); empty-state copy switches to "Nothing within 5 km — try expanding" when the filter is on. Chip renders correctly in preview; runtime permission grant is OS-mediated. Visual Figma match on Edit Profile carved off as a separate item pending the Whole-app styling audit. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Feed list non-visual lint pass: 6 magic numbers → theme tokens.** Figma MCP still rate-limited (View seat on Professional plan), so I split the visual half of the Per-screen Feed sub-audit off as its own follow-up and shipped the structural half — the lint pass that doesn't strictly require Figma access. Audited the 4 Feed surface files (`app/(tabs)/feed/index.tsx`, `src/components/feed/FeedHeader.tsx`, `EventCard.tsx`, `SearchFilterBar.tsx`) for hex literals and magic font/radius numbers. `feed/index.tsx` and `FeedHeader.tsx` came back clean — all colour/spacing/font-size references already go through `colors.*` / `spacing.*` / `typography.*`. `EventCard.tsx`: `borderRadius: 8` → `radius.sm`, `fontSize: 20` → `typography.fontSize.lg`. `SearchFilterBar.tsx`: `fontSize: 17` ×2 → `typography.fontSize.md`, `fontSize: 15` → `typography.fontSize.base`, `fontWeight: '400'` → `typography.fontWeight.regular`. Each swap is byte-equivalent (the token literal values match the inline ones) so no visual change is possible. Remaining inline values are intentional Figma-specific gaps that don't map to existing tokens: `fontSize: 14` ×2 (between `sm: 13` and `base: 15`), `borderRadius: 18` and `borderRadius: 28` (no exact match in the radius scale), and the universal `shadowColor: '#000'` pattern (kept inline because the brand `colors.black` is `#0D0D0D`, not pure black). Visual comparison against Figma waits on the MCP rate limit reset — that piece stays in UP NEXT. Typecheck clean. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Error boundaries on every top-level route.** New `src/components/ui/ErrorBoundary.tsx` exposes two surfaces: an `ErrorBoundary` class component for explicit subtree wrapping, plus a `makeRouteErrorBoundary(name)` factory that plugs straight into expo-router's per-route `export const ErrorBoundary = ...` mechanism. The same `DefaultFallback` view backs both — centred alert icon, "Something went wrong" headline, body copy, dev-only error.message under the body, chocolate "Try again" button that resets the boundary state. A short Node script swept 21 routes (`(auth)` × 4, `(tabs)` × 11, plus event/user/profile-edit/ticket/location detail screens) and added `import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary'; export const ErrorBoundary = makeRouteErrorBoundary('<slug>');` to each. Slugs are short and grep-friendly (`feed-list`, `event-detail`, `messages-circle`, etc.) so a future Sentry/Bugsnag wiring can group by them. First-pass script bug: my insertion heuristic put the new import on a blank line in the middle of multi-line imports, breaking syntax — fixed by a second-pass script that strips every occurrence and re-inserts after the last completed `from '…'` line. Verified the fallback by injecting a temporary `if (window.location.search.includes('crash=1')) throw …` into the feed screen and loading `/feed?crash=1`: fallback rendered exactly as designed, error detail visible in __DEV__, the bottom nav stayed functional (the rest of the app keeps working when one screen crashes), and the console got the tagged `[ErrorBoundary:feed-list]` payload. Temporary throw reverted before commit. Sentry/Bugsnag wiring stays a P2 follow-up. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — RN `Image` → `expo-image` sweep across 21 files.** Installed `expo-image@~55.0.11` via `npx expo install`. A short Node script peeled `Image` out of every `import { ... } from 'react-native'` line and added `import { Image } from 'expo-image'` alongside it, then renamed every `resizeMode="cover"` (7 JSX sites) to `contentFit="cover"`. Files touched: feed map, all three message threads, both circle screens, both create screens, event detail, conversation row, both circle cards, bottom nav, mural poster, avatar, circle activity card, chat bubble, event card, profile activity card, entity list sheet, circle join sheet, profile form, profile view, circle preview modal. `MuralPoster` comments updated to reflect that expo-image renders a real `<img>` on web (no more RN-Web `background-image: z-index -1` trick), so the wrapper-bg-color workaround note is gone — wrapper stays transparent for visual continuity but the constraint is lifted. `useMuralDimensions.ts` keeps the `Image.getSize()` static call from `react-native` deliberately: it's a metadata API, not a render path, and migrating it would require switching to expo-image's `loadAsync` which adds API surface without the rendering benefit. Typecheck clean. Feed list verified visually in preview (Open Mic / Funkhaus Late / Berlin Zine Fair posters all render correctly via expo-image). Mural dev-mode appearance unchanged from before the migration (same canvas-pan/zoom that puts posters outside the dev-mode visible strip). Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Email signup → onboarding form no longer intercepted by the (auth) redirect.** Bug filed during this morning's auth-edge-case audit: `signup.tsx` does `router.replace('/(auth)/onboarding')` after a successful `signUp()`, but on the same render cycle `(auth)/_layout` saw the new session and bounced the user to `/location` — the onboarding stack unmounted before paint and every new email signup landed in the app with only `display_name` set. Fixed via Option B from the spec: `(auth)/_layout.tsx` now reads `useSegments()`, detects when the active child route is `onboarding`, and falls through to the Stack instead of redirecting. Returning-user behaviour preserved — `profile.onboarding_completed=true` still goes to `/(tabs)/feed`, anyone else not on `/onboarding` still goes to `/location`. Verified in preview: navigating to `/onboarding` with no session now mounts the route (onboarding.tsx returns `null` because `!user`, but the empty render confirms the layout no longer intercepts — previously the URL would have bounced to `/location` instead). Trace walked through all four entry paths (email signup, OAuth signup, email returning login, OAuth returning login) — all land correctly. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — evt-startup poster ships: BUILD IN PUBLIC, deep teal + terminal-green accent.** Last picsum.photos placeholder on the figma-seed pool is gone. Added a new `startup` design to `scripts/generate-svg-posters.ts` using the existing `bigType` generator — deep teal bg (`#0F2A2E`), warm cream fg (`#F3EFE5`), terminal-green accent stripe (`#7AE07A`). Headline "BUILD IN PUBLIC" splits across two lines (BUILD / IN PUBLIC), subtitle "Founders meetup — 5-min demos, honest questions", meta "SAT 30 MAY · 18:00 · FACTORY GÖRLI". Re-ran the generator (50 KB PNG, 16 KB WebP) and uploaded to `event-posters/figma-seed/evt-startup.webp`. Swapped `evt-startup.poster_url` in `mockEvents.ts` from `picsum.photos/seed/sphaer-startup/800/900` to the new Supabase URL, added matching `poster_width: 800` / `poster_height: 1133` for the Mural prefetch path. Re-seeded; DB row confirms the new URL. Standalone render verified (BUILD/IN PUBLIC headline, accent stripe, meta line all crisp at 800×1133). All 39 figma-seed events now ship authored or generated posters. Note: event detail hero crops the middle of portrait posters — this is shared with every other event and is its own backlog item if it ever becomes a problem. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Compress Figma-seed posters to WebP: 41.23 MB → 2.32 MB (94.4% saved).** Added `sharp@0.34.5` as devDep. Extended `scripts/import-figma-posters.ts` to pipe each downloaded PNG through `sharp(...).webp({ quality: 80 })` before upload — output path now `event-posters/figma-seed/<evt-id>.webp` with `Content-Type: image/webp`. Per-poster size log shows ratios between 24% and 79% of source; total drop is the headline number. Also extended `scripts/generate-svg-posters.ts` (the SVG-typography pipeline) to encode straight to WebP — was uploading PNG and would have been left out of the savings otherwise. Local `.png` cache + on-disk `.png` copy retained for debug visibility. Swapped all 38 figma-seed `.png` URLs in `mockEvents.ts` to `.webp` via a sed-style global replace. Re-seeded — DB now shows 38 events with `.webp` poster_url (the 39th is `evt-startup` still on a picsum placeholder, tracked as new UP NEXT #2). Verified on Feed list view: OPEN/Funkhaus Late/Berlin Zine Fair posters all render at full quality. One transient ORB-block on the first cold fetch of newly-uploaded SVG posters resolved on next reload (Cloudflare cache propagation). Old `.png` storage objects retained — cleanup is a future follow-up. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Loading skeletons audit: SkeletonBlock primitive + Feed/Profile/Circles/Event/User skeletons.** Replaced the raw centred `ActivityIndicator` on five mid-screen loading paths with shimmer-pulsing skeletons that mirror the populated layout, so the swap to real data lands without a visual jump. New `src/components/ui/SkeletonBlock.tsx` is the single shimmer primitive — width/height/radius/delay props, opacity-pulse from 0.55 → 1 over 900ms (same cadence as Mural's existing SkeletonWall, deliberately matched so the app's loading feel is consistent everywhere). Four screen-level skeletons under `src/components/ui/skeletons/`: `EventCardSkeleton` (358×231 card with text-block placeholders + 163-wide poster block), `CircleCardSkeleton` (176×313 vertical card with circular image + title + counts), `ProfileSkeleton` (avatar + name + stats row + action button + section block + 3-up image grid), `EventDetailSkeleton` (320-tall hero + title + meta + organiser row + body paragraph). Wired in at: `app/(tabs)/feed/index.tsx` (4 EventCardSkeletons), `app/(tabs)/circles/index.tsx` (2 sections × 3 CircleCardSkeletons inside a horizontal ScrollView matching the populated structure), `app/(tabs)/profile/index.tsx` (ProfileSkeleton replaces both authLoading and extrasLoading spinners), `app/event/[id].tsx` (EventDetailSkeleton), `app/user/[id].tsx` (ProfileSkeleton). Each call site staggers the pulse via the `index`/`delay` prop so a grid of skeletons feels alive rather than flashing in lockstep. Visually verified the EventCardSkeleton via a temporary forced-true injection in the feed — title rows, meta lines, and poster block all render with correct sizes and the pulse is visible. In-flight button spinners (Follow toggle, save button) are preserved per spec. Imports of `ActivityIndicator` cleaned up from four files. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — App-wide empty states audit: Feed, Messages inbox, Circles browse all use `<EmptyState>`.** Walked every tab via a code inventory (preview can't simulate a fresh account in dev mode), classified each list-rendering screen, and replaced three plain-text empty branches with the screen-level EmptyState variant. **Feed** (`app/(tabs)/feed/index.tsx`) — "No activities yet" string → calendar-outline icon + "Nothing on right now" title + a body line explaining when the feed will fill, and a separate search-aware variant ("No matches for \"X\"") when a search query is active. **Messages inbox** (`app/(tabs)/messages/index.tsx`) — single "No conversations to show" line → tab-aware copy via a new `emptyCopyForFilter()` helper: All / Unread / Favourites / Direct / Activities / Circles each get their own icon + headline + body (e.g. Unread: "You're all caught up — Nothing unread, new messages will show up here"). **Circles browse** (`app/(tabs)/circles/index.tsx`) — already had an icon + line, refactored to use EmptyState for visual consistency. Orphan `empty`/`emptyText` styles removed from all three. Inventory subagent classified the remaining sites: Map / Mural / chat threads / circles detail / EntityListSheet — each already adequately handled (map has natural empty render, mural is mock-data-backed, chat threads are placeholder screens, circle detail uses inline italic hints, EntityListSheet renders centered text via its `emptyMessage` prop). Verified the Messages "All" tab empty state visually in the preview (chat bubble icon in soft circle + bold headline + centered body). Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Empty state on other users' profile gallery + sections; reusable `<EmptyState>` lands.** New `src/components/ui/EmptyState.tsx` with two implicit variants — inline (italic body, no icon, optional onPress) for section-level empties, and screen (icon + title + body + CTA + spaced) for the upcoming app-wide audit. Wired into `ProfileView` at four sites: Images section now always renders with "{displayName} hasn't uploaded any photos yet." (centred) when an other-user profile has no gallery rows; Experience section now shows a placeholder for both own-profile ("Add roles, residencies, and projects from Edit Profile.") and other-profile ("{displayName} hasn't added any experience yet."); Testimonials migrated from inline italic to EmptyState with name-personalised copy for other-user profiles; Activity section's empty placeholder is gated on `activitiesCount === 0` so we don't lie ("Anke Peters hasn't shared any activities yet" while stats say Activities: 1 — we just don't fetch the timeline list on /user/[id]). Orphan `emptyHint` style removed from ProfileView. Verified on Anke Peters (`db34aadd-9c59-44cc-af50-693c81de8f69`) — has experience, no images, no testimonials — all three empties render correctly. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Auth edge-case audit: SIGNED_IN race fixed, /location belt-and-braces, email-signup-onboarding bug filed.** Audited the 4 entry paths plus session-expiry and OAuth-cancel after the `onboarding_completed` migration shipped. Found two issues. (1) `AuthContext.onAuthStateChange` re-fetched the profile on every event without flipping `isLoading` back to true — so after a fresh `SIGNED_IN`, the `(auth)` layout's gate ran for a frame against a stale `profile?.onboarding_completed=undefined` and routed returning users to `/location` before the new profile arrived. Fixed by discriminating on event type: `SIGNED_IN` flips loading; `TOKEN_REFRESHED` / `USER_UPDATED` / `INITIAL_SESSION` leave it alone (profile didn't change); `SIGNED_OUT` clears. (2) `app/location.tsx`'s early-bail only honoured the legacy AsyncStorage flag, so a reinstall user with `onboarding_completed=true` in the DB but no local flag would have been stuck on the prompt. Now bails if either signal is set, and migrates the legacy flag → DB column at the same time. Session expiry was already correct (supabase-js `autoRefreshToken: true` + the onAuthStateChange listener handles SIGNED_OUT cleanly). OAuth-cancel was already correct (`'cancelled'` substring check silences the alert; the browser modal makes multi-tap impossible). New backlog bug filed: email-signup-skips-onboarding-form (`(auth)/_layout`'s redirect overrides `router.replace('/onboarding')` before the form ever mounts). Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Profile completion % card replaces persistent "Finish setting up your profile" banner.** New `src/utils/profile-completion.ts` helper scores six fields (avatar_url, bio, about, location, disciplines, experiences) at equal weight and returns `{ percentage, missing }`. `cover_url` was dropped from the list because ProfileForm has no editor for it (counting it would cap real users below 100% with no fix path). New `src/components/profile/ProfileCompletionCard.tsx` renders the sparkles icon + "Profile N% complete" title + readable missing-fields subtitle ("Add a profile photo and a tagline") + a thin progress bar; returns `null` at 100% so the card unmounts entirely once the user is done. Replaced `ProfileIncompleteBanner` in `app/(tabs)/profile/index.tsx` and deleted the old file. Demo ghost profiles (`scripts/seed-demo-data.ts`) hit 100% (all six fields filled) so the demo profile shows no card. Visually verified at 33% completion via a temporary dev-fallback injection — title, subtitle, progress bar, and chevron all render as designed. Branch: `funny-kare-983d2c`.
+- **2026-06-08 — Login → location-onboarding glitch fixed: server-side `onboarding_completed` flag.** Returning users were sometimes re-routed through `/location` after login because the old gate relied on an AsyncStorage flag that's local to a single install — reinstall, second device, or web-after-native silently wiped it. New migration `20260608000000_onboarding_completed.sql` adds `profiles.onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE` and backfills `TRUE` for any profile that already has a `neighborhood` or non-empty `location` (18 of 21 live rows). `app/(auth)/_layout.tsx` now gates on the new column — onboarded users go straight to `/(tabs)/feed`, first-timers still get `/location`. `app/location.tsx`'s `finishAndGoToFeed` writes the flag (and neighborhood) to the DB profile via `updateProfile()` and pushes the updated profile into AuthContext, so the next login skips the screen without ever mounting it. The legacy AsyncStorage flag is still read on mount as a fast-path migration: if it's set but the DB column isn't, the screen quietly upgrades the DB and bails. Types regenerated in `src/types/supabase.ts`; `mockEvents.ts` host-profile factory updated to include the required field. Branch: `funny-kare-983d2c`.
 - **2026-06-08 — Mural polish pass: 1.3× initial zoom + minimap + smooth filter relayout + 10 SVG-generated posters.** Initial mount now opens at scale 1.3× so the canvas clearly overflows in every direction — reads as "more wall to explore" instead of the previous "you can see everything." New `MuralMinimap` component at bottom-right shows the wall's outline with poster cells and a viewport rectangle that tracks pan/zoom; opacity fades 0.7→1.0 on active gesture (mirrors iOS scrollbar); tap anywhere on it to teleport viewport. Filter changes that resize the canvas now fade-dip opacity 1→0.25→1 over ~360ms so the snap reads as a transition. New `scripts/generate-svg-posters.ts` produces typography-driven posters (bigType / gradient / geometric / twoColor styles) via sharp; 10 new posters this batch — Rough Trade Night, Floh Kreuzberg, Who Owns the City, Void & Volume, Tresor 4-Floor, Riso Workshop, Das Programm, Berlin Zine Fair, Funkhaus Late, Cafe Lichtblick Open Mic. **39 events total** in the DB now.
 - **2026-06-08 — Mural densification: +13 posters from Figma secondary pool, ~28 events total.** Pulled `imgRectangle4..14` + `imgFrame4`/`imgFrame7` from the original Figma export — these were a secondary pool of 13 high-res posters the first import pass skipped (it only looked at the `imgPoster*` slot). Visual confirmation: all 5 of the user's reference posters (Pictoplasma, Blues & Rhythm Festival, Type Craft Workshop, Berlin Collection Launch / Studio 8, Das Plakat MK&G) were *already in the Figma file* — no AI gen needed. Added new MOCK_EVENT entries for each (Toundra @ Bi Nuu, SXTN tour, Foreign Diplomats @ Badehaus, DSO Berlin / Santtu-Matias Rouvali, Margiana exhibition, The Bitter End, "thought about leaving" reading night, modular synth open lab, etc), each with embedded poster dimensions. Re-seed pushed 29 events to Supabase. Mural canvas grew from 585×789 to 740×840 — visible benefit: more posters per row, wall now feels meaningfully bigger to pan around. Branch: `funny-kare-983d2c`. AI gen item retired since the Figma pool covered it.
 - **2026-06-08 — Mural sizing pass: Figma-correct dense layout + instant cold mount.** Band height dropped from `screenHeight/2` (~400px) to a fixed 140px (matches the Figma comp showing ~5 bands of ~93px-wide posters per iPhone viewport). `MIN_BAND_COUNT=3` keeps the wall from collapsing on small data sets. Cold mount now skips `Image.getSize()` entirely for figma-seed posters thanks to embedded `poster_width`/`poster_height` on each MockEvent — first paint is instant instead of waiting 10–15s for 32MB to download. Two CSS-stacking-context bugs fixed along the way: removed `backgroundColor` from both the canvas and each poster wrapper because RN Web's `<Image>` renders its picture at `z-index: -1`, which any parent `backgroundColor` painted over. Branch: `funny-kare-983d2c`. Follow-up: more posters via AI gen (now UP NEXT #1) — wall feels right but still small.

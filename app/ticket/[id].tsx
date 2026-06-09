@@ -19,6 +19,7 @@ import { useAuthContext } from '@/context/AuthContext';
 import { getRegistration } from '@/services/registrations.service';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { EventRegistration } from '@/services/registrations.service';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma 4025:5364 — ticket detail. Dark backdrop, white ticket card with
 // side notches (classic ticket silhouette), QR centered, event title +
@@ -362,3 +363,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('ticket-detail');

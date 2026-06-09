@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import type { PosterRect } from '@/hooks/useMuralLayout';
 
 interface MuralPosterProps {
@@ -14,11 +15,10 @@ interface MuralPosterProps {
  * sequence. Positioning is `absolute` driven by the rect from
  * useMuralLayout; the parent canvas applies the global pan/zoom transform.
  *
- * Uses RN's <Image> with resizeMode="cover". The wrapper carries the
- * fallback background colour (NOT the Image itself) — RN Web renders the
- * actual picture as a backgroundImage on a child div at z-index -1, and
- * putting a backgroundColor on the Image style would paint the placeholder
- * div opaque and hide the picture on cached / remounted images.
+ * Uses `expo-image` with `contentFit="cover"`. On web, expo-image renders
+ * a real <img> rather than the `background-image: z-index -1` trick that
+ * tripped us up on RN Web, so the canvas no longer has to fight a stacking
+ * context to keep cached / remounted images visible.
  *
  * Memoised on rect identity since the canvas re-renders rarely (layout
  * inputs change less often than the pan/zoom shared values, which never
@@ -44,7 +44,7 @@ function MuralPosterBase({ rect }: MuralPosterProps) {
         <Image
           source={{ uri: event.poster_url ?? undefined }}
           style={styles.image}
-          resizeMode="cover"
+          contentFit="cover"
         />
       ) : (
         <View style={[styles.image, styles.placeholder]} />
@@ -69,13 +69,11 @@ const styles = StyleSheet.create({
   poster: {
     position: 'absolute',
     overflow: 'hidden',
-    // NO backgroundColor on the wrapper. RN Web's <Image> renders the
-    // picture as a `background-image` on an inner div at z-index: -1.
-    // Inside an `position: absolute` parent (which creates a stacking
-    // context), that z-index:-1 child renders BEHIND the wrapper's
-    // background-color paint — meaning any colour we set here hides the
-    // picture on cached / remounted images. The canvas's own black
-    // background shows through during the brief load window instead.
+    // expo-image renders a real <img> on web, so unlike the RN Web era
+    // we could now safely set a backgroundColor here as a placeholder
+    // tint. Left transparent so the canvas's own black background shows
+    // through during the brief load window — the wall reads as one
+    // continuous surface rather than a grid of placeholder tiles.
   },
   image: {
     width: '100%',

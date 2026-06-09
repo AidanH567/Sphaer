@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SphaerIcon } from '@/components/SphaerLogo';
 import { Button } from '@/components/ui/Button';
 import { colors, typography, spacing } from '@/constants/theme';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const { height } = Dimensions.get('window');
 
@@ -92,3 +93,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('auth-landing');

@@ -1,18 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  Animated,
-  StyleSheet,
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  Dimensions,
-} from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, Animated, StyleSheet, ActivityIndicator, ScrollView, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

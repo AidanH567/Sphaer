@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Text, Image, Platform } from 'react-native';
+import { View, StyleSheet, Text, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAppContext } from '@/context/AppContext';
 import { useEvents } from '@/hooks/useEvents';
@@ -10,6 +11,7 @@ import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import type { EventWithRelations } from '@/types/event.types';
 import { formatEventDateShort } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // react-native-maps is iOS/Android only — lazy-require so the web bundle
 // doesn't choke. (The web build is provided by map.web.tsx alongside this.)
@@ -216,3 +218,5 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('feed-map');

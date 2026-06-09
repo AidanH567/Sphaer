@@ -4,13 +4,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
+import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
 import { useAuthContext } from '@/context/AuthContext';
 import {
   getProfile,
@@ -29,6 +29,7 @@ import { colors, typography, spacing } from '@/constants/theme';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
  * Public profile screen reached via /user/[id]. Reads the id from the route,
@@ -187,11 +188,7 @@ export default function UserProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {status === 'loading' && (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.black} />
-        </View>
-      )}
+      {status === 'loading' && <ProfileSkeleton />}
 
       {status === 'not_found' && (
         <View style={styles.center}>
@@ -327,3 +324,5 @@ const styles = StyleSheet.create({
     marginTop: -spacing.sm,
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('user-profile');

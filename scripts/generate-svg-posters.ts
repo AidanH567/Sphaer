@@ -296,6 +296,25 @@ const DESIGNS: PosterDesign[] = [
         meta: 'Wed 07.10 · 19:30',
       }),
   },
+  {
+    // Replaces the last picsum.photos placeholder for evt-startup.
+    // Deep teal + warm cream + a terminal-green accent — reads as "tech
+    // but Berlin," matches Factory Görli's softer indie aesthetic without
+    // tipping into Silicon Valley pitch-deck territory.
+    slug: 'startup',
+    title: 'Founders Meetup: Build in Public',
+    subtitle: 'Show-and-tell · 5-minute demos · no pitch decks',
+    meta: 'Sat 30 May 2026 · 18:00 · Factory Berlin Görli',
+    svg: () =>
+      bigType({
+        bg: '#0F2A2E',
+        fg: '#F3EFE5',
+        accent: '#7AE07A',
+        title: 'BUILD IN PUBLIC',
+        subtitle: 'Founders meetup — 5-min demos, honest questions',
+        meta: 'SAT 30 MAY · 18:00 · FACTORY GÖRLI',
+      }),
+  },
 ];
 
 // ─── Pipeline ───────────────────────────────────────────────────────────────
@@ -314,12 +333,16 @@ async function main() {
 
     fs.writeFileSync(svgPath, svgString);
 
-    const buf = await sharp(Buffer.from(svgString)).png().toBuffer();
-    fs.writeFileSync(pngPath, buf);
+    // Encode straight to WebP so figma-seed/ stays uniformly compressed —
+    // SVG → PNG → WebP is wasteful when we never need the PNG. We still
+    // keep a local .png copy on disk for quick visual debugging.
+    const png = await sharp(Buffer.from(svgString)).png().toBuffer();
+    fs.writeFileSync(pngPath, png);
+    const webp = await sharp(Buffer.from(svgString)).webp({ quality: 80 }).toBuffer();
 
-    const objectPath = `${PREFIX}/${eventId}.png`;
-    const { error } = await supabase.storage.from(BUCKET).upload(objectPath, buf, {
-      contentType: 'image/png',
+    const objectPath = `${PREFIX}/${eventId}.webp`;
+    const { error } = await supabase.storage.from(BUCKET).upload(objectPath, webp, {
+      contentType: 'image/webp',
       upsert: true,
       cacheControl: '31536000',
     });
@@ -327,7 +350,9 @@ async function main() {
 
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(objectPath);
     results[eventId] = { url: data.publicUrl, width: W, height: H };
-    console.log(`  ${eventId} → ${data.publicUrl}`);
+    console.log(
+      `  ${eventId} → ${data.publicUrl} (png ${png.length}B, webp ${webp.length}B)`
+    );
   }
 
   const outJson = path.join(projectRoot, '.tmp', 'svg-poster-urls.json');

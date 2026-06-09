@@ -24,6 +24,7 @@ import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { signInWithGoogle } from '@/services/auth.service';
 import { isValidEmail, isValidPassword } from '@/utils/validators';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma tokens — Sign Up Flow Screen 1.1 (node 5013:10790)
 const CHOCOLATE = '#2B2A27';
@@ -272,3 +273,5 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('auth-signup');

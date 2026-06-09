@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Alert,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +12,7 @@ import { colors, typography, spacing } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { createCircle, updateCircle, uploadCircleImage } from '@/services/circles.service';
 import { EVENT_CATEGORIES } from '@/constants/categories';
+import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function CreateCircleScreen() {
   const router = useRouter();
@@ -215,3 +209,5 @@ const styles = StyleSheet.create({
   },
   cta: {},
 });
+
+export const ErrorBoundary = makeRouteErrorBoundary('create-circle');
