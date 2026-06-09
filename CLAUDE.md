@@ -71,7 +71,15 @@ NativeWind (Tailwind for React Native). All token values live in `src/constants/
 
 ## Git Workflow
 
-Feature branch workflow — never commit to `main`. Branch naming: `feature/`, `fix/`, `chore/`, `refactor/`. Conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`).
+Solo-dev workflow as of 2026-06-08:
+
+- **One commit per shipped BACKLOG item.** As soon as a `▶ UP NEXT` (or other) item moves to `✓ Shipped`, commit the working tree on the active branch with a `feat(scope):` / `fix(scope):` / `chore(scope):` / `perf(scope):` / `docs(scope):` subject and the shipped-entry summary as the body. This keeps history 1:1 with the BACKLOG and means GitHub's contribution graph fires on every working day.
+- **DB migrations get their own commit, landing first.** Any schema change is its own commit (`feat(db): ...`) before the code that consumes the new column / table — lets you cherry-pick the migration alone if needed.
+- **Direct merge to `main`** at the end of a session (or sooner when the user asks). PR-based review is overkill for solo dev. Exception: if a change is genuinely risky (schema break, auth refactor), open a PR for the paper trail.
+- **Push timing:** after committing on the branch and merging to main, push both. Don't leave commits sitting unpushed past the end of a session.
+- **No `Co-Authored-By: Claude` tag.** The work is the user's; commits should attribute to them only so the contribution graph reads cleanly.
+- **Branch naming for ad-hoc work:** `feature/`, `fix/`, `chore/`, `refactor/`. Claude worktree branches under `claude/` are also fine and merge to main the same way.
+- **Conventional Commits subjects** (`feat:`, `fix:`, `chore:`, `refactor:`, `perf:`, `docs:`).
 # Sphaer
 
 > The digital cultural layer of Berlin's underground creative scene.
