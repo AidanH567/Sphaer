@@ -540,6 +540,7 @@ export type Database = {
           id: string
           location: string | null
           neighborhood: string | null
+          onboarding_completed: boolean
           username: string | null
           website: string | null
         }
@@ -555,6 +556,7 @@ export type Database = {
           id: string
           location?: string | null
           neighborhood?: string | null
+          onboarding_completed?: boolean
           username?: string | null
           website?: string | null
         }
@@ -570,6 +572,7 @@ export type Database = {
           id?: string
           location?: string | null
           neighborhood?: string | null
+          onboarding_completed?: boolean
           username?: string | null
           website?: string | null
         }
