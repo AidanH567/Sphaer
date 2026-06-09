@@ -41,6 +41,60 @@ export async function getCurrentUser() {
   return data.user;
 }
 
+/* ── Password reset ─────────────────────────────────────── */
+
+/**
+ * Resolves the URL Supabase should redirect to when the user clicks the
+ * password-reset link in their email. The link carries the recovery token in
+ * the URL fragment; once the SDK lands here, `detectSessionInUrl: true`
+ * (configured in src/lib/supabase.ts) parses the hash, creates a temporary
+ * `recovery` session, and fires SIGNED_IN. The update-password screen then
+ * calls `updateUser({ password })` against that session.
+ *
+ * Platform-conditional, mirroring the Google OAuth redirect pattern:
+ *   - Web: `<origin>/update-password` (Expo Router strips the (auth) parens
+ *     from URLs, so the route group is invisible in the path).
+ *   - Native: `sphaer://auth/update-password` deep link.
+ *
+ * NOTE: the redirect URLs above must be added to the Supabase Auth
+ * dashboard's "Redirect URLs" allowlist for both web preview and the
+ * production domain, otherwise Supabase will refuse to redirect.
+ */
+function getPasswordResetRedirectUrl(): string {
+  if (Platform.OS === 'web') {
+    return typeof window !== 'undefined'
+      ? `${window.location.origin}/update-password`
+      : '';
+  }
+  return AuthSession.makeRedirectUri({
+    scheme: 'sphaer',
+    path: 'auth/update-password',
+  });
+}
+
+/**
+ * Send a password-reset email to `email`. Supabase returns success even if
+ * the email doesn't match an account (a privacy-preserving default) — the
+ * UI should always show the same "check your inbox" state regardless of
+ * whether an account exists, to avoid leaking which emails are registered.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: getPasswordResetRedirectUrl(),
+  });
+  if (error) throw error;
+}
+
+/**
+ * Set a new password on the currently-recovery-authenticated user.
+ * Must be called from the update-password screen, after Supabase has
+ * detected the recovery token in the URL and created a session.
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 /* ── Google OAuth ───────────────────────────────────────── */
 
 // Required for the OAuth browser redirect to close cleanly on iOS.

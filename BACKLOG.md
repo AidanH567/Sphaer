@@ -112,54 +112,46 @@ serif until the .otf files land).
 
 ---
 
-### 2. Password reset / forgot password (P1 launch blocker)
+### 2. Apple Sign In (P1 launch blocker, conditional on Apple dev account)
 
-**Why.** Login screen already says "forgot password?" but the link routes
-nowhere. App Store reviewers will hit this on day-one of their submission
-walk-through and reject the build. Concrete, well-defined, no Figma
-dependency — promote into active work as soon as the Figma audit blocks.
+**Why.** App Store policy: any app offering third-party sign-in (Google,
+Facebook, etc.) MUST also offer Sign in with Apple — failing this is a
+near-guaranteed reject at review. We already ship Google.
 
 **Approach.**
-1. Wire the existing "Forgot password?" copy on the login screen to
-   navigate to a new `app/(auth)/reset-password.tsx` screen.
-2. The reset-password screen collects an email + calls
-   `supabase.auth.resetPasswordForEmail(email, { redirectTo })` where
-   `redirectTo` is the deep link back into the app
-   (`sphaer://auth/update-password` on native, the deployed web origin on
-   web — mirror the OAuth redirect pattern in `auth.service.ts`).
-3. Configure the Supabase dashboard's "Reset Password" email template
-   to use that redirectTo URL.
-4. Add `app/(auth)/update-password.tsx` that:
-   - Reads the recovery token out of the URL hash on web (or via deep
-     link params on native) and calls `supabase.auth.setSession()` or
-     relies on `detectSessionInUrl: true` to populate the session.
-   - Renders a "set a new password" form that calls
-     `supabase.auth.updateUser({ password })`.
-   - On success, signs the user in (their session is already set) and
-     routes to `/(tabs)/feed`.
-5. Cover both the happy path and the "token expired / invalid" error
-   path with copy that points back to the reset flow.
+1. Add `expo-apple-authentication` to the project (`npx expo install
+   expo-apple-authentication`). Drop the Apple button onto the landing
+   screen + login screen + signup screen, mirroring the existing
+   `GoogleButton` in `src/components/auth/AuthControls.tsx`.
+2. Add `signInWithApple()` to `src/services/auth.service.ts` — mirrors
+   `signInWithGoogle()` but goes through Apple's native sheet, exchanges
+   the identity token for a Supabase session via
+   `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
+3. Configure Supabase Auth's Apple provider (one-time dashboard work):
+   add the Apple Service ID, Team ID, Key ID, and signing key.
+4. Same skip-onboarding flow as Google — Apple users land straight on
+   `/(tabs)/feed`.
 
 **Done when.**
-- [ ] `/login` "Forgot password" link routes to `/(auth)/reset-password`.
-- [ ] Reset screen sends the email; success copy + back-to-login.
-- [ ] Deep link route `/(auth)/update-password` accepts the token,
-      lets the user set a new password, and routes back into the app.
-- [ ] Email template configured in Supabase dashboard (operations note;
-      not commitable — flag it in the ship summary).
-- [ ] Manual test on a throwaway account before merging.
+- [ ] Apple button on landing, login, signup.
+- [ ] Sign-in flow returns a session and routes the user past onboarding.
+- [ ] Manually verified on an iOS simulator/device (Apple sign-in is iOS-
+      only at the OS level, but the button can render on Android/web for
+      consistency — pressing it just no-ops with an "Apple sign-in is only
+      available on iOS" alert).
+
+**STOP CONDITION.** Apple Sign In requires an Apple Developer account
+($99/year) + a Service ID configured in App Store Connect + a signing key
+generated and downloaded from there. If the Apple dev account isn't set
+up yet, file this as a blocked-on-credentials item and skip — the user
+must register / configure those before any of this can be tested.
 
 **Files likely touched.**
-- `app/(auth)/login.tsx` — wire the existing link.
-- `app/(auth)/reset-password.tsx` — new screen.
-- `app/(auth)/update-password.tsx` — new screen, deep link target.
-- `src/services/auth.service.ts` — add `requestPasswordReset(email)` +
-  `updatePassword(newPassword)` helpers.
-- `BACKLOG.md` (move to Shipped, promote next).
-
-**Out of scope.** Magic-link-only auth (would replace passwords entirely
-— bigger product call). SMS-based reset (no Twilio / Supabase phone
-auth configured yet).
+- `src/services/auth.service.ts` — add `signInWithApple()`.
+- `src/components/auth/AuthControls.tsx` — new `AppleButton`.
+- `app/(auth)/index.tsx`, `login.tsx`, `signup.tsx` — render the button.
+- `package.json` — `expo-apple-authentication`.
+- `app.json` — `expo-apple-authentication` config plugin entry.
 
 ---
 
@@ -188,14 +180,6 @@ Done when:
 ## P1 — Launch blockers (App Store requirements)
 
 (Account deletion is in `▶ UP NEXT` #2 as the Figma-blocked fallback work.)
-
-### Password reset / forgot password
-Why: Login screen says "forgot password?" linking nowhere. App Store reviewers will hit this.
-Done when:
-- [ ] "Forgot password" link on login screen routes to `/(auth)/reset-password`
-- [ ] Screen collects email, calls Supabase `resetPasswordForEmail()`
-- [ ] Email template in Supabase configured with a deep link back to the app
-- [ ] Deep link route `/(auth)/update-password?token=...` lets user set new password
 
 ### Apple Sign In (if Google Sign In is shipped)
 Why: App Store rule — if you offer third-party sign-in (Google, Facebook), you must also offer Sign in with Apple. Otherwise reject.
@@ -272,6 +256,7 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — Password reset / forgot password (P1 App Store launch blocker).** `src/services/auth.service.ts` gains two new helpers: `requestPasswordReset(email)` (wraps `supabase.auth.resetPasswordForEmail` with a platform-conditional redirect URL — `<origin>/update-password` on web, `sphaer://auth/update-password` on native, mirroring the Google OAuth pattern) and `updatePassword(newPassword)` (wraps `supabase.auth.updateUser({ password })`). Two new screens: `app/(auth)/reset-password.tsx` (email field + "Send reset link" CTA → on submit calls the service and flips to a "Check your inbox" success state with the email echoed back; surfaces inline validation for malformed addresses; always shows the same success state regardless of whether the email matched an account, to avoid leaking which addresses are registered) and `app/(auth)/update-password.tsx` (deep-link landing — polls `getSession()` then subscribes to `onAuthStateChange` with a 1.5s fallback to detect whether the recovery token populated a session; renders three states: "Set a new password" with new + confirm fields when a recovery session is present, "Password updated" success after successful `updateUser`, "Link expired" when no recovery session shows up after the polling window; on success signs out the recovery session before bouncing to login because silently signing the user in via a recovery flow is surprising and means a stolen email link grants persistent access). The login screen's existing "Forgot password?" link now `router.push('/(auth)/reset-password')` instead of the placeholder Alert. `app/(auth)/_layout.tsx` gets a second mid-flow fall-through: previously only `onboarding` was allowed to mount while a session was present (post-signup form), now `update-password` is also allowed because Supabase populates a temporary recovery session before the screen mounts — without the fall-through the layout would bounce the user to `/location` or `/feed` before they could set a new password. The `lastSeg` is cast to `String()` because expo-router's generated route literal type hasn't picked up the new files yet. Visually verified in preview: clicking "Forgot password?" on /login navigates to /reset-password with correct chrome (logo, serif title, dark CTA, back-to-login link), inline email validation shows "Enter a valid email address" for malformed inputs, /update-password loads the "Link expired" state after the 1.5s polling window when accessed directly without a token. **DEPLOYMENT NOTE for the human:** the Supabase Auth dashboard's "Reset Password" email template needs the `redirectTo` URLs added to its allowlist (Authentication → URL Configuration → Redirect URLs) — add `<production-web-origin>/update-password` and `sphaer://auth/update-password`. Until those are allowlisted, Supabase will refuse to redirect and the reset email's link will dead-end on the Supabase error page. Email template body can stay default. **Test plan (not yet executed end-to-end — needs the dashboard config + a throwaway account):** sign up a throwaway, log out, log in screen → Forgot password → enter the throwaway email → check inbox → click link → land on /update-password → set new password → log in with the new password. Commit `__HASH__`.
 - **2026-06-09 — Account deletion (P1 App Store launch blocker).** New `supabase/functions/delete-account/index.ts` edge function: verifies the caller's JWT via a user-scoped client, best-effort cleans up storage (avatars under `<userId>/`, gallery objects under `<userId>/`, plus posters on events they created and images on circles they created — fetched via a creator_id query BEFORE the cascade fires so paths are still resolvable), then calls `admin.auth.admin.deleteUser(userId)`. The schema already has `profiles.id REFERENCES auth.users(id) ON DELETE CASCADE` and every downstream FK is `ON DELETE CASCADE` (events, event_registrations, event_message_reads, saved_events, follows, circles, circle_members, circle_follows, circle_message_reads, messages, direct_message_reads, notifications, profile_images) — so a single auth-row delete cascades the entire user graph. No new migration needed. Client: new `src/services/account.service.ts#deleteAccount()` invokes the function via `supabase.functions.invoke('delete-account')` with the caller's JWT auto-attached. UI: new `SettingsSection` at the bottom of `app/(tabs)/profile/index.tsx` (below the Available-for-work bar, separated by a hairline) with a red trash icon + "Delete account" row; tapping opens a two-step ConfirmSheet flow — first sheet "Delete your Sphaer account?" with red "Continue" button; on Continue advances (with a 240ms gap so the close animation finishes cleanly) to second sheet "Permanently delete account · Last chance" with red "Delete account" button. On success the local session is killed via signOut() (errors swallowed because the JWT now references a non-existent user) and the user is bounced to `/`. Visually verified in preview by clicking through both sheets. `tsconfig.json` now excludes `supabase/functions/**` from the project's tsc check since the edge function runs under Deno's own type system. **Deployment note:** the function file is committed but NOT yet deployed — Supabase MCP returned net::ERR_FAILED for the entire session. Run `supabase functions deploy delete-account` once the MCP is back up or via the CLI to make the client call resolve; until deployed the UI surfaces "Function not found" via the ConfirmSheet's error alert. **Test plan (not yet executed — no throwaway account at hand):** sign up a throwaway account, post an event, save another event, follow someone, join a circle, send a DM; tap Delete account → Continue → Delete account; verify (a) you're bounced to `/`, (b) the auth row is gone (Supabase dashboard → Auth → Users), (c) the profile row is gone (`select * from profiles where id = '<uuid>'`), (d) the event is gone, (e) the save is gone, (f) the follow is gone, (g) the circle membership is gone, (h) the message is gone, (i) the avatar object is gone from the avatars bucket. Commit `629b901`.
 - **2026-06-09 — Figma audit: Tagline screen (2012:1683).** "Your City. Your Sphaer." on the landing screen was at fontSize 24 / weight bold for "Your Sphaer." — Figma spec is 26 / Medium. Updated styles.tagline / styles.taglineBold on `app/(auth)/index.tsx`. Color, layout, animation, and hero structure already matched. Font file Test Martina Plantijn is referenced via `typography.fontFamily.display` but not loaded at runtime — falls back to system serif until the .otf files land (separate item). Commit `bc36700`.
 - **2026-06-09 — Figma audit: Splash Screen (2012:1757).** Replaced the 1×1 placeholder `assets/images/splash.png` with a Figma-matched 1024×1024 splash. New `scripts/generate-splash.ts` emits the splash via sharp: white Master Cream bg (`#FFFFFF`), two-hoop logo from the existing `SphaerIcon` SVG paths scaled 3× and centred, "Sphaer" wordmark below in system sans-serif Semibold, all in Neutral/chocolate (`#2B2A27`). Cluster centred vertically with the Figma's ~7.5px optical lift. Closes the "Splash screen polish" Backlog (later) item early. Commit `bf3cd71`. **Note for future sessions:** the Figma audit is now the active UP NEXT — 12 screens remaining, user pending a Figma subscription upgrade for full audit bandwidth.

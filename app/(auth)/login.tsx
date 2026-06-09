@@ -114,7 +114,7 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={styles.forgotWrap}
-                onPress={() => Alert.alert('Coming soon', 'Password reset is not wired up yet.')}
+                onPress={() => router.push('/(auth)/reset-password' as never)}
               >
                 <Text style={styles.forgotText}>Forgot password?</Text>
               </TouchableOpacity>
