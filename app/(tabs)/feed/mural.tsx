@@ -4,9 +4,11 @@ import {
   LayoutChangeEvent,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { MotiView } from 'moti';
 import { useAppContext } from '@/context/AppContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
@@ -187,6 +189,24 @@ export default function MuralScreen() {
     [router]
   );
 
+  // Refresh affordance. Feed list has FlatList's RefreshControl on overscroll;
+  // the Mural canvas already owns vertical drag (pan-and-pinch), so a true
+  // overscroll-to-refresh would fight the pan gesture's rubber-band. A small
+  // floating refresh button is a more reliable affordance — accessible (single
+  // tap), visible (top-right corner), and doesn't risk regressing the pan/zoom.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Mural] refresh failed:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch, isRefreshing]);
+
   const viewportReady = viewport.width > 0 && viewport.height > 0;
   const showSkeleton = !viewportReady || !dimensionsReady || isLoading;
   const showEmpty =
@@ -242,6 +262,23 @@ export default function MuralScreen() {
             <ActivityIndicator color={colors.white} />
           </View>
         )}
+
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={handleRefresh}
+          activeOpacity={0.7}
+          disabled={isRefreshing}
+          accessibilityLabel="Refresh mural"
+          accessibilityRole="button"
+          accessibilityState={{ busy: isRefreshing }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="refresh" size={18} color={colors.white} />
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -327,6 +364,21 @@ const styles = StyleSheet.create({
   skeletonPoster: {
     position: 'absolute',
     backgroundColor: '#2A2A2A',
+  },
+  refreshButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Sits above the canvas so the gesture detector doesn't swallow taps.
+    zIndex: 10,
   },
 });
 
