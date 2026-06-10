@@ -40,6 +40,13 @@ export default function CreateScreen() {
   // Confirm sheet asking the user if they want to publish without an address.
   // If yes, we call doPublish() — which is the real publish path.
   const [noAddressWarningVisible, setNoAddressWarningVisible] = useState(false);
+  // Per-field validation errors. Cleared on edit; populated by handleCreate.
+  // Matches the pattern from signup.tsx + ProfileForm.tsx.
+  const [errors, setErrors] = useState<{
+    title?: string;
+    startsAt?: string;
+    endsAt?: string;
+  }>({});
   // Structured place data captured when the user picks an autocomplete
   // suggestion. Cleared when they keep typing afterward — then we fall
   // back to live geocoding on submit.
@@ -79,18 +86,16 @@ export default function CreateScreen() {
 
   async function handleCreate() {
     if (!user) return;
-    if (!title.trim()) {
-      Alert.alert('Title required', 'Please add a title for your activity.');
-      return;
+    // Collect all per-field errors so the user sees every issue at once,
+    // not one-at-a-time via sequential Alert popups.
+    const next: typeof errors = {};
+    if (!title.trim()) next.title = 'Please add a title for your activity.';
+    if (!startsAt) next.startsAt = 'Please pick a start date and time.';
+    if (startsAt && endsAt && endsAt <= startsAt) {
+      next.endsAt = 'End time must be after the start.';
     }
-    if (!startsAt) {
-      Alert.alert('Start time required', 'Please pick a start date and time.');
-      return;
-    }
-    if (endsAt && endsAt <= startsAt) {
-      Alert.alert('End must be after start', 'Please pick an end time later than the start.');
-      return;
-    }
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
 
     // No address → warn the user the event won't appear on the map.
     // Address isn't required (per spec) — they can proceed anyway.
@@ -208,7 +213,11 @@ export default function CreateScreen() {
             label="Title"
             placeholder=""
             value={title}
-            onChangeText={setTitle}
+            onChangeText={(t) => {
+              setTitle(t);
+              if (errors.title) setErrors((e) => ({ ...e, title: undefined }));
+            }}
+            error={errors.title}
           />
           <View>
             <Text style={styles.inputLabel}>Describe</Text>
@@ -248,18 +257,26 @@ export default function CreateScreen() {
           <DateTimeField
             label="Starts"
             value={startsAt}
-            onChange={setStartsAt}
+            onChange={(d) => {
+              setStartsAt(d);
+              if (errors.startsAt) setErrors((e) => ({ ...e, startsAt: undefined }));
+            }}
             placeholder="Pick a start time"
             minimumDate={new Date()}
           />
+          {errors.startsAt && <Text style={styles.fieldError}>{errors.startsAt}</Text>}
           <DateTimeField
             label="Ends (optional)"
             value={endsAt}
-            onChange={setEndsAt}
+            onChange={(d) => {
+              setEndsAt(d);
+              if (errors.endsAt) setErrors((e) => ({ ...e, endsAt: undefined }));
+            }}
             placeholder="Pick an end time"
             clearable
             minimumDate={startsAt ?? new Date()}
           />
+          {errors.endsAt && <Text style={styles.fieldError}>{errors.endsAt}</Text>}
 
           <View style={styles.priceRow}>
             <TouchableOpacity
@@ -404,6 +421,13 @@ const styles = StyleSheet.create({
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: -spacing.sm },
   form: { gap: spacing.base },
+  // Error caption rendered under DateTimeFields (Input ships its own).
+  fieldError: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 12,
+    color: colors.badge.red,
+    marginTop: -spacing.sm,
+  },
   inputLabel: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,

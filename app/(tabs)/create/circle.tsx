@@ -23,6 +23,7 @@ export default function CreateCircleScreen() {
   const [tags, setTags] = useState<string[]>([]);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [nameError, setNameError] = useState<string | undefined>();
 
   function toggleTag(tag: string) {
     setTags((prev) =>
@@ -50,9 +51,10 @@ export default function CreateCircleScreen() {
   async function handleCreate() {
     if (!user) return;
     if (!name.trim()) {
-      Alert.alert('Name required', 'Please add a name for your circle.');
+      setNameError('Please add a name for your circle.');
       return;
     }
+    setNameError(undefined);
 
     setIsLoading(true);
     try {
@@ -118,7 +120,11 @@ export default function CreateCircleScreen() {
             label="Circle name"
             placeholder=""
             value={name}
-            onChangeText={setName}
+            onChangeText={(t) => {
+              setName(t);
+              if (nameError) setNameError(undefined);
+            }}
+            error={nameError}
           />
           <Input
             label="Description"

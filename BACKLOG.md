@@ -203,14 +203,8 @@ Done when:
 - [ ] Supabase Auth Apple provider configured
 - [ ] Same OAuth-skip-onboarding flow as Google
 
-### Notifications list screen (data layer ready, UI missing)
-Why: `src/hooks/useNotifications.ts` already exists and `notifications` table is set up, but there's no route to render the list. Every notification we produce (follows, event reminders, circle activity, new messages outside the unread badge) currently fires into a black hole.
-Done when:
-- [ ] New route `app/(tabs)/notifications/index.tsx` consuming `useNotifications()`
-- [ ] Visual states for each notification `type`: 'follow', 'event_reminder', 'circle_event', 'message'
-- [ ] Tap a notification → navigate to the right destination (profile / event / circle / chat)
-- [ ] Mark-as-read on tap; bulk "Mark all read" CTA at top
-- [ ] Bottom-nav entry (or surface inside profile if tab bar is full); badge on the icon for unread count
+### ~~Notifications list screen (data layer ready, UI missing)~~ — shipped 2026-06-09
+Shipped `app/notifications.tsx` as a root-level `presentation: 'card'` route (the bottom tab bar is already full at 5 tabs). Consumes the existing `useNotifications()` hook. Each row has a type-tinted icon (follow / event_reminder / circle_event / message), a copy line, relative time-ago, an unread dot, and routes on tap to the right destination (`/user/<id>`, `/event/<id>`, `/messages/<id>`). Per-row mark-as-read on tap; "Mark all read" CTA in the top-right when `unreadCount > 0`. Empty state ("You're all caught up") + ErrorState for not-signed-in. Reachable from a new bell icon on the profile TopBar with a red unread-count badge (caps at 99+). Producer side (Postgres triggers that actually fan out into `notifications`) still missing — tracked in the expanded Push notifications entry.
 
 ### ~~Permission Info.plist sweep (HIG copy)~~ — shipped 2026-06-09 (merged with P0 permission descriptions)
 
@@ -236,7 +230,7 @@ Done when:
 - [ ] Optional timepicker when user saves an event (default: 2h before start)
 - [ ] Scheduled edge function or pg_cron sweeps reminders due in the next 15 minutes → enqueues notifications → push handles delivery
 
-### Inline form validation on Create flows (not Alert popups)
+### ~~Inline form validation on Create flows (not Alert popups)~~ — shipped 2026-06-09 (Create Event + Create Circle both use inline errors now)
 Why: `app/(tabs)/create/index.tsx` and `app/(tabs)/create/circle.tsx` use `Alert.alert('Title required')` etc. The rest of the app (signup, ProfileForm) uses inline per-field error state. Investors notice the inconsistency.
 Done when:
 - [ ] Convert `Alert.alert('Title required')` etc. on both create screens to per-field `error` prop on the `Input` component
@@ -353,8 +347,7 @@ Done when:
 - [ ] In Google Cloud Console, restrict the Maps API key to bundle IDs `com.sphaer.app` (iOS + Android)
 - [ ] No code change; just operational checklist
 
-### PostgREST `.or()` search uses unescaped user input
-Why: `src/services/events.service.ts` builds `.or()` from the search string. PostgREST's parser is safe today, but if it ever changes or a user finds a vector, this is risky. Defensive sanitisation.
+### ~~PostgREST `.or()` search uses unescaped user input~~ — shipped 2026-06-09 (strips `,():*` before interpolation)
 Done when:
 - [ ] Strip PostgREST-reserved chars (`,`, `(`, `)`, `*`, `:`) from search input before interpolation
 - [ ] Or move to a PostgREST function with explicit parameters
@@ -387,12 +380,8 @@ Done when:
 - [ ] Smoke test suite covers: signup form validation, create-event form validation, save-event toggle, sign-out flow
 - [ ] GitHub Actions CI runs the suite on push before merge
 
-### TypeScript enums for `notification.type` and `circle_members.role`
-Why: Schema enforces them via string CHECK constraints; code uses string literals scattered everywhere. A typo (`'circle_evnt'` instead of `'circle_event'`) silently breaks notification routing.
-Done when:
-- [ ] New `src/types/enums.ts` with `type NotificationType = 'follow' | 'event_reminder' | 'circle_event' | 'message'`
-- [ ] All `notification.type` callsites + RPC return types use the typed alias
-- [ ] Same for `CircleRole = 'admin' | 'member'`
+### ~~TypeScript enums for `notification.type` and `circle_members.role`~~ — shipped 2026-06-09
+New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` already wired to use `NotificationType` (META_FOR_TYPE record + routeFor switch). Remaining: refactor all `'admin'`/`'member'` literals in `src/services/circles.service.ts` to use `CircleRole` — small follow-up, no real bug being fixed today.
 
 ---
 
@@ -420,6 +409,8 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — Batch: enums + PostgREST sanitisation + Create form inline validation (3 P2 items).** (1) New `src/types/enums.ts` with `NotificationType` (`'follow' | 'event_reminder' | 'circle_event' | 'message'`) and `CircleRole` (`'admin' | 'member'`) string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` wired to use `NotificationType` for both `META_FOR_TYPE` record keys and the `routeFor` switch discriminant — typo protection back. (2) `src/services/events.service.ts` `.or()` search now sanitises user input: `filters.search.replace(/[,():*]/g, ' ').trim()` strips PostgREST-reserved chars (commas split filter clauses, parens nest them, asterisk is a column wildcard, colon separates field.op.value). Empty after-sanitisation short-circuits the `.or()` clause so a search of just `,*` doesn't fire a malformed query. (3) Create Event and Create Circle screens no longer use `Alert.alert('Title required')` for validation. Create Event gains `errors: {title, startsAt, endsAt}` state — `handleCreate()` collects ALL field errors at once (instead of sequential Alert popups), clears them on edit, threads `errors.title` into `<Input error>`, renders red error captions below both `<DateTimeField>`s with a new `fieldError` style. Create Circle gets a single-field `nameError` via the same pattern. Both match the signup.tsx / ProfileForm.tsx convention. Typecheck clean. Commit `915b7ef`.
+- **2026-06-09 — Notifications list screen (P1 — useNotifications hook was unused until now).** New `app/notifications.tsx` route at the app root with `presentation: 'card'`. Consumes the existing `useNotifications()` hook (which already has its Realtime subscription baked in). Renders a chronological FlatList; each row shows a type-tinted icon-in-circle (follow → blue person-add, event_reminder → orange alarm, circle_event → green calendar, message → purple chat-ellipses), a copy line, relative time-ago via `formatMessageTime`, and an unread dot on the right when `is_read=false`. Tap a row → routes to the right destination via a `routeFor()` switch (`follow` → `/user/<reference_id>`, `event_reminder` + `circle_event` → `/event/<reference_id>`, `message` → `/messages/<reference_id>`) and marks just that row read via a direct `supabase.from('notifications').update({ is_read: true })`. Top-right "Mark all read" button uses the hook's existing `markAllRead`. Empty state for zero notifications ("You're all caught up"); ErrorState for the no-session case. Reachable from a new bell icon on the profile TopBar (in `app/(tabs)/profile/index.tsx#TopBar`) with a red round badge showing the unread count (caps at "99+"). The bottom-nav was already full at 5 tabs so a bell-icon-in-TopBar was the cleanest entry. Producer side (Postgres triggers fanning into the `notifications` table) is still missing — tracked in the now-expanded Push notifications entry. Typecheck clean. Commit `7c03531`.
 - **2026-06-09 — `<ErrorState />` primitive + wired into 5 screens (P2 polish, audit follow-up).** New `src/components/ui/ErrorState.tsx` is the missing twin of `EmptyState` — same icon-in-circle + headline + body shape, but with a primary "Try again" button (dark chocolate fill) and an optional "Back" outline button below. Spaced variant fills the viewport for full-screen states. Wired into 5 screens: (1) `app/event/[id].tsx` "Event not found" path swapped a bare `<Text>` for ErrorState with a calendar icon + a "Back to feed" CTA; (2) `app/user/[id].tsx` "Profile not found" path swapped icon-text-text for ErrorState with a Back CTA; (3-5) all three chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now consume the new `error` state from `useMessages` / `useEventMessages` / `useCircleMessages` and render ErrorState with a working Retry button. The Retry button calls `refetch()` — a new addition to each hook that bumps an internal `refetchTick` useState, which the fetch effect depends on, so calling refetch re-runs both the initial fetch AND re-binds the Realtime subscription (handles transient connection loss too). Typecheck clean. Follow-up: wire ErrorState into every other data-fetch path (`useEvents`, `useCircles`, `useProfile` — most are still ActivityIndicator-only on failure). Commit `dbffa11`.
 - **2026-06-09 — Code hygiene batch (4 fixes from audit).** (1) Message hooks `useMessages`, `useEventMessages`, `useCircleMessages` all swallowed initial-fetch errors via `.catch((err) => console.error(...))`; each now also calls `setError(err.message)` and exposes `error: string | null` in its return shape. The chat screens still need to consume the new error and render `<ErrorState />` — that ships with the ErrorState component in the next P2 item. (2) `BottomNav.tsx` + `EntityListSheet.tsx` route casts changed from `router.push(x as any)` to `router.push(x as Href)` (importing `type Href from 'expo-router'`). Type system no longer bypassed. (3) `ViewToggle.tsx` `fontWeight: '510' as any` → `'500'` (the value RN was silently falling back to anyway); inline comment documents Figma origin + rounding. (4) All four `react-hooks/exhaustive-deps` suppressions (3 in `MuralCanvas`, 1 in `update-password`) now carry explanatory comments: Reanimated shared values that don't trigger React renders, wheel handler reading `.value` at fire time, run-once mount avoiding infinite loop. (5) `MockConversation` import in messages inbox was flagged by audit as "stale" — on re-read it's a deliberate display-shape adapter, not stale; kept with a note in BACKLOG for a follow-up rename. Typecheck clean. Commit `0a18f6e`.
 - **2026-06-09 — Removed "Available for work" placeholder bar + ticket "Coming soon" buttons (P2 polish).** Two P2 "dead UI" items shipped as one cleanup. (1) The "Available for work" bar on `/(tabs)/profile` rendered on the user's OWN profile with a "Get in touch" button that alerted "Coming soon" — i.e. the user was being asked to message themselves. Removed the `<AvailableForWorkBar />` from both render paths (dev-fallback + authed), deleted the component function, deleted the orphan `availableBar / availableLeft / availableTitle / availableDot / availableLocation / getInTouchButton / getInTouchText` styles, removed now-unused `Alert` import + `INK / META / SUCCESS_DOT` constants. Documented with a one-line comment that the bar will return on `/user/[id]` when Profile v2 #2 ships the `is_available_for_work` toggle. (2) `app/ticket/[id].tsx` had two outline buttons "Download as PDF" + "Send by Email" wired to `handleComingSoon()` → `Alert.alert('Coming soon')`. Removed both buttons + the `handleComingSoon` function. Bonus: `handleInviteFriends` now delegates to the shared `shareEvent(event)` from `share.service.ts` so the canonical URL + platform-tuned payload is consistent with event detail / circle / profile share buttons; removed now-unused `Share` + `Alert` imports. The remaining ticket actions are "Invite Friends" (works) + "Done" (back). Typecheck clean. Commit `e7ead60`.

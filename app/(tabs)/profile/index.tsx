@@ -27,6 +27,7 @@ import { getSavedEvents } from '@/services/events.service';
 import { signOut } from '@/services/auth.service';
 import { deleteAccount } from '@/services/account.service';
 import { useAuthContext } from '@/context/AuthContext';
+import { useNotifications } from '@/hooks/useNotifications';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
 import type { EventWithRelations } from '@/types/event.types';
@@ -43,6 +44,11 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile, isLoading: authLoading } = useAuthContext();
+  const { unreadCount: notifUnread } = useNotifications(user?.id);
+
+  function handleNotificationsPress() {
+    router.push('/notifications' as never);
+  }
 
   // Live counts pulled from Supabase. See grilling Q5 + Q6d:
   //   - activities count = event_registrations rows for user (creator-as-attendee
@@ -216,7 +222,11 @@ export default function ProfileScreen() {
   if (authLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <TopBar onSignOut={handleSignOut} />
+        <TopBar
+          onSignOut={handleSignOut}
+          onNotificationsPress={handleNotificationsPress}
+          unreadCount={notifUnread}
+        />
         <ProfileSkeleton />
       </SafeAreaView>
     );
@@ -341,7 +351,11 @@ export default function ProfileScreen() {
     const mock = getMockProfileById(CURRENT_USER_PROFILE_ID);
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <TopBar onSignOut={handleSignOut} />
+        <TopBar
+          onSignOut={handleSignOut}
+          onNotificationsPress={handleNotificationsPress}
+          unreadCount={notifUnread}
+        />
         <ProfileView
           profile={mock}
           isOwnProfile
@@ -359,7 +373,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <TopBar onSignOut={handleSignOut} />
+      <TopBar
+        onSignOut={handleSignOut}
+        onNotificationsPress={handleNotificationsPress}
+        unreadCount={notifUnread}
+      />
 
       <ProfileCompletionCard
         percentage={completion.percentage}
@@ -393,13 +411,45 @@ export default function ProfileScreen() {
 
 // ─── Top nav row ─────────────────────────────────────────────────────────────
 
-function TopBar({ onSignOut }: { onSignOut: () => void }) {
+function TopBar({
+  onSignOut,
+  onNotificationsPress,
+  unreadCount,
+}: {
+  onSignOut: () => void;
+  onNotificationsPress: () => void;
+  unreadCount: number;
+}) {
   return (
     <View style={styles.navBar}>
       <View style={styles.navButton} />
-      <TouchableOpacity onPress={onSignOut} style={styles.navButton}>
-        <Ionicons name="log-out-outline" size={24} color={colors.text.secondary} />
-      </TouchableOpacity>
+      <View style={styles.navRight}>
+        <TouchableOpacity
+          onPress={onNotificationsPress}
+          style={styles.navButton}
+          accessibilityLabel="Notifications"
+        >
+          <Ionicons
+            name="notifications-outline"
+            size={24}
+            color={colors.text.secondary}
+          />
+          {unreadCount > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText} numberOfLines={1}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onSignOut}
+          style={styles.navButton}
+          accessibilityLabel="Sign out"
+        >
+          <Ionicons name="log-out-outline" size={24} color={colors.text.secondary} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -447,6 +497,28 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.badge.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadgeText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 11,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.white,
   },
 
   center: {
