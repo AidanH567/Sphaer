@@ -20,7 +20,14 @@ interface ChatBubbleProps {
   senderAvatarUrl?: string | null;
 }
 
-export function ChatBubble({
+/**
+ * Memoised because chat threads render this component once per message in a
+ * FlatList; re-rendering every bubble on each parent state flip (new message
+ * arriving, read receipt updating, hook tick) is the dominant cost.
+ * Shallow-equal compare on the props is sufficient — `message` is the only
+ * object prop and the parent passes a stable reference per message id.
+ */
+function ChatBubbleImpl({
   message,
   isOwn,
   showTimestamp,
@@ -73,6 +80,8 @@ export function ChatBubble({
     </View>
   );
 }
+
+export const ChatBubble = React.memo(ChatBubbleImpl);
 
 const ATTRIBUTION_AVATAR_SIZE = 18;
 

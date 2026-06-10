@@ -16,6 +16,7 @@ import type { OptimisticMessage } from '@/types/message.types';
 import type { Event } from '@/types/event.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { MessageBubbleSkeletonList } from '@/components/ui/skeletons/MessageBubbleSkeleton';
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
 
@@ -123,9 +124,7 @@ export default function EventChatScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.black} />
-          </View>
+          <MessageBubbleSkeletonList />
         ) : error ? (
           <ErrorState
             icon="chatbubble-ellipses-outline"

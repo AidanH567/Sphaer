@@ -281,11 +281,8 @@ Done when:
 - [ ] Either regenerate types so the RPC return is properly typed, OR
 - [ ] Add a runtime validator (zod / io-ts) at the cast boundary that throws a clear error on shape mismatch
 
-### Missing skeletons on `/user/[id]` + message threads
-Why: `ProfileSkeleton` exists but isn't used on the other-user-profile fetch path. Message threads (`messages/[id]`, `messages/event/[id]`, `messages/circle/[id]`) use `ActivityIndicator` instead of a chat-bubble skeleton list. Visual inconsistency vs. rest of app.
-Done when:
-- [ ] `/user/[id]` shows `ProfileSkeleton` during `status === 'loading'`
-- [ ] New `MessageBubbleSkeleton` component (staggered pulse to mimic real bubble list); wire into all three chat screens
+### ~~Missing skeletons on `/user/[id]` + message threads~~ — shipped 2026-06-09
+`/user/[id]` already shows `ProfileSkeleton` during `status === 'loading'` — audit was wrong about that one. New `src/components/ui/skeletons/MessageBubbleSkeleton.tsx` exposes `MessageBubbleSkeleton` (single bubble — side / width / index props) and `MessageBubbleSkeletonList` (a 6-bubble alternating-sides stack mimicking real conversation rhythm). All three chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now render the list during `isLoading` instead of a centred `ActivityIndicator`.
 
 ### ~~Other-users-profile (`/user/[id]`) still falls back to `mockProfiles`~~ — shipped 2026-06-09
 Removed the `getMockProfileByExactId` import and call from `app/user/[id].tsx`. Live Supabase `fetchRealProfile(id)` is now the only source — if the DB doesn't have the id, the screen renders the ErrorState "Profile not found" path that shipped earlier today. The `MockProfile` type alias is still imported for the display shape (used by `adaptProfileToDisplay`) — separate from the data fallback.
@@ -299,12 +296,10 @@ Both `BottomNav.tsx` and `EntityListSheet.tsx` now import `type Href from 'expo-
 ### ~~`fontWeight: '510' as any` in ViewToggle~~ — shipped 2026-06-09
 Switched both occurrences to `'500'` (the value RN was silently falling back to anyway). Inline comment documents the Figma-510 origin and the rounding rationale.
 
-### Memo audit of high-churn parents
-Why: Feed memoizes `visibleEvents`; Profile / Circles / chat bubble subtrees don't. On AppContext or auth state flip they re-render wide trees.
-Done when:
-- [ ] Profile screen wraps stable children (ProfileCompletionCard, AvailableForWorkBar, SettingsSection) with `React.memo`
+### ~~Memo audit of high-churn parents~~ — wrapped 3 hot FlatList row components 2026-06-09
+Three components that render inside FlatLists were re-rendering on every parent state change despite their own props being unchanged. All three got `React.memo`-wrapped via the `Impl` rename + `export const X = React.memo(XImpl)` pattern: `ChatBubble` (one per message in chat threads), `EventCard` (one per event in Feed), `ConversationRow` (one per row in Messages inbox). Each carries an inline comment explaining the parent re-render pressure. Remaining (not yet done):
+- [ ] Profile screen subtree memoisation (`ProfileCompletionCard`, `SettingsSection`)
 - [ ] Circle cards memoize their handlers via `useCallback`
-- [ ] Chat bubble list memoizes per-message render
 
 ### Accessibility audit (concrete numbers)
 Why: 325 TouchableOpacity/Pressable instances in the app vs only ~14 `accessibilityLabel` props. VoiceOver users can't navigate.
@@ -403,6 +398,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — MessageBubbleSkeleton + React.memo on 3 hot FlatList rows (P2 polish + perf).** (1) New `src/components/ui/skeletons/MessageBubbleSkeleton.tsx` exports `MessageBubbleSkeleton` (single bubble — `side` / `width` / `index` props for stagger) and `MessageBubbleSkeletonList` (a 6-bubble alternating-sides stack mimicking real conversation rhythm — long/short/medium/medium/short/long widths). Wired into all 3 chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) during `isLoading`, replacing the centred `ActivityIndicator` they each rendered. (2) Three components that render inside FlatLists were re-rendering on every parent state change: `ChatBubble` (one per message), `EventCard` (one per event in Feed), `ConversationRow` (one per inbox row). All three got React.memo via the rename-to-Impl + `export const X = React.memo(XImpl)` pattern. Each carries an inline comment explaining the parent-re-render pressure being killed. The biggest visible win is `ChatBubble` — `useMessages` flips state on every Realtime message + every read-receipt tick, and without memo every bubble re-renders on every flip. Audit also flagged `/user/[id]` skeleton as missing but it was already wired (`ProfileSkeleton` during `status === 'loading'`). Typecheck clean. Commit `__HASH__`.
 - **2026-06-09 — Long-press to unfollow from Following sheet (P2 UX).** `EntityListSheet`'s `UserRow` gained an optional `onLongPress` prop; the parent props grew an `onLongPressUser?: (profile: Profile) => void` for the `type === 'user'` variant (gated on the discriminator). `/(tabs)/profile/index.tsx` wires it on the Following sheet only (the Followers sheet doesn't get it — wrong direction of the relationship; you can't unfollow your followers). Long-press sets a new `unfollowTarget: Profile | null` state which renders a destructive `<ConfirmSheet>` ("Unfollow X? Their activities will stop appearing on your feed."). On confirm: optimistic remove from the visible `following` list + `counts.following` decrement, then `unfollowUser(user.id, target.id)`; on error, rollback (re-add + re-increment). `delayLongPress={400}` so the gesture doesn't fire on accidental holds; new `accessibilityHint="Long-press to unfollow"` on the row so VoiceOver announces it. Typecheck clean. Commit `a25a89c`.
 - **2026-06-09 — Image upload MIME + size validation across all 4 upload paths (P2 security).** New `src/utils/upload-validation.ts` exports `validateImageUpload(blob)` + `UploadValidationError`. Checks `blob.type` against an allowlist (`image/jpeg`, `image/jpg` non-standard, `image/png`, `image/webp`, `image/heic`, `image/heif`, `image/gif`) and `blob.size` against `MAX_UPLOAD_BYTES = 10 MB`. Throws a user-friendly `UploadValidationError` on failure (caller lets it bubble to UI Alert / inline error). Wired into all 4 upload paths via a single-line `validateImageUpload(blob)` call between `uriToBlob()` and the `.upload(...)`: `uploadAvatar` + `uploadGalleryImage` in `profile.service.ts`, `uploadEventPoster` in `events.service.ts`, `uploadCircleImage` in `circles.service.ts`. Backlog tracks the remaining server-side hardening (bucket `allowed_mime_types` config + magic-byte sniffing + optional virus scan) — those add defence-in-depth on top of this client gate. Typecheck clean. Commit `17ee82b`.
 - **2026-06-09 — Other-user profile `/user/[id]` mock fallback retired (Profile v2 #7).** Removed `getMockProfileByExactId` import + call from `app/user/[id].tsx`. The screen now goes directly: `fetchRealProfile(id)` → found OR not_found, no mid-step mock catalog lookup. The `MockProfile` type alias is still imported (it's the display shape consumed by `adaptProfileToDisplay`) — separate concern from the data fallback. Pairs with the ErrorState "Profile not found" path shipped earlier today, so the no-DB-match path now lands on a usable ErrorState instead of a fake profile or bare 404. Typecheck clean.

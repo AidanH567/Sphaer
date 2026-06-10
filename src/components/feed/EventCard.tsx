@@ -28,7 +28,15 @@ const POSTER_WIDTH = 163;
  * button. Matches the Figma card (358×231, 8px radius, 163px poster).
  * Tapping the card opens the event detail page.
  */
-export function EventCard({ event, onSave, isSaved = false }: EventCardProps) {
+/**
+ * Memoised — the Feed FlatList renders one of these per event, and the
+ * parent re-renders on every filter / save toggle / focus refresh. Without
+ * memo, scrolling past 20+ cards causes visible jank during a `setSavedIds`
+ * call. Shallow-compare on { event, onSave, isSaved } is sufficient: parent
+ * passes the same `event` object reference for unchanged rows and
+ * `onSave` is wrapped in a stable identity via toggleSave's closure.
+ */
+function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
   const router = useRouter();
 
   const dateLabel = formatEventDateShort(event.starts_at).replace(',', '');
@@ -85,6 +93,8 @@ export function EventCard({ event, onSave, isSaved = false }: EventCardProps) {
     </TouchableOpacity>
   );
 }
+
+export const EventCard = React.memo(EventCardImpl);
 
 const styles = StyleSheet.create({
   card: {

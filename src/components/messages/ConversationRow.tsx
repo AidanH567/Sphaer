@@ -27,7 +27,13 @@ const AVATAR_SIZE = 56;
  * with prefix icon variants (check / location / voice / typing), timestamp,
  * and pin / mention / unread-badge indicators on the right.
  */
-export function ConversationRow({ conversation, onPress }: ConversationRowProps) {
+/**
+ * Memoised — the inbox FlatList renders one of these per conversation, and
+ * `useMessagesContext` re-emits on every Realtime new-message tick. Without
+ * memo every row re-renders on every message, regardless of whether the
+ * row's own `conversation` prop changed.
+ */
+function ConversationRowImpl({ conversation, onPress }: ConversationRowProps) {
   const {
     name,
     avatar,
@@ -111,6 +117,8 @@ export function ConversationRow({ conversation, onPress }: ConversationRowProps)
     </TouchableOpacity>
   );
 }
+
+export const ConversationRow = React.memo(ConversationRowImpl);
 
 const styles = StyleSheet.create({
   row: {
