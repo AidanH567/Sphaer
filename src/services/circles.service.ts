@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { validateImageUpload } from '@/utils/upload-validation';
 import type { CircleInsert, CircleUpdate, CircleWithCounts } from '@/types/circle.types';
 
 export async function getCircles(search?: string): Promise<CircleWithCounts[]> {
@@ -221,6 +222,7 @@ export async function uploadCircleImage(
   const path = `${userId}/${circleId}-${kind}.${ext}`;
   const response = await fetch(uri);
   const blob = await response.blob();
+  validateImageUpload(blob);
 
   const { error } = await supabase.storage
     .from('circle-images')

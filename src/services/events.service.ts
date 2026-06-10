@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { validateImageUpload } from '@/utils/upload-validation';
 import type { EventInsert, EventUpdate, EventWithRelations, EventFilters } from '@/types/event.types';
 
 export async function getEvents(filters?: EventFilters): Promise<EventWithRelations[]> {
@@ -169,6 +170,7 @@ export async function uploadEventPoster(
   const path = `${userId}/${eventId}.${ext}`;
   const response = await fetch(uri);
   const blob = await response.blob();
+  validateImageUpload(blob);
 
   const { error } = await supabase.storage
     .from('event-posters')

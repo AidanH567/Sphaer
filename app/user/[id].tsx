@@ -26,7 +26,7 @@ import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { shareProfile } from '@/services/share.service';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
-import { getMockProfileByExactId, type MockProfile } from '@/data/mockProfiles';
+import { type MockProfile } from '@/data/mockProfiles';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
@@ -113,7 +113,10 @@ export default function UserProfileScreen() {
   const [userActivities, setUserActivities] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
 
-  // ── Initial fetch: Supabase first, then mock fallback, then "not found" ──
+  // ── Initial fetch: Supabase only. The previous mock-profile fallback was
+  // retired 2026-06-09 (Profile v2 #7): real DB profiles are the only
+  // source of truth on the public profile page now. If the DB doesn't have
+  // the id, the screen renders the ErrorState "Profile not found" path.
   useEffect(() => {
     if (!id) {
       setStatus('not_found');
@@ -127,13 +130,6 @@ export default function UserProfileScreen() {
         if (!active) return;
         if (real) {
           setDisplayProfile(real);
-          setStatus('found');
-          return;
-        }
-        // Supabase didn't have this id — try the mock catalog by exact id
-        const mock = getMockProfileByExactId(id);
-        if (mock) {
-          setDisplayProfile(mock);
           setStatus('found');
         } else {
           setDisplayProfile(null);
