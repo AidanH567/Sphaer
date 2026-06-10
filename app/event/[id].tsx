@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Share, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,8 @@ import { EventDetailSkeleton } from '@/components/ui/skeletons/EventDetailSkelet
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
+import { shareEvent } from '@/services/share.service';
+import { addEventToCalendar } from '@/services/calendar.service';
 import {
   isEventSaved as isEventSavedService,
   saveEvent,
@@ -113,9 +115,20 @@ export default function EventDetailScreen() {
 
   async function handleShare() {
     if (!event) return;
-    await Share.share({
-      message: `${event.title} — ${event.location_name ?? 'Berlin'}`,
-    });
+    try {
+      await shareEvent(event);
+    } catch (err) {
+      console.error('[EventDetail] share failed:', err);
+    }
+  }
+
+  async function handleAddToCalendar() {
+    if (!event) return;
+    try {
+      await addEventToCalendar(event);
+    } catch (err) {
+      console.error('[EventDetail] add to calendar failed:', err);
+    }
   }
 
   function openInMaps() {
@@ -154,7 +167,18 @@ export default function EventDetailScreen() {
               <Ionicons name="chatbubble-outline" size={22} color={colors.text.primary} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={handleShare} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={handleAddToCalendar}
+            style={styles.navButton}
+            accessibilityLabel="Add to calendar"
+          >
+            <Ionicons name="calendar-outline" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleShare}
+            style={styles.navButton}
+            accessibilityLabel="Share event"
+          >
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleToggleSave} style={styles.navButton}>

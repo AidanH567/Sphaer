@@ -23,6 +23,7 @@ import {
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
+import { shareProfile } from '@/services/share.service';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { getMockProfileByExactId, type MockProfile } from '@/data/mockProfiles';
 import { colors, typography, spacing } from '@/constants/theme';
@@ -186,6 +187,20 @@ export default function UserProfileScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
+        {displayProfile && (
+          <TouchableOpacity
+            onPress={() =>
+              shareProfile({
+                id: displayProfile.id,
+                displayName: displayProfile.displayName,
+              }).catch(() => {})
+            }
+            style={styles.navButton}
+            accessibilityLabel="Share profile"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {status === 'loading' && <ProfileSkeleton />}
@@ -299,6 +314,9 @@ async function fetchRealProfile(id: string): Promise<MockProfile | null> {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   navBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
