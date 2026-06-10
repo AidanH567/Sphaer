@@ -50,7 +50,15 @@ their own commits per the standard workflow.
 
 **Figma file (use this fileKey for every call):**
 `iuCO8ENAhfYIJly1JGAeU1` — `Sphaer_Prototype_RA (Copy)` in user's drafts.
-Verified working as long as the rate limit has bandwidth left.
+
+**Blocker status (re-diagnosed 2026-06-10):** the earlier `net::ERR_FAILED`
+was a Claude-side MCP transport outage affecting ALL connectors — it has
+resolved (`whoami` works, Supabase + Vercel MCPs work). The REAL remaining
+blocker is the **Figma Starter-plan tool-call cap**: `get_design_context`
+returns the upgrade paywall. Editor seat does NOT lift it — it's a team
+plan limit (both of the user's teams show `tier: "starter"`). Resume the
+audit the moment the team plan is upgraded, or use the Dev Mode paste
+fallback below.
 
 **Already shipped (do NOT re-audit):**
 - ✅ `2012:1757` — Splash Screen (1×1 placeholder PNG → Figma-matched
@@ -361,12 +369,11 @@ Done when:
 
 ## P2 — Developer experience (audit 2026-06-09)
 
-### Zero test coverage
-Why: No `.test.*` files anywhere; no Jest / Vitest / Detox config. Every refactor is by hand. **PROMOTE candidate for after launch** — let's not block ship on tests, but baseline coverage prevents regressions.
-Done when:
-- [ ] Jest + React Native Testing Library installed
-- [ ] Smoke test suite covers: signup form validation, create-event form validation, save-event toggle, sign-out flow
-- [ ] GitHub Actions CI runs the suite on push before merge
+### Zero test coverage — first slice shipped 2026-06-10 (61 unit tests on pure utils)
+`jest` + `jest-expo@~55` (SDK-matched) installed; `npm test` script + `jest` preset config in package.json (`@/` alias mapped, `__tests__/**/*.test.*` matcher). Six suites under `src/utils/__tests__/`: validators (email/password/username/url), event-filters (isTonight / isThisWeekend / currentWeekendWindow with pinned `now` dates + applyChipFilters AND-semantics), ics (CRLF, UTC times, TEXT escaping, multi-VEVENT bulk, null-starts_at drop), upload-validation (MIME allowlist, case-insensitivity, size cap boundary), profile-completion (null→100%, whitespace-only, empty arrays), geo (haversine vs. known Berlin landmark distances). `tsconfig.json` adds `"jest"` to `types`. All 61 green; tsc clean.
+CI shipped 2026-06-10: `.github/workflows/ci.yml` runs `tsc --noEmit` + `jest --ci` on push/PR to main (Node 20, npm cache, 15-min timeout; `npm ci` dry-run verified the lockfile is in sync).
+Remaining:
+- [ ] Component smoke tests via @testing-library/react-native (signup form validation, create-event validation, save toggle)
 
 ### ~~TypeScript enums for `notification.type` and `circle_members.role`~~ — shipped 2026-06-09
 New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` already wired to use `NotificationType` (META_FOR_TYPE record + routeFor switch). Remaining: refactor all `'admin'`/`'member'` literals in `src/services/circles.service.ts` to use `CircleRole` — small follow-up, no real bug being fixed today.
@@ -397,6 +404,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-10 — Feed chip-row clipping fix + test suite bootstrap (61 unit tests).** (1) The Near me / Tonight / This weekend / Free chips rendered clipped (user screenshot showed pills cut to half height). Root cause via DOM inspection: react-native-web's ScrollView ships `{ flexGrow: 1, flexShrink: 1 }` base style — the FlatList below shrank the chip row to 4px. Fix: `style={{ flexGrow: 0, flexShrink: 0 }}` + paddingVertical on the content container. Verified at 390×844: pills full height, horizontal scroll intact, Tonight toggle filters correctly. Commit `e1d48a9`. (2) First test coverage in the repo: jest + jest-expo@~55, `npm test`, six suites / 61 tests over the pure utils (validators, event-filters with pinned clock, ics RFC-5545 compliance, upload-validation allowlist + size boundary, profile-completion, geo haversine against real Berlin landmark distances). tsconfig gains `"jest"` types. All green, tsc clean. Commit `64fd5f4`.
 - **2026-06-09 — Denormalised follower / following counts migration (data integrity).** `supabase/migrations/20260609010000_denormalized_follow_counts.sql` adds `profiles.followers_count INT NOT NULL DEFAULT 0` + `profiles.following_count INT NOT NULL DEFAULT 0`, backfills both from the existing `follows` rows (per-side aggregation joined back into `profiles`), and installs trigger function `follows_update_counts()` (SECURITY DEFINER + locked search_path) wired to `AFTER INSERT` and `AFTER DELETE` on `follows`. Atomic `count = count + 1` and `GREATEST(0, count - 1)` keep the columns consistent under concurrent inserts. Service-layer follow-up: once `supabase db push` runs and types regenerate, `getProfile()` can drop its two parallel COUNT queries against `follows` and read the columns directly — tracked in BACKLOG. Forward-compat scaffolding for now (columns exist but service still uses COUNT until the regenerate). **Apply with:** `npx supabase db push`. Commit `6b236d6`.
 - **2026-06-09 — First-time-user 3-screen intro tutorial (later-backlog promoted).** New `app/(auth)/intro.tsx` — paged horizontal ScrollView with 3 screens (Discover Berlin / Follow artists & circles / Save & get reminded). Each: 112px icon-in-soft-circle, display-serif title, 24-line body, max 320px wide. Top-right Skip button on pages 1+2, "Next" CTA advances `scrollTo` on pages 1+2 then becomes "Get Started" on page 3 which writes the AsyncStorage flag and `router.replace('/(auth)')`. Page-indicator dot row with a width-stretched active dot. Landing screen (`app/(auth)/index.tsx`) now reads `INTRO_SEEN_KEY` on mount; first-timers get `router.replace('/(auth)/intro')` before the landing's fade-in animation has a chance to play. Storage failures fall through to the landing — a missed intro beats a permanently broken first launch. Route registered in `(auth)/_layout.tsx`. Closes the "Onboarding tutorial" backlog (later) entry. Typecheck clean. Commit `fd55297`.
 - **2026-06-09 — Saved-event reminders migration (schema half).** New `supabase/migrations/20260609000000_saved_events_reminder.sql` adds `saved_events.reminder_at TIMESTAMPTZ NULL` + a partial index `saved_events_reminder_at_idx (reminder_at) WHERE reminder_at IS NOT NULL` so the future scheduled-job query — `WHERE reminder_at IS NOT NULL AND reminder_at <= now() + interval '15 min'` — stays cheap. Producer half (scheduled edge function + push) tracked in the Push notifications backlog entry. Until producer ships the column is forward-compat scaffolding only — read-only until the next session. Service / UI changes (reminderAt arg on `saveEvent`, timepicker in the save flow) wait until generated types know about the column (regenerated post-`db push`). **Apply with:** `npx supabase db push` once MCP is back or via CLI.
