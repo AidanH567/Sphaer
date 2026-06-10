@@ -277,11 +277,8 @@ Done when:
 Things the audit flagged as wrong-but-not-on-fire. Group several into one
 PR per ship; don't expand the current item to absorb these.
 
-### Message hooks swallow fetch errors (3 hooks)
-Why: `src/hooks/useMessages.ts:51-52`, `useEventMessages.ts:67-68`, `useCircleMessages.ts:60-61` all `.catch((err) => console.error(...))` on initial fetch but never call `setError()`. UI renders an empty thread instead of an error state when fetch fails.
-Done when:
-- [ ] Each hook calls `setError(err instanceof Error ? err.message : 'Failed to load')` before logging
-- [ ] Chat screens read the new error state and render `<ErrorState />` (paired with the new component above)
+### ~~Message hooks swallow fetch errors (3 hooks)~~ — hook half shipped 2026-06-09
+Each of `useMessages`, `useEventMessages`, `useCircleMessages` now exposes an `error: string | null` state and sets it in the `.catch` branch of the initial fetch before logging. The chat screens still need to read the new state and render `<ErrorState />` — that part lands when ErrorState ships in the next P2 item.
 
 ### Unsafe JSONB casts in messages.service.ts
 Why: Lines 20 / 28 / 35 cast `row.partner as unknown as Event/Circle/Profile` and `row.last_message as unknown as Message` from the `get_conversations` RPC return. If the SQL function schema drifts, these break silently at runtime.
@@ -301,23 +298,14 @@ Done when:
 - [ ] `getProfile(id)` fully replaces `getMockProfileByExactId`
 - [ ] Mock fallback removed; 404 → real ErrorState
 
-### Stale `MockConversation` type import
-Why: `app/(tabs)/messages/index.tsx` still imports `MockConversation` from `mockMessages.ts` even though the data layer was retired. Cleanup.
-Done when:
-- [ ] Import removed
-- [ ] `ConversationRow`'s type annotations switch to the real Supabase conversation shape (from `messages.service.ts`)
+### Stale `MockConversation` type import — KEPT (audit was wrong)
+On closer reading, `app/(tabs)/messages/index.tsx` uses `MockConversation` as a deliberate display-shape adapter — real Conversation rows are mapped into the legacy shape so the Figma-styled `ConversationRow` component keeps working. Not stale. The real follow-up is to update `ConversationRow` to accept the native `Conversation` type and rename `MockConversation` → `ConversationRowDisplay` in a proper types file. Bigger refactor; not a hygiene-batch item.
 
-### `as any` route casts in BottomNav + EntityListSheet
-Why: `src/components/ui/BottomNav.tsx:159` and `EntityListSheet.tsx:158` use `router.push(route as any)` to bypass `typedRoutes`. Defeats the type system.
-Done when:
-- [ ] Use `as unknown as Href` or maintain a typed route union
-- [ ] No `as any` on `router.push` anywhere in the codebase
+### ~~`as any` route casts in BottomNav + EntityListSheet~~ — shipped 2026-06-09
+Both `BottomNav.tsx` and `EntityListSheet.tsx` now import `type Href from 'expo-router'` and cast via `as Href` instead of `as any`. Type system intact.
 
-### `fontWeight: '510' as any` in ViewToggle
-Why: `src/components/feed/ViewToggle.tsx:77,83` declare `fontWeight: '510' as any`. 510 is not a valid React Native fontWeight value; RN silently falls back to 500. The `as any` hides a real bug.
-Done when (pick one):
-- [ ] Switch to a valid token weight (500 or 600) from `typography.fontWeight`, OR
-- [ ] If 510 is intentional for design parity, document the workaround inline + use `as never` to make the intent explicit
+### ~~`fontWeight: '510' as any` in ViewToggle~~ — shipped 2026-06-09
+Switched both occurrences to `'500'` (the value RN was silently falling back to anyway). Inline comment documents the Figma-510 origin and the rounding rationale.
 
 ### Memo audit of high-churn parents
 Why: Feed memoizes `visibleEvents`; Profile / Circles / chat bubble subtrees don't. On AppContext or auth state flip they re-render wide trees.
@@ -334,10 +322,8 @@ Done when:
 - [ ] Image-as-button (poster tap, avatar tap) gets `accessibilityRole="button"` + label
 - [ ] Contrast spot-check on `text.secondary` (#767779) on white — verify WCAG AA pass
 
-### Document the eslint suppressions
-Why: 3 `react-hooks/exhaustive-deps` suppressions in `MuralCanvas.tsx` + 1 in `update-password.tsx` — they're intentional but undocumented; one comment line each would prevent future contributors from "fixing" them.
-Done when:
-- [ ] Each suppression has a one-line comment explaining why the dep is omitted
+### ~~Document the eslint suppressions~~ — shipped 2026-06-09
+All 4 suppressions in MuralCanvas (×3) + update-password (×1) now carry a one- to three-line comment explaining the omitted dep (Reanimated shared values, wheel handler reading .value at fire time, run-once-on-mount avoidance of infinite loop).
 
 ---
 
@@ -430,6 +416,7 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — Code hygiene batch (4 fixes from audit).** (1) Message hooks `useMessages`, `useEventMessages`, `useCircleMessages` all swallowed initial-fetch errors via `.catch((err) => console.error(...))`; each now also calls `setError(err.message)` and exposes `error: string | null` in its return shape. The chat screens still need to consume the new error and render `<ErrorState />` — that ships with the ErrorState component in the next P2 item. (2) `BottomNav.tsx` + `EntityListSheet.tsx` route casts changed from `router.push(x as any)` to `router.push(x as Href)` (importing `type Href from 'expo-router'`). Type system no longer bypassed. (3) `ViewToggle.tsx` `fontWeight: '510' as any` → `'500'` (the value RN was silently falling back to anyway); inline comment documents Figma origin + rounding. (4) All four `react-hooks/exhaustive-deps` suppressions (3 in `MuralCanvas`, 1 in `update-password`) now carry explanatory comments: Reanimated shared values that don't trigger React renders, wheel handler reading `.value` at fire time, run-once mount avoiding infinite loop. (5) `MockConversation` import in messages inbox was flagged by audit as "stale" — on re-read it's a deliberate display-shape adapter, not stale; kept with a note in BACKLOG for a follow-up rename. Typecheck clean. Commit `__HASH__`.
 - **2026-06-09 — Removed "Available for work" placeholder bar + ticket "Coming soon" buttons (P2 polish).** Two P2 "dead UI" items shipped as one cleanup. (1) The "Available for work" bar on `/(tabs)/profile` rendered on the user's OWN profile with a "Get in touch" button that alerted "Coming soon" — i.e. the user was being asked to message themselves. Removed the `<AvailableForWorkBar />` from both render paths (dev-fallback + authed), deleted the component function, deleted the orphan `availableBar / availableLeft / availableTitle / availableDot / availableLocation / getInTouchButton / getInTouchText` styles, removed now-unused `Alert` import + `INK / META / SUCCESS_DOT` constants. Documented with a one-line comment that the bar will return on `/user/[id]` when Profile v2 #2 ships the `is_available_for_work` toggle. (2) `app/ticket/[id].tsx` had two outline buttons "Download as PDF" + "Send by Email" wired to `handleComingSoon()` → `Alert.alert('Coming soon')`. Removed both buttons + the `handleComingSoon` function. Bonus: `handleInviteFriends` now delegates to the shared `shareEvent(event)` from `share.service.ts` so the canonical URL + platform-tuned payload is consistent with event detail / circle / profile share buttons; removed now-unused `Share` + `Alert` imports. The remaining ticket actions are "Invite Friends" (works) + "Done" (back). Typecheck clean. Commit `e7ead60`.
 - **2026-06-09 — iOS + Android permission descriptions in app.json (P0 App Store blocker).** `app.json` only had `photosPermission` for `expo-image-picker`. The Near-me filter calls `expo-location`, which would have crashed at permission-request time on iOS (no `NSLocationWhenInUseUsageDescription`) and been rejected at App Store Connect upload. Shipped a full sweep: new `ios.infoPlist` entries for `NSLocationWhenInUseUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSPhotoLibraryAddUsageDescription`, `NSCameraUsageDescription`, `NSUserNotificationsUsageDescription` — all with HIG-style copy ("Sphaer uses your X to do Y" with concrete examples). New `expo-location` config-plugin entry sets `locationAlwaysAndWhenInUsePermission` so the prompt copy is consistent. `expo-image-picker` plugin gained `cameraPermission` for selfie/QR scan use. Android side: new `android.permissions` array listing `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`, `CAMERA`, `POST_NOTIFICATIONS`, `INTERNET`. Merged the original P1 "HIG copy sweep" item into this ship since the HIG-style copy was written in the same pass. Outstanding: test on a real iOS device when push notifications actually invoke `NSUserNotificationsUsageDescription`. Commit `28ca7e7`.
 - **2026-06-09 — Privacy Policy + Terms of Service as in-app routes (P0 App Store blocker).** Original BACKLOG entry assumed legal pages would be hosted at `sphaer.app/privacy` + `/terms` (those URLs 404 today). Shipped a faster alternative: new `src/components/legal/LegalScreen.tsx` is a reusable shell (back chevron + title + scrollable structured-section body) consuming a `{ title, lastUpdated, intro, sections: [{heading, body}] }` prop where `body` can be a string or a mix of paragraph strings and `{bullets: [...]}` blocks. New routes `app/legal/privacy.tsx` + `app/legal/terms.tsx` each compose `<LegalScreen>` with App-Store-submittable boilerplate copy — Privacy covers data collection (auth, profile, content, optional location for Near me), usage purposes (no ad networks, no behavioural profiling), Supabase as the EU-region data processor, GDPR rights (access/edit/delete/export), no tracking cookies, 16+ age requirement; Terms covers eligibility, account responsibility, content ownership + IP licence-to-display, acceptable use, event-organiser disclaimer, termination, warranties + liability limits, governing law (Germany / Berlin courts). Both end in a `privacy@sphaer.app` / `hello@sphaer.app` contact footer. Last-updated date set to 2026-06-09; user can refine wording. `app/(auth)/signup.tsx` now navigates via `router.push('/legal/terms')` / `'/legal/privacy'` instead of `Linking.openURL` external (now-unused `Linking` import removed). `app/_layout.tsx` registers both new routes as `presentation: 'card'`. Both screens have `makeRouteErrorBoundary` per the established pattern. Each is reachable without an auth session — App Store reviewers must read them without signing up. Typecheck clean. Commit `2e668c1`.

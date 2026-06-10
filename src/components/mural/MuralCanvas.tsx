@@ -163,6 +163,10 @@ export function MuralCanvas({
     }
     prevCanvasRef.current = { w: canvasWidth, h: canvasHeight };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Reanimated shared values (translateX/Y, scale, canvasOpacity) are
+    // intentionally NOT in the dep list — they don't trigger React renders
+    // and including them would force-recreate the effect on every gesture
+    // tick, breaking the smooth relayout.
   }, [canvasWidth, canvasHeight, viewportWidth, viewportHeight]);
 
   // Web-only wheel handler.
@@ -235,6 +239,9 @@ export function MuralCanvas({
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // translateX/Y and scale are Reanimated shared values — excluded
+    // deliberately. The wheel handler reads .value at fire time, so it
+    // always sees the latest gesture state without re-subscribing.
   }, [viewportWidth, viewportHeight, canvasWidth, canvasHeight, minScale]);
 
   const handleTap = (screenX: number, screenY: number) => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, usePathname, type Href } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SphaerIcon } from '@/components/SphaerLogo';
@@ -156,7 +156,9 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
           <TouchableOpacity
             key={segment}
             style={styles.tab}
-            onPress={segment === 'create' ? onCreatePress : () => router.push(route as any)}
+            onPress={
+              segment === 'create' ? onCreatePress : () => router.push(route as Href)
+            }
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}

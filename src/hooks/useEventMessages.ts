@@ -37,6 +37,7 @@ function generateClientId(): string {
 export function useEventMessages(userId: string | undefined, eventId: string | undefined) {
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const messagesRef = useRef<OptimisticMessage[]>([]);
   useEffect(() => {
@@ -51,6 +52,7 @@ export function useEventMessages(userId: string | undefined, eventId: string | u
   useEffect(() => {
     if (!userId || !eventId) return;
     setIsLoading(true);
+    setError(null);
     sendersCacheRef.current.clear();
 
     let cancelled = false;
@@ -65,7 +67,9 @@ export function useEventMessages(userId: string | undefined, eventId: string | u
         setMessages(msgs.map((m) => toOptimistic(m)));
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error('[useEventMessages] initial fetch failed:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load chat.');
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -179,5 +183,5 @@ export function useEventMessages(userId: string | undefined, eventId: string | u
     [userId, eventId]
   );
 
-  return { messages, isLoading, sendMessage, retryMessage };
+  return { messages, isLoading, error, sendMessage, retryMessage };
 }

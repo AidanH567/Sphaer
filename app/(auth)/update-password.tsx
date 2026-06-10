@@ -90,6 +90,9 @@ export default function UpdatePasswordScreen() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Run-once on mount; we intentionally don't re-run when
+    // hasRecoverySession flips because the effect itself is what flips it.
+    // Adding it as a dep would cause an infinite loop.
   }, []);
 
   function validate(): boolean {

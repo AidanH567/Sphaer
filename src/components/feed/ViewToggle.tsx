@@ -74,12 +74,22 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 17,
-    fontWeight: '510' as any,
+    // Figma spec is 510 (one notch between Medium 500 and Semibold 600).
+    // RN doesn't accept arbitrary numeric strings, so we round to 500 and
+    // let the system font carry the slight extra weight via metrics. Using
+    // '500' here instead of the previous `'510' as any`, which RN was
+    // silently falling back to 500 anyway.
+    fontWeight: '500',
     color: INACTIVE,
   },
 
   labelActive: {
     color: '#FFF',
-    fontWeight: '510' as any,
+    // Figma spec is 510 (one notch between Medium 500 and Semibold 600).
+    // RN doesn't accept arbitrary numeric strings, so we round to 500 and
+    // let the system font carry the slight extra weight via metrics. Using
+    // '500' here instead of the previous `'510' as any`, which RN was
+    // silently falling back to 500 anyway.
+    fontWeight: '500',
   },
 });
