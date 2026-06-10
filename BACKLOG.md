@@ -155,6 +155,28 @@ must register / configure those before any of this can be tested.
 
 ---
 
+## P0 — App Store launch blockers (audit 2026-06-09 — promote candidates)
+
+These are submission-blockers, not polish. Each is a near-guaranteed App
+Store / Play Store rejection. Promote to `▶ UP NEXT` before any other
+P1 work once Apple Sign In + the Figma audit clear.
+
+### Privacy Policy + Terms of Service pages don't exist
+Why: `app/(auth)/signup.tsx:177,181` links to `https://sphaer.app/privacy` and `/terms`. Both URLs 404. App Store + Play Store reviewers verify legal links during submission; broken legal links = reject.
+Done when:
+- [ ] Legal pages hosted somewhere reachable (`sphaer.app/privacy`, `sphaer.app/terms`)
+- [ ] Even single-page placeholders with date-stamped policy + ToS suffice for v1 submission
+- [ ] Verify the two `Linking.openURL` calls in signup.tsx open the live pages
+
+### iOS permission descriptions missing from `app.json`
+Why: `app.json` currently only sets `photosPermission` for `expo-image-picker`. The "Near me" filter uses `expo-location`; that requires `NSLocationWhenInUseUsageDescription`. Without the right Info.plist string, iOS crashes at permission request time AND App Store Connect rejects the build at upload.
+Done when:
+- [ ] Audit every native API the app touches (location, notifications when push lands, photo library, calendar isn't needed because we use `Linking.openURL` for ics)
+- [ ] Add the right per-permission strings to `app.json` under `ios.infoPlist` and `expo-location` config-plugin entries
+- [ ] Test on a real iOS device — granting / denying each permission shouldn't crash the app
+
+---
+
 ## P0 — Investor demo polish
 
 Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
@@ -189,19 +211,74 @@ Done when:
 - [ ] Supabase Auth Apple provider configured
 - [ ] Same OAuth-skip-onboarding flow as Google
 
+### Notifications list screen (data layer ready, UI missing)
+Why: `src/hooks/useNotifications.ts` already exists and `notifications` table is set up, but there's no route to render the list. Every notification we produce (follows, event reminders, circle activity, new messages outside the unread badge) currently fires into a black hole.
+Done when:
+- [ ] New route `app/(tabs)/notifications/index.tsx` consuming `useNotifications()`
+- [ ] Visual states for each notification `type`: 'follow', 'event_reminder', 'circle_event', 'message'
+- [ ] Tap a notification → navigate to the right destination (profile / event / circle / chat)
+- [ ] Mark-as-read on tap; bulk "Mark all read" CTA at top
+- [ ] Bottom-nav entry (or surface inside profile if tab bar is full); badge on the icon for unread count
+
+### Permission Info.plist sweep (HIG copy)
+Why: Beyond the bare-minimum P0 fix, Apple's HIG has style guidance for each permission prompt copy ("Sphaer uses your location to surface events nearby" etc.). Generic copy gets flagged at review.
+Done when:
+- [ ] Every permission string in `app.json` follows Apple HIG ("App needs X to do Y for the user")
+- [ ] Android equivalent permissions documented in `android.permissions`
+
 ### Email confirmation re-enabled (already in existing Profile v2 #9)
 
 ---
 
 ## P2 — Soon (next quarter-ish)
 
-### Push notifications via Expo Notifications
-Why: Currently notifications only render in-app. Real engagement needs push.
+### Push notifications via Expo Notifications (client half + producer half)
+Why: Currently notifications only render in-app. Real engagement needs push. **Producer side is also missing** — even after the notifications-screen ships, no Postgres trigger fires on messages INSERT, follows INSERT, or events INSERT, so the in-app notifications list stays empty for new activity. The producer triggers are the bigger half of this item.
 Done when:
-- [ ] `expo-notifications` setup + permission flow
-- [ ] User push token stored in `profiles.expo_push_token`
-- [ ] Edge function or trigger sends a push on new message, new follower, event reminder, new event from followed circle
-- [ ] In-app preferences for which notification types to receive
+- [ ] **Client:** `expo-notifications` setup + permission flow + `profiles.expo_push_token` column + storage
+- [ ] **Producer:** Postgres triggers on `messages` INSERT (notify recipient), `follows` INSERT (notify followed user), `events` INSERT (notify followers of `events.circle_id` when set — see Activities v2 #18)
+- [ ] **Push delivery:** edge function that reads `notifications` rows pending delivery and calls Expo Push API with the user's token
+- [ ] Scheduled job for event reminders (N hours before `events.starts_at` for any user with that event saved)
+- [ ] In-app preferences screen for which notification types to receive
+
+### Saved-event reminders
+Why: README promises saved events trigger reminders. `saved_events` has no reminder column and no scheduler. Pairs with push notifications.
+Done when:
+- [ ] Migration adds `reminder_at TIMESTAMPTZ NULL` to `saved_events` (or default to event.starts_at − N hours via a settings table)
+- [ ] Optional timepicker when user saves an event (default: 2h before start)
+- [ ] Scheduled edge function or pg_cron sweeps reminders due in the next 15 minutes → enqueues notifications → push handles delivery
+
+### Inline form validation on Create flows (not Alert popups)
+Why: `app/(tabs)/create/index.tsx` and `app/(tabs)/create/circle.tsx` use `Alert.alert('Title required')` etc. The rest of the app (signup, ProfileForm) uses inline per-field error state. Investors notice the inconsistency.
+Done when:
+- [ ] Convert `Alert.alert('Title required')` etc. on both create screens to per-field `error` prop on the `Input` component
+- [ ] Match the dirty-state guard pattern from ProfileForm (Save disabled until form is dirty + valid)
+- [ ] Visually verified parity with signup.tsx
+
+### "Not found" + network-error recovery UX
+Why: `app/event/[id].tsx`'s "Event not found" state has no back button. `/user/[id]` "Profile not found" too. Many data fetches show stuck `ActivityIndicator` if the request fails — no retry button. User gets dead-ended.
+Done when:
+- [ ] Reusable `<ErrorState />` in `src/components/ui/` with icon + headline + body + Retry button + optional Back button
+- [ ] Wire into every detail screen's not-found path + every list screen's fetch-error path
+- [ ] `useEvents` / `useCircles` / `useProfile` etc. expose an `error` state that screens can render
+
+### "Available for work" placeholder bar on own profile
+Why: The bar renders on the user's OWN profile with a "Get in touch" button. Tapping it shows "Coming soon" — the user is being asked to contact themselves. Confusing on first open.
+Done when (pick one):
+- [ ] Gate the bar to only render on OTHER users' profiles, OR
+- [ ] Ship the toggle (Profile v2 #2) — adds `is_available_for_work BOOLEAN` to profiles, toggle in Edit Profile, bar only renders when true
+
+### Ticket detail "Download as PDF" / "Send by email" placeholders
+Why: `app/ticket/[id].tsx:159,166` both show `Alert.alert('Coming soon')`. Either implement or remove for v1 — leaving them is investor friction.
+Done when (pick one):
+- [ ] **Implement:** PDF generation via `expo-print` + email-send edge function via Supabase functions
+- [ ] **Remove:** drop the two buttons for v1; re-add when feature is real
+
+### Unfollow from the follower / following list
+Why: `EntityListSheet` lists Followers and Following but has no per-row unfollow action. User must navigate to the profile and tap Follow again. Common iOS / Insta pattern is long-press → Unfollow.
+Done when:
+- [ ] Long-press (or swipe-left on iOS) reveals an Unfollow action
+- [ ] Optimistic UI matches existing toggleFollow pattern in `app/user/[id].tsx`
 
 ### Share — web preview pages + Universal Links / App Links (deferred infrastructure)
 Why: The in-app Share buttons + canonical `sphaer.app/...` URLs already ship (see ✓ Shipped 2026-06-09). What's left is the deep-link plumbing so the URLs actually open something useful when received.
@@ -213,20 +290,157 @@ Done when:
 
 ---
 
+## P2 — Code hygiene & known bugs (audit 2026-06-09)
+
+Things the audit flagged as wrong-but-not-on-fire. Group several into one
+PR per ship; don't expand the current item to absorb these.
+
+### Message hooks swallow fetch errors (3 hooks)
+Why: `src/hooks/useMessages.ts:51-52`, `useEventMessages.ts:67-68`, `useCircleMessages.ts:60-61` all `.catch((err) => console.error(...))` on initial fetch but never call `setError()`. UI renders an empty thread instead of an error state when fetch fails.
+Done when:
+- [ ] Each hook calls `setError(err instanceof Error ? err.message : 'Failed to load')` before logging
+- [ ] Chat screens read the new error state and render `<ErrorState />` (paired with the new component above)
+
+### Unsafe JSONB casts in messages.service.ts
+Why: Lines 20 / 28 / 35 cast `row.partner as unknown as Event/Circle/Profile` and `row.last_message as unknown as Message` from the `get_conversations` RPC return. If the SQL function schema drifts, these break silently at runtime.
+Done when:
+- [ ] Either regenerate types so the RPC return is properly typed, OR
+- [ ] Add a runtime validator (zod / io-ts) at the cast boundary that throws a clear error on shape mismatch
+
+### Missing skeletons on `/user/[id]` + message threads
+Why: `ProfileSkeleton` exists but isn't used on the other-user-profile fetch path. Message threads (`messages/[id]`, `messages/event/[id]`, `messages/circle/[id]`) use `ActivityIndicator` instead of a chat-bubble skeleton list. Visual inconsistency vs. rest of app.
+Done when:
+- [ ] `/user/[id]` shows `ProfileSkeleton` during `status === 'loading'`
+- [ ] New `MessageBubbleSkeleton` component (staggered pulse to mimic real bubble list); wire into all three chat screens
+
+### Other-users-profile (`/user/[id]`) still falls back to `mockProfiles`
+Why: Profile v2 #7 — already deferred. Worth promoting because `/user/[id]` falling to mocks means any DB user without a hard-coded mock entry hits a stale fake profile or "not found".
+Done when:
+- [ ] `getProfile(id)` fully replaces `getMockProfileByExactId`
+- [ ] Mock fallback removed; 404 → real ErrorState
+
+### Stale `MockConversation` type import
+Why: `app/(tabs)/messages/index.tsx` still imports `MockConversation` from `mockMessages.ts` even though the data layer was retired. Cleanup.
+Done when:
+- [ ] Import removed
+- [ ] `ConversationRow`'s type annotations switch to the real Supabase conversation shape (from `messages.service.ts`)
+
+### `as any` route casts in BottomNav + EntityListSheet
+Why: `src/components/ui/BottomNav.tsx:159` and `EntityListSheet.tsx:158` use `router.push(route as any)` to bypass `typedRoutes`. Defeats the type system.
+Done when:
+- [ ] Use `as unknown as Href` or maintain a typed route union
+- [ ] No `as any` on `router.push` anywhere in the codebase
+
+### `fontWeight: '510' as any` in ViewToggle
+Why: `src/components/feed/ViewToggle.tsx:77,83` declare `fontWeight: '510' as any`. 510 is not a valid React Native fontWeight value; RN silently falls back to 500. The `as any` hides a real bug.
+Done when (pick one):
+- [ ] Switch to a valid token weight (500 or 600) from `typography.fontWeight`, OR
+- [ ] If 510 is intentional for design parity, document the workaround inline + use `as never` to make the intent explicit
+
+### Memo audit of high-churn parents
+Why: Feed memoizes `visibleEvents`; Profile / Circles / chat bubble subtrees don't. On AppContext or auth state flip they re-render wide trees.
+Done when:
+- [ ] Profile screen wraps stable children (ProfileCompletionCard, AvailableForWorkBar, SettingsSection) with `React.memo`
+- [ ] Circle cards memoize their handlers via `useCallback`
+- [ ] Chat bubble list memoizes per-message render
+
+### Accessibility audit (concrete numbers)
+Why: 325 TouchableOpacity/Pressable instances in the app vs only ~14 `accessibilityLabel` props. VoiceOver users can't navigate.
+Done when:
+- [ ] Per-screen sweep PR — add `accessibilityLabel` to every interactive element
+- [ ] Icon-only buttons get descriptive labels ("Refresh mural", "Share event", "Open ticket")
+- [ ] Image-as-button (poster tap, avatar tap) gets `accessibilityRole="button"` + label
+- [ ] Contrast spot-check on `text.secondary` (#767779) on white — verify WCAG AA pass
+
+### Document the eslint suppressions
+Why: 3 `react-hooks/exhaustive-deps` suppressions in `MuralCanvas.tsx` + 1 in `update-password.tsx` — they're intentional but undocumented; one comment line each would prevent future contributors from "fixing" them.
+Done when:
+- [ ] Each suppression has a one-line comment explaining why the dep is omitted
+
+---
+
+## P2 — Security (audit 2026-06-09)
+
+### Image upload file-type validation
+Why: `src/services/events.service.ts#uploadEventPoster()` and the profile gallery upload paths guess extension from URI string — no Content-Type validation. A user could upload `.exe` renamed `.jpg`. Bucket RLS limits write to own folder but doesn't prevent malicious file types.
+Done when:
+- [ ] Validate MIME type server-side via an edge function gate OR Supabase Storage `allowed_mime_types` bucket config
+- [ ] Reject anything that isn't `image/jpeg | image/png | image/webp | image/heic`
+- [ ] Optional: add a virus-scan call (VirusTotal API) on upload before making the object public
+
+### Rate limiting on writes (messages / follows / notifications)
+Why: No throttle anywhere. A user can spam-send 100 DMs in a second, each firing a notification. Harassment + spam vector.
+Done when:
+- [ ] Postgres function `check_rate_limit(uid uuid, action text)` that reads count from a rolling-window log table; rejects if over threshold
+- [ ] Triggers on `messages` / `follows` / `notifications` INSERT call the function
+- [ ] Thresholds picked per action — e.g. 10 DMs / minute, 30 follows / hour
+
+### Google Maps API key restrictions
+Why: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is bundled into the APK / IPA (unavoidable on Expo). If unrestricted, an attacker can reuse it for their own quota / billing. One-time ops fix.
+Done when:
+- [ ] In Google Cloud Console, restrict the Maps API key to bundle IDs `com.sphaer.app` (iOS + Android)
+- [ ] No code change; just operational checklist
+
+### PostgREST `.or()` search uses unescaped user input
+Why: `src/services/events.service.ts` builds `.or()` from the search string. PostgREST's parser is safe today, but if it ever changes or a user finds a vector, this is risky. Defensive sanitisation.
+Done when:
+- [ ] Strip PostgREST-reserved chars (`,`, `(`, `)`, `*`, `:`) from search input before interpolation
+- [ ] Or move to a PostgREST function with explicit parameters
+
+---
+
+## P2 — Data integrity (audit 2026-06-09)
+
+### Denormalised follower / following counts
+Why: `getProfile()` recomputes counts on read. Concurrent follows can race; the counts could disagree with reality on a hot profile.
+Done when:
+- [ ] Migration adds `followers_count INT DEFAULT 0`, `following_count INT DEFAULT 0` to `profiles`
+- [ ] Postgres trigger on `follows` INSERT / DELETE uses `UPDATE ... SET count = count + 1` for atomicity
+- [ ] Read path stops computing from `follows` join
+
+### Soft-delete policy decision
+Why: Events / circles / messages are all hard-deleted today; cascade deletion of an account vapourises everything. For future content moderation / dispute resolution, decide whether to add `deleted_at TIMESTAMPTZ` columns now and filter at query time.
+Done when:
+- [ ] Product decision: hard-delete v. soft-delete per content type
+- [ ] If soft-delete: migrations add `deleted_at`, all service queries add `WHERE deleted_at IS NULL`, account deletion still hard-purges the user's own rows but moderation can soft-delete others'
+
+---
+
+## P2 — Developer experience (audit 2026-06-09)
+
+### Zero test coverage
+Why: No `.test.*` files anywhere; no Jest / Vitest / Detox config. Every refactor is by hand. **PROMOTE candidate for after launch** — let's not block ship on tests, but baseline coverage prevents regressions.
+Done when:
+- [ ] Jest + React Native Testing Library installed
+- [ ] Smoke test suite covers: signup form validation, create-event form validation, save-event toggle, sign-out flow
+- [ ] GitHub Actions CI runs the suite on push before merge
+
+### TypeScript enums for `notification.type` and `circle_members.role`
+Why: Schema enforces them via string CHECK constraints; code uses string literals scattered everywhere. A typo (`'circle_evnt'` instead of `'circle_event'`) silently breaks notification routing.
+Done when:
+- [ ] New `src/types/enums.ts` with `type NotificationType = 'follow' | 'event_reminder' | 'circle_event' | 'message'`
+- [ ] All `notification.type` callsites + RPC return types use the typed alias
+- [ ] Same for `CircleRole = 'admin' | 'member'`
+
+---
+
 ## Backlog (later — months out)
 
-- **Circle group chat** — v2 of Messaging spec. Schema already supports `circle_id` on messages.
+- **Circle group chat (Messaging v2)** — `src/hooks/useCircleMessages.ts` already exists but is unused; circle detail screen has no chat tab. Wire the existing hook + add chat UI inside circle detail (new tab between Members and Activities); existing 1:1 ChatBubble + ChatComposer components should drop in.
+- **Ticketing / Stripe integration** — schema has `events.is_free` + `price` + `ticket_url` but `registrations.service.ts` is RSVP-only (no payment processor). Investors will ask about monetisation. Big project: Stripe Checkout + webhook for confirmation + refund / cancel path + `paid_at` column on registrations.
+- **Notification triggers (Activities v2 #18 — pair with push notifications)** — Postgres trigger on `events` INSERT fans out a `notifications` row to every user in `circle_follows` WHERE circle_id matches the event's circle_id. Needed once the notifications screen ships, otherwise the screen stays empty for circle-event activity.
+- **Onboarding tutorial (3-screen swipeable intro before signup CTA)** — first-open users see "Discover Berlin events" → "Follow artists & communities" → "Save & get notified" before the landing-screen Get Started / Log In CTAs. Promote this if investor demo is approaching — a blank feed cold-start is a bad first impression.
+- **Onboarding screen consolidation (5 → 3)** — current first-time path is splash → tagline → landing → signup → verify-email → onboarding → /location → feed. Folding the `/location` neighborhood picker into the onboarding form's final step would cut to 3 screens and feel less interrogative.
+- **Photo likes + comments on profile gallery (Profile v2 #4 + #5 promoted)** — tap a gallery thumbnail → photo detail page with hearts + comments + caption display. New tables: `profile_image_likes (user_id, image_id)` + `profile_image_comments (id, image_id, author_id, content, created_at)`. Notifications producer fans out to the gallery owner.
+- **Bulk calendar export for saved events** — single `.ics` file containing every saved event so the user can import their whole queue at once. Per-event Add-to-Calendar already shipped 2026-06-09; this is the saved-list variant. Add a button to the Saved sheet on profile.
 - **Map clustering** — when zoomed out, group pins to avoid visual mess. `react-native-maps` supports this with a cluster wrapper.
-- **Calendar export of saved events (bulk)** — single .ics file containing every saved event so the user can import their whole queue at once. The per-event "Add to calendar" already shipped 2026-06-09; this is just the saved-list bulk variant.
-- **Dark mode** — `theme.ts` is already token-based, so this is mostly a swap of color values + `useColorScheme()` hook.
+- **Dark mode** — `theme.ts` is already token-based, so this is mostly a swap of color values + `useColorScheme()` hook + a refactor of every screen to read colors via a `useColors()` hook instead of importing `colors` directly.
 - **Blocking / reporting users** — mute/block flow + report-to-mods. App Store may push back if absent given the social nature.
 - **Analytics (PostHog / Mixpanel)** — track funnel: signup → first event view → first save → first message. Pick one.
 - **Crash reporting (Sentry / Bugsnag)** — wire to error boundaries from the P1 item.
-- **Accessibility audit** — VoiceOver labels on every interactive element, dynamic type support, color contrast spot-checks. Aim for WCAG AA before launch.
 - **AI-generated event posters** — user mentioned this is coming. Designers can generate a poster from an event title/description. Hook `expo-image-manipulator` for client crop, openAI or Replicate for the gen, store dims at gen time (resolves the deferred `poster_width`/`poster_height` columns from the Mural session).
-- **Onboarding tutorial** — first-time users see a 3-screen swipeable "what is Sphaer" intro before signup CTA. Helps investor demos especially.
 - **Splash screen polish** — current splash is the Expo default. Custom Sphaer artwork matching the landing screen.
-- **Profile image gallery editing** — long-press to delete, drag-to-reorder. Currently photos are append-only.
+- **Profile image gallery editing** — long-press to delete, drag-to-reorder. Currently photos are append-only inside Edit Profile; no delete in view mode.
 
 ---
 
