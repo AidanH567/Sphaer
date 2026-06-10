@@ -22,15 +22,24 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
     // so we fold the array to text via `categories::text` and ilike against
     // that. Cheap on small data sets; switch to a tsvector + GIN index when
     // events crosses ~10k rows (tracked as Activities v2 #11).
-    const q = `%${filters.search}%`;
-    query = query.or(
-      [
-        `title.ilike.${q}`,
-        `description.ilike.${q}`,
-        `location_name.ilike.${q}`,
-        `address.ilike.${q}`,
-      ].join(',')
-    );
+    //
+    // Sanitize the input: strip PostgREST-reserved characters (commas split
+    // filter clauses, parens nest them, asterisk is a column wildcard, colon
+    // separates field.op.value). Without this, a user typing `event,*` as a
+    // search would inject a malformed filter clause. The parser is otherwise
+    // safe today, but defensive — see BACKLOG P2 security entry.
+    const safe = filters.search.replace(/[,():*]/g, ' ').trim();
+    if (safe.length > 0) {
+      const q = `%${safe}%`;
+      query = query.or(
+        [
+          `title.ilike.${q}`,
+          `description.ilike.${q}`,
+          `location_name.ilike.${q}`,
+          `address.ilike.${q}`,
+        ].join(',')
+      );
+    }
   }
   if (filters?.categories?.length) {
     query = query.overlaps('categories', filters.categories);

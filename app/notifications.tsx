@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { colors, spacing, typography } from '@/constants/theme';
 import { formatMessageTime } from '@/utils/date';
 import type { Notification } from '@/types/message.types';
+import type { NotificationType } from '@/types/enums';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
@@ -126,7 +127,7 @@ function NotificationRow({
   item: Notification;
   onPress: () => void;
 }) {
-  const meta = META_FOR_TYPE[item.type] ?? FALLBACK_META;
+  const meta = META_FOR_TYPE[item.type as NotificationType] ?? FALLBACK_META;
   return (
     <TouchableOpacity
       style={[styles.row, !item.is_read && styles.rowUnread]}
@@ -156,7 +157,7 @@ interface NotificationMeta {
   copy: (n: Notification) => string;
 }
 
-const META_FOR_TYPE: Record<string, NotificationMeta> = {
+const META_FOR_TYPE: Record<NotificationType, NotificationMeta> = {
   follow: {
     icon: 'person-add-outline',
     iconColor: '#3B82F6',
@@ -192,7 +193,7 @@ const FALLBACK_META: NotificationMeta = {
 
 function routeFor(n: Notification): string | null {
   if (!n.reference_id) return null;
-  switch (n.type) {
+  switch (n.type as NotificationType) {
     case 'follow':
       return `/user/${n.reference_id}`;
     case 'event_reminder':
