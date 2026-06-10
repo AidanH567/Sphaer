@@ -16,6 +16,7 @@ import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
 import { shareEvent } from '@/services/share.service';
+import { addEventToCalendar } from '@/services/calendar.service';
 import {
   isEventSaved as isEventSavedService,
   saveEvent,
@@ -121,6 +122,15 @@ export default function EventDetailScreen() {
     }
   }
 
+  async function handleAddToCalendar() {
+    if (!event) return;
+    try {
+      await addEventToCalendar(event);
+    } catch (err) {
+      console.error('[EventDetail] add to calendar failed:', err);
+    }
+  }
+
   function openInMaps() {
     if (event?.lat == null || event?.lng == null) return;
     const query = `${event.lat},${event.lng}`;
@@ -157,7 +167,18 @@ export default function EventDetailScreen() {
               <Ionicons name="chatbubble-outline" size={22} color={colors.text.primary} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={handleShare} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={handleAddToCalendar}
+            style={styles.navButton}
+            accessibilityLabel="Add to calendar"
+          >
+            <Ionicons name="calendar-outline" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleShare}
+            style={styles.navButton}
+            accessibilityLabel="Share event"
+          >
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleToggleSave} style={styles.navButton}>
