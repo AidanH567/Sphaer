@@ -66,6 +66,8 @@ export default function RootLayout() {
               <Stack.Screen name="event/[id]" options={{ presentation: 'card' }} />
               <Stack.Screen name="user/[id]" options={{ presentation: 'card' }} />
               <Stack.Screen name="ticket/[id]" options={{ presentation: 'card' }} />
+              <Stack.Screen name="legal/privacy" options={{ presentation: 'card' }} />
+              <Stack.Screen name="legal/terms" options={{ presentation: 'card' }} />
               <Stack.Screen
                 name="location"
                 options={{

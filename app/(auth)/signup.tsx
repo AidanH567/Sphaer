@@ -8,7 +8,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -174,11 +173,17 @@ export default function SignUpScreen() {
           <View style={styles.legal}>
             <Text style={styles.legalText}>
               By continuing, you agree to Sphaer’s{'\n'}
-              <Text style={styles.legalLink} onPress={() => Linking.openURL('https://sphaer.app/terms')}>
+              <Text
+                style={styles.legalLink}
+                onPress={() => router.push('/legal/terms' as never)}
+              >
                 Terms of Service
               </Text>{' '}
               and{' '}
-              <Text style={styles.legalLink} onPress={() => Linking.openURL('https://sphaer.app/privacy')}>
+              <Text
+                style={styles.legalLink}
+                onPress={() => router.push('/legal/privacy' as never)}
+              >
                 Privacy Policy
               </Text>
             </Text>
