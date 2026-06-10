@@ -15,6 +15,7 @@ import {
   leaveCircle,
   getCircleMembers,
 } from '@/services/circles.service';
+import { shareCircle } from '@/services/share.service';
 import { supabase } from '@/lib/supabase';
 import type { EventWithRelations } from '@/types/event.types';
 import type { Profile } from '@/types/user.types';
@@ -133,8 +134,12 @@ export default function CircleDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton}>
-          <Ionicons name="information-circle-outline" size={24} color={colors.text.secondary} />
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => circle && shareCircle(circle).catch(() => {})}
+          accessibilityLabel="Share circle"
+        >
+          <Ionicons name="share-outline" size={22} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
 
