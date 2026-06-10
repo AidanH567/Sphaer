@@ -283,10 +283,14 @@ export default function FeedScreen() {
 
       {/* Quick filter chips — lives between the header and the list so it
           can be dropped in without restructuring the SearchFilterBar layout.
-          ScrollView so it scrolls horizontally on narrow screens. */}
+          ScrollView so it scrolls horizontally on narrow screens.
+          `chipScroll` (flexGrow: 0) is load-bearing: without it the parent
+          flex column lets the FlatList below compress this row to half
+          height and the chips render clipped. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.chipScroll}
         contentContainerStyle={styles.chipRow}
       >
         <TouchableOpacity
@@ -441,10 +445,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.appleMail },
   list: { paddingTop: spacing.base, paddingBottom: spacing['4xl'] },
   skeletonList: { paddingTop: spacing.base },
+  // Both flags are load-bearing. react-native-web's ScrollView ships a
+  // base style of { flexGrow: 1, flexShrink: 1 } — flexGrow: 0 alone still
+  // lets the FlatList below shrink this row to ~4px and the chips render
+  // clipped. flexShrink: 0 forces the row to keep its natural height.
+  chipScroll: { flexGrow: 0, flexShrink: 0 },
   chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
     paddingBottom: spacing.sm,
     gap: spacing.xs,
   },
