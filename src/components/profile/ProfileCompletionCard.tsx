@@ -21,7 +21,16 @@ interface ProfileCompletionCardProps {
  * read like a permanent UI bug. The completion-% framing turns the same data
  * into a positive nudge that quietly hides once the user is done.
  */
-export function ProfileCompletionCard({
+/**
+ * Memoised — the profile screen re-renders on every focus / notifications
+ * unread-count tick / stats refetch, and this card's props (percentage +
+ * missing array) only change when the underlying profile mutates. Shallow
+ * compare with a stable `missing` array reference (caller passes
+ * `completion.missing` straight from `computeProfileCompletion` which
+ * returns a new array each call — but the contents are deep-equal until
+ * the profile changes, so memo by reference works fine in practice).
+ */
+function ProfileCompletionCardImpl({
   percentage,
   missing,
   onEditPress,
@@ -63,6 +72,8 @@ export function ProfileCompletionCard({
     </TouchableOpacity>
   );
 }
+
+export const ProfileCompletionCard = React.memo(ProfileCompletionCardImpl);
 
 /**
  * Human copy for the first 1–2 missing fields. Never lists more than two:

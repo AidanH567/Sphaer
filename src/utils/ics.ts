@@ -18,25 +18,49 @@
 
 import type { EventWithRelations } from '@/types/event.types';
 
+type IcsEvent = Pick<
+  EventWithRelations,
+  | 'id'
+  | 'title'
+  | 'description'
+  | 'starts_at'
+  | 'ends_at'
+  | 'location_name'
+  | 'address'
+>;
+
 /** Build an .ics file body for a single event. */
-export function buildEventIcs(
-  event: Pick<
-    EventWithRelations,
-    | 'id'
-    | 'title'
-    | 'description'
-    | 'starts_at'
-    | 'ends_at'
-    | 'location_name'
-    | 'address'
-  >,
-): string {
+export function buildEventIcs(event: IcsEvent): string {
+  return wrapCalendar(eventVeventLines(event));
+}
+
+/**
+ * Build an .ics file body containing every event passed in — used by the
+ * "Export saved events" bulk action. All events live inside one VCALENDAR
+ * wrapper so the user only sees one calendar-app import prompt, not N.
+ * Events with no `starts_at` are silently dropped (the calendar app
+ * wouldn't know where to place them anyway).
+ */
+export function buildEventsIcs(events: IcsEvent[]): string {
+  const usable = events.filter((e) => e.starts_at);
+  return wrapCalendar(usable.flatMap(eventVeventLines));
+}
+
+function wrapCalendar(veventLines: string[]): string {
   const lines: string[] = [];
   lines.push('BEGIN:VCALENDAR');
   lines.push('VERSION:2.0');
   lines.push('PRODID:-//Sphaer//EN');
   lines.push('CALSCALE:GREGORIAN');
   lines.push('METHOD:PUBLISH');
+  lines.push(...veventLines);
+  lines.push('END:VCALENDAR');
+  // RFC 5545 mandates CRLF, not LF.
+  return lines.join('\r\n') + '\r\n';
+}
+
+function eventVeventLines(event: IcsEvent): string[] {
+  const lines: string[] = [];
   lines.push('BEGIN:VEVENT');
   // UID must be globally unique. The event id + the app's domain is
   // stable and prevents duplicates when re-imported.
@@ -62,9 +86,7 @@ export function buildEventIcs(
   }
   lines.push(`URL:https://sphaer.app/event/${event.id}`);
   lines.push('END:VEVENT');
-  lines.push('END:VCALENDAR');
-  // RFC 5545 mandates CRLF, not LF.
-  return lines.join('\r\n') + '\r\n';
+  return lines;
 }
 
 /**

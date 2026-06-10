@@ -1,5 +1,5 @@
 import { Linking, Platform } from 'react-native';
-import { buildEventIcs } from '@/utils/ics';
+import { buildEventIcs, buildEventsIcs } from '@/utils/ics';
 import type { EventWithRelations } from '@/types/event.types';
 
 /**
@@ -40,6 +40,40 @@ export async function addEventToCalendar(
 
   // Native: base64-encode the ICS content and hand it off via data: URI.
   // expo-router / supabase-js already polyfill `btoa` on RN runtimes.
+  const base64 = encodeBase64(ics);
+  const uri = `data:text/calendar;base64,${base64}`;
+  const supported = await Linking.canOpenURL(uri).catch(() => false);
+  if (!supported) {
+    throw new Error('Calendar handoff not supported on this device.');
+  }
+  await Linking.openURL(uri);
+}
+
+/**
+ * Bulk: export every event passed in as a single .ics file with multiple
+ * VEVENTs. Same handoff machinery as `addEventToCalendar` — one prompt
+ * for the user, not N.
+ */
+export async function addEventsToCalendar(
+  events: Array<
+    Pick<
+      EventWithRelations,
+      | 'id'
+      | 'title'
+      | 'description'
+      | 'starts_at'
+      | 'ends_at'
+      | 'location_name'
+      | 'address'
+    >
+  >,
+): Promise<void> {
+  const ics = buildEventsIcs(events);
+  const filename = `sphaer-saved-${Date.now()}.ics`;
+  if (Platform.OS === 'web') {
+    downloadIcsOnWeb(ics, filename);
+    return;
+  }
   const base64 = encodeBase64(ics);
   const uri = `data:text/calendar;base64,${base64}`;
   const supported = await Linking.canOpenURL(uri).catch(() => false);

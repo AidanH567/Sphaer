@@ -24,7 +24,12 @@ const META = colors.neutral.neutral400; // neutral/neutral-400 — activity / me
  * One-to-one with the Figma card: circular image, title, activity + member
  * counts. Fixed 176×313 so it never stretches inside a horizontal row.
  */
-export function CircleCard({ circle, onPress }: CircleCardProps) {
+/**
+ * Memoised — the Circles browse screen renders these inside horizontal
+ * ScrollViews per section. Without memo, every card re-renders when the
+ * parent's `useCircles` reacts to a context tick.
+ */
+function CircleCardImpl({ circle, onPress }: CircleCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       {circle.avatar_url ? (
@@ -50,6 +55,8 @@ export function CircleCard({ circle, onPress }: CircleCardProps) {
     </TouchableOpacity>
   );
 }
+
+export const CircleCard = React.memo(CircleCardImpl);
 
 const styles = StyleSheet.create({
   card: {
