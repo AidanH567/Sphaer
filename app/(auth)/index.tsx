@@ -2,10 +2,12 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SphaerIcon } from '@/components/SphaerLogo';
 import { Button } from '@/components/ui/Button';
 import { colors, typography, spacing } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { INTRO_SEEN_KEY } from './intro';
 
 const { height } = Dimensions.get('window');
 
@@ -18,6 +20,21 @@ export default function LandingScreen() {
   const buttonsY = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
+    // First-time-user gate. If the user hasn't seen the 3-screen intro,
+    // bounce them there before the landing renders. Subsequent launches
+    // skip this branch and show the landing immediately. AsyncStorage
+    // failures fall through to the landing — a missed intro is preferable
+    // to a permanently broken first-launch experience.
+    AsyncStorage.getItem(INTRO_SEEN_KEY)
+      .then((seen) => {
+        if (!seen) {
+          router.replace('/(auth)/intro' as never);
+        }
+      })
+      .catch(() => {
+        // Tolerated — show landing.
+      });
+
     Animated.sequence([
       Animated.parallel([
         Animated.timing(logoOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
