@@ -50,7 +50,15 @@ their own commits per the standard workflow.
 
 **Figma file (use this fileKey for every call):**
 `iuCO8ENAhfYIJly1JGAeU1` — `Sphaer_Prototype_RA (Copy)` in user's drafts.
-Verified working as long as the rate limit has bandwidth left.
+
+**Blocker status (re-diagnosed 2026-06-10):** the earlier `net::ERR_FAILED`
+was a Claude-side MCP transport outage affecting ALL connectors — it has
+resolved (`whoami` works, Supabase + Vercel MCPs work). The REAL remaining
+blocker is the **Figma Starter-plan tool-call cap**: `get_design_context`
+returns the upgrade paywall. Editor seat does NOT lift it — it's a team
+plan limit (both of the user's teams show `tier: "starter"`). Resume the
+audit the moment the team plan is upgraded, or use the Dev Mode paste
+fallback below.
 
 **Already shipped (do NOT re-audit):**
 - ✅ `2012:1757` — Splash Screen (1×1 placeholder PNG → Figma-matched
