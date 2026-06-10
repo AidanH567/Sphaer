@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Share,
-  Alert,
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,6 +15,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useEvent } from '@/hooks/useEvents';
 import { useAuthContext } from '@/context/AuthContext';
 import { getRegistration } from '@/services/registrations.service';
+import { shareEvent } from '@/services/share.service';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { EventRegistration } from '@/services/registrations.service';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -63,18 +62,13 @@ export default function TicketDetailScreen() {
   async function handleInviteFriends() {
     if (!event) return;
     try {
-      await Share.share({
-        message: `Join me at ${event.title} on Sphaer.`,
-        // url field is honored on iOS; Android falls back to message text.
-        url: `https://sphaer.app/event/${event.id}`,
-      });
+      // Delegate to the shared share helper so the canonical URL +
+      // platform-tuned payload is consistent with event detail / circle /
+      // profile share buttons.
+      await shareEvent(event);
     } catch (err) {
       console.error('[Ticket] share failed:', err);
     }
-  }
-
-  function handleComingSoon(label: string) {
-    Alert.alert('Coming soon', `${label} isn't wired up yet.`);
   }
 
   if (isLoading) {
@@ -153,23 +147,11 @@ export default function TicketDetailScreen() {
         </View>
 
         <View style={styles.actions}>
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionOutline, styles.actionHalf]}
-              onPress={() => handleComingSoon('Download as PDF')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.actionOutlineText}>Download as PDF</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.actionOutline, styles.actionHalf]}
-              onPress={() => handleComingSoon('Send by Email')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.actionOutlineText}>Send by Email</Text>
-            </TouchableOpacity>
-          </View>
-
+          {/* "Download as PDF" / "Send by Email" used to live here behind
+              Alert("Coming soon") stubs — removed for v1 to avoid showing
+              users dead controls. Re-add behind real implementations
+              (expo-print for PDF + Supabase edge function for email)
+              when those land — tracked in BACKLOG. */}
           <TouchableOpacity
             style={[styles.actionButton, styles.actionPrimary]}
             onPress={handleInviteFriends}

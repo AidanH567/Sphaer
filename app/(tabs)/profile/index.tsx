@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,9 +34,8 @@ import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { colors, typography, spacing } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
-const INK = '#1B1B18';
-const META = '#767779';
-const SUCCESS_DOT = '#2A7E3B';
+// Note: INK / META / SUCCESS_DOT used to live here for the
+// AvailableForWorkBar; removed alongside the bar in 2026-06-09 cleanup.
 
 // NOTE: real authed users come from Supabase. In __DEV__ with no session
 // we still fall back to mockProfiles for UI iteration without auth.
@@ -347,12 +345,7 @@ export default function ProfileScreen() {
         <ProfileView
           profile={mock}
           isOwnProfile
-          trailingSlot={
-            <>
-              <AvailableForWorkBar location={mock.location} />
-              <SettingsSection onDeletePress={handleDeleteAccount} />
-            </>
-          }
+          trailingSlot={<SettingsSection onDeletePress={handleDeleteAccount} />}
         />
         {signOutSheet}
         {deleteAccountSheets}
@@ -387,12 +380,7 @@ export default function ProfileScreen() {
           onActivitiesPress={() => setOpenSheet('activities')}
           onSavedPress={() => setOpenSheet('saved')}
           onTicketsPress={() => setOpenSheet('tickets')}
-          trailingSlot={
-            <>
-              <AvailableForWorkBar location={displayProfile.location} />
-              <SettingsSection onDeletePress={handleDeleteAccount} />
-            </>
-          }
+          trailingSlot={<SettingsSection onDeletePress={handleDeleteAccount} />}
         />
       )}
 
@@ -418,39 +406,12 @@ function TopBar({ onSignOut }: { onSignOut: () => void }) {
 
 // ─── Available for work — placeholder until the feature ships ────────────────
 
-function AvailableForWorkBar({ location }: { location: string }) {
-  return (
-    <View style={styles.availableBar}>
-      <View style={styles.availableLeft}>
-        <View style={styles.availableTitleRow}>
-          <View style={styles.availableDot} />
-          <Text style={styles.availableTitle}>Available for work</Text>
-        </View>
-        <View style={styles.availableLocationRow}>
-          <Ionicons name="navigate" size={11} color={META} />
-          <Text style={styles.availableLocation}>{location || 'Berlin'}</Text>
-        </View>
-      </View>
-      <TouchableOpacity
-        style={styles.getInTouchButton}
-        onPress={() =>
-          // DMs ARE wired up — this bar's "Get in touch" is the placeholder
-          // for what will eventually be the OTHER-user-profile messaging
-          // entry once the "Available for work" toggle ships (Profile v2 #2).
-          // On the own-profile we keep the bar visible as a demo of the
-          // shape, but the button has no honest action yet.
-          Alert.alert(
-            'Coming soon',
-            'The "Available for work" toggle ships in Profile v2 — this bar will appear on other artists\' profiles when they mark themselves available.'
-          )
-        }
-        activeOpacity={0.85}
-      >
-        <Text style={styles.getInTouchText}>Get in touch</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+// Note: the old `<AvailableForWorkBar />` rendered on every own-profile,
+// but its "Get in touch" CTA alerted "Coming soon" — meaning the user
+// was being asked to message themselves. Removed 2026-06-09 to stop the
+// dead control showing up on demo. The bar will re-emerge on
+// /user/[id].tsx (other-user profiles) when Profile v2 #2 ships the
+// `is_available_for_work` toggle and the toggle is on for that user.
 
 // ─── Settings section — Delete account row ───────────────────────────────────
 
@@ -492,55 +453,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  // Available-for-work placeholder bar
-  availableBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    paddingTop: spacing.base,
-    paddingHorizontal: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  availableLeft: { flex: 1, gap: 2 },
-  availableTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  availableDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: SUCCESS_DOT,
-  },
-  availableTitle: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: 15,
-    fontWeight: typography.fontWeight.bold,
-    color: INK,
-  },
-  availableLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingLeft: 17,
-  },
-  availableLocation: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
-    color: META,
-  },
-  getInTouchButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 30,
-    backgroundColor: INK,
-  },
-  getInTouchText: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.white,
   },
 
   settingsSection: {
