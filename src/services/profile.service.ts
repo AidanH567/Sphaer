@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { validateImageUpload } from '@/utils/upload-validation';
 import type {
   ProfileUpdate,
   ProfileWithCounts,
@@ -125,6 +126,7 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string>
   const ext = inferExtension(uri);
   const path = `${userId}/avatar.${ext}`;
   const blob = await uriToBlob(uri);
+  validateImageUpload(blob);
 
   const { error } = await supabase.storage
     .from('avatars')
@@ -175,6 +177,7 @@ export async function uploadGalleryImage(
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
   const path = `${profileId}/${fileName}`;
   const blob = await uriToBlob(uri);
+  validateImageUpload(blob);
 
   const { error: uploadError } = await supabase.storage
     .from('profile-gallery')

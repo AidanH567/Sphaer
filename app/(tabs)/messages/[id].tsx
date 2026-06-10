@@ -21,6 +21,7 @@ import { ChatBubble } from '@/components/messaging/ChatBubble';
 import { MessageInput } from '@/components/messaging/MessageInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { MessageBubbleSkeletonList } from '@/components/ui/skeletons/MessageBubbleSkeleton';
 import { colors, typography, spacing } from '@/constants/theme';
 import { formatSeenTime } from '@/utils/date';
 import type { OptimisticMessage } from '@/types/message.types';
@@ -112,9 +113,7 @@ export default function ConversationScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.black} />
-          </View>
+          <MessageBubbleSkeletonList />
         ) : error ? (
           <ErrorState
             icon="chatbubble-ellipses-outline"
