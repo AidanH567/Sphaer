@@ -20,6 +20,7 @@ import {
   getProfileImages,
   getFollowers,
   getFollowing,
+  unfollowUser,
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
@@ -50,6 +51,23 @@ export default function ProfileScreen() {
     router.push('/notifications' as never);
   }
 
+  async function performUnfollow() {
+    if (!user?.id || !unfollowTarget) return;
+    const target = unfollowTarget;
+    // Optimistic remove from the visible list + counters; rollback on error.
+    setFollowing((prev) => prev.filter((p) => p.id !== target.id));
+    setCounts((c) => ({ ...c, following: Math.max(0, c.following - 1) }));
+    setUnfollowTarget(null);
+    try {
+      await unfollowUser(user.id, target.id);
+    } catch (err) {
+      console.error('[Profile] unfollow failed:', err);
+      // Rollback — add back to the visible list + counter.
+      setFollowing((prev) => [target, ...prev]);
+      setCounts((c) => ({ ...c, following: c.following + 1 }));
+    }
+  }
+
   // Live counts pulled from Supabase. See grilling Q5 + Q6d:
   //   - activities count = event_registrations rows for user (creator-as-attendee
   //     is auto-inserted by the `on_event_created` trigger, so this naturally
@@ -66,6 +84,11 @@ export default function ProfileScreen() {
   const [extrasLoading, setExtrasLoading] = useState(true);
 
   const [signOutSheetVisible, setSignOutSheetVisible] = useState(false);
+  // Long-press unfollow confirm — set when the user long-presses a row in the
+  // Following sheet. Two-state machine: null means "no confirm pending"; a
+  // Profile means "confirm sheet open, this person is about to be unfollowed".
+  const [unfollowTarget, setUnfollowTarget] = useState<Profile | null>(null);
+
   // Two-step delete: first sheet warns, second sheet is the point of no return.
   // Splitting it into two sheets is the "double confirm" spec — a single typed
   // "DELETE" prompt was rejected as over-engineered for a solo demo (see BACKLOG).
@@ -252,6 +275,20 @@ export default function ProfileScreen() {
   // the dev-fallback and authed render paths so the UI is verifiable in
   // preview; without a session, the edge function returns 401 and the sheet
   // surfaces the error rather than silently no-op'ing.
+  // Long-press → unfollow confirm. Rendered only when a target is set; close
+  // on cancel by clearing the target.
+  const unfollowSheet = (
+    <ConfirmSheet
+      visible={unfollowTarget !== null}
+      title={`Unfollow ${unfollowTarget?.display_name ?? 'this artist'}?`}
+      message="Their activities will stop appearing on your feed. You can re-follow anytime."
+      confirmLabel="Unfollow"
+      destructive
+      onConfirm={performUnfollow}
+      onClose={() => setUnfollowTarget(null)}
+    />
+  );
+
   const deleteAccountSheets = (
     <>
       <ConfirmSheet
@@ -298,6 +335,7 @@ export default function ProfileScreen() {
         isLoading={sheetLoading && openSheet === 'following'}
         emptyMessage="Not following anyone yet — tap a creator on the feed to follow them."
         onClose={() => setOpenSheet(null)}
+        onLongPressUser={(profile) => setUnfollowTarget(profile)}
       />
       <EntityListSheet
         visible={openSheet === 'circles'}
@@ -363,6 +401,7 @@ export default function ProfileScreen() {
         />
         {signOutSheet}
         {deleteAccountSheets}
+        {unfollowSheet}
       </SafeAreaView>
     );
   }
@@ -405,6 +444,7 @@ export default function ProfileScreen() {
       {signOutSheet}
       {statsSheets}
       {deleteAccountSheets}
+      {unfollowSheet}
     </SafeAreaView>
   );
 }
