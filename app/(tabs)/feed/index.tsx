@@ -9,6 +9,7 @@ import { useAuthContext } from '@/context/AuthContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { EventCard } from '@/components/feed/EventCard';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { EventCardSkeleton } from '@/components/ui/skeletons/EventCardSkeleton';
 import { useEvents } from '@/hooks/useEvents';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -50,7 +51,7 @@ export default function FeedScreen() {
   // keystroke — avoids firing one `ilike` per character.
   const debouncedSearch = useDebounce(searchText, 300);
 
-  const { events, isLoading, refetch } = useEvents({
+  const { events, isLoading, error, refetch } = useEvents({
     categories: feedFilters.categories,
     search: debouncedSearch.trim() || undefined,
   });
@@ -369,6 +370,13 @@ export default function FeedScreen() {
             <EventCardSkeleton key={i} index={i} />
           ))}
         </View>
+      ) : error && events.length === 0 ? (
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load the feed"
+          body={error}
+          onRetry={refetch}
+        />
       ) : visibleEvents.length === 0 ? (
         <View style={styles.center}>
           <EmptyState

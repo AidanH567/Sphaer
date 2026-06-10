@@ -54,6 +54,9 @@ interface ActivityListProps extends BaseProps {
   /** When true, rows route to /ticket/<id> instead of /event/<id>. Used by
    *  the Tickets sheet on the profile screen. */
   routeAsTicket?: boolean;
+  /** Optional CTA rendered at the top of the activity list. Used by the
+   *  Saved sheet to expose an "Export to calendar" action. */
+  headerAction?: { label: string; icon?: keyof typeof Ionicons.glyphMap; onPress: () => void };
 }
 
 export type EntityListSheetProps = UserListProps | CircleListProps | ActivityListProps;
@@ -313,6 +316,24 @@ export function EntityListSheet(props: EntityListSheetProps) {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {props.type === 'activity' && props.headerAction && (
+              <TouchableOpacity
+                onPress={props.headerAction.onPress}
+                style={styles.headerAction}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={props.headerAction.label}
+              >
+                {props.headerAction.icon && (
+                  <Ionicons
+                    name={props.headerAction.icon}
+                    size={18}
+                    color={colors.neutral.chocolate}
+                  />
+                )}
+                <Text style={styles.headerActionText}>{props.headerAction.label}</Text>
+              </TouchableOpacity>
+            )}
             {filteredItems.map((item, i) => renderRow(item, i))}
           </ScrollView>
         )}
@@ -614,6 +635,25 @@ const styles = StyleSheet.create({
   },
 
   list: { flex: 1 },
+
+  // Optional header action (e.g. "Export to calendar" on the Saved sheet).
+  // Sits above the first row, with the same horizontal padding so it lines
+  // up with the row body.
+  headerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  headerActionText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
+  },
 
   row: {
     flexDirection: 'row',

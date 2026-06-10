@@ -25,6 +25,7 @@ import {
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
 import { getSavedEvents } from '@/services/events.service';
+import { addEventsToCalendar } from '@/services/calendar.service';
 import { signOut } from '@/services/auth.service';
 import { deleteAccount } from '@/services/account.service';
 import { useAuthContext } from '@/context/AuthContext';
@@ -368,6 +369,15 @@ export default function ProfileScreen() {
         isLoading={sheetLoading && openSheet === 'saved'}
         emptyMessage="No saved activities yet — tap the bookmark on any activity to save it for later."
         onClose={() => setOpenSheet(null)}
+        headerAction={
+          mySaved.length > 0
+            ? {
+                label: `Export ${mySaved.length} to calendar`,
+                icon: 'calendar-outline',
+                onPress: () => addEventsToCalendar(mySaved).catch(() => {}),
+              }
+            : undefined
+        }
       />
       <EntityListSheet
         visible={openSheet === 'tickets'}

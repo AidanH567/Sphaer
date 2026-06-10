@@ -12,6 +12,7 @@ import { CircleCard } from '@/components/circles/CircleCard';
 import { CircleJoinSheet } from '@/components/circles/CircleJoinSheet';
 import { SearchFilterBar } from '@/components/feed/SearchFilterBar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { CircleCardSkeleton } from '@/components/ui/skeletons/CircleCardSkeleton';
 import { useCircles } from '@/hooks/useCircles';
 import { colors, typography, spacing } from '@/constants/theme';
@@ -36,7 +37,7 @@ export default function CirclesScreen() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedCircle, setSelectedCircle] = useState<CircleWithCounts | null>(null);
 
-  const { circles, isLoading, refetch } = useCircles();
+  const { circles, isLoading, error, refetch } = useCircles();
 
   useFocusEffect(
     useCallback(() => {
@@ -135,6 +136,13 @@ export default function CirclesScreen() {
             </View>
           ))}
         </ScrollView>
+      ) : error && circles.length === 0 ? (
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load circles"
+          body={error}
+          onRetry={refetch}
+        />
       ) : !hasResults ? (
         <View style={styles.center}>
           <EmptyState
