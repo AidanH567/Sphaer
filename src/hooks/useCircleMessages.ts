@@ -33,6 +33,9 @@ function generateClientId(): string {
 export function useCircleMessages(userId: string | undefined, circleId: string | undefined) {
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refetchTick, setRefetchTick] = useState(0);
+  const refetch = useCallback(() => setRefetchTick((n) => n + 1), []);
 
   const messagesRef = useRef<OptimisticMessage[]>([]);
   useEffect(() => {
@@ -44,6 +47,7 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
   useEffect(() => {
     if (!userId || !circleId) return;
     setIsLoading(true);
+    setError(null);
     sendersCacheRef.current.clear();
 
     let cancelled = false;
@@ -58,7 +62,9 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
         setMessages(msgs.map((m) => toOptimistic(m)));
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error('[useCircleMessages] initial fetch failed:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load chat.');
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -101,7 +107,7 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
       cancelled = true;
       channel.unsubscribe();
     };
-  }, [userId, circleId]);
+  }, [userId, circleId, refetchTick]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -170,5 +176,5 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
     [userId, circleId]
   );
 
-  return { messages, isLoading, sendMessage, retryMessage };
+  return { messages, isLoading, error, sendMessage, retryMessage, refetch };
 }

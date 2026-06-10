@@ -20,6 +20,7 @@ import { useMessages } from '@/hooks/useMessages';
 import { ChatBubble } from '@/components/messaging/ChatBubble';
 import { MessageInput } from '@/components/messaging/MessageInput';
 import { Avatar } from '@/components/ui/Avatar';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { colors, typography, spacing } from '@/constants/theme';
 import { formatSeenTime } from '@/utils/date';
 import type { OptimisticMessage } from '@/types/message.types';
@@ -43,9 +44,11 @@ export default function ConversationScreen() {
   const {
     messages,
     isLoading,
+    error,
     partnerLastReadAt,
     sendMessage,
     retryMessage,
+    refetch,
   } = useMessages(user?.id, partnerId);
 
   useEffect(() => {
@@ -112,6 +115,14 @@ export default function ConversationScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={colors.black} />
           </View>
+        ) : error ? (
+          <ErrorState
+            icon="chatbubble-ellipses-outline"
+            title="Couldn't load chat"
+            body={error}
+            onRetry={refetch}
+            onBack={() => router.back()}
+          />
         ) : (
           <FlatList
             data={display}

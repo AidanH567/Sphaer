@@ -12,6 +12,7 @@ import { formatPrice } from '@/utils/format';
 import { useEvent } from '@/hooks/useEvents';
 import { EventMapPreview } from '@/components/events/EventMapPreview';
 import { EventDetailSkeleton } from '@/components/ui/skeletons/EventDetailSkeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { register as registerForEvent } from '@/services/registrations.service';
@@ -101,9 +102,13 @@ export default function EventDetailScreen() {
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
-        <View style={styles.center}>
-          <Text style={styles.notFound}>Event not found</Text>
-        </View>
+        <ErrorState
+          icon="calendar-outline"
+          title="Event not found"
+          body="This event may have been cancelled or removed. Head back to the feed to discover what's on."
+          onBack={() => router.back()}
+          backLabel="Back to feed"
+        />
       </SafeAreaView>
     );
   }

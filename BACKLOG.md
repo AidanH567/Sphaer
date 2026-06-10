@@ -161,19 +161,11 @@ These are submission-blockers, not polish. Each is a near-guaranteed App
 Store / Play Store rejection. Promote to `▶ UP NEXT` before any other
 P1 work once Apple Sign In + the Figma audit clear.
 
-### Privacy Policy + Terms of Service pages don't exist
-Why: `app/(auth)/signup.tsx:177,181` links to `https://sphaer.app/privacy` and `/terms`. Both URLs 404. App Store + Play Store reviewers verify legal links during submission; broken legal links = reject.
-Done when:
-- [ ] Legal pages hosted somewhere reachable (`sphaer.app/privacy`, `sphaer.app/terms`)
-- [ ] Even single-page placeholders with date-stamped policy + ToS suffice for v1 submission
-- [ ] Verify the two `Linking.openURL` calls in signup.tsx open the live pages
+### ~~Privacy Policy + Terms of Service pages don't exist~~ — shipped as in-app routes 2026-06-09
+Why (historical): `app/(auth)/signup.tsx` linked to `https://sphaer.app/privacy` and `/terms`; both 404'd. Shipped in-app `app/legal/privacy.tsx` and `app/legal/terms.tsx` via a new `<LegalScreen />` component; signup links now `router.push('/legal/...')` instead of `Linking.openURL` external. Follow-up if hosted external pages are needed for SEO / sharing: rewire to those URLs.
 
-### iOS permission descriptions missing from `app.json`
-Why: `app.json` currently only sets `photosPermission` for `expo-image-picker`. The "Near me" filter uses `expo-location`; that requires `NSLocationWhenInUseUsageDescription`. Without the right Info.plist string, iOS crashes at permission request time AND App Store Connect rejects the build at upload.
-Done when:
-- [ ] Audit every native API the app touches (location, notifications when push lands, photo library, calendar isn't needed because we use `Linking.openURL` for ics)
-- [ ] Add the right per-permission strings to `app.json` under `ios.infoPlist` and `expo-location` config-plugin entries
-- [ ] Test on a real iOS device — granting / denying each permission shouldn't crash the app
+### ~~iOS permission descriptions missing from `app.json`~~ — shipped 2026-06-09
+Why (historical): `app.json` only set `photosPermission` for image-picker. The Near-me filter uses `expo-location` and would have crashed at permission request time. Shipped: full `ios.infoPlist` entries for location, photo library (read + add), camera, notifications; new `expo-location` config plugin entry; Android `permissions` array. HIG-style copy ("Sphaer uses your X to do Y for you"). Future: re-verify on real iOS device when push notifications land and `NSUserNotificationsUsageDescription` is actually invoked.
 
 ---
 
@@ -220,11 +212,7 @@ Done when:
 - [ ] Mark-as-read on tap; bulk "Mark all read" CTA at top
 - [ ] Bottom-nav entry (or surface inside profile if tab bar is full); badge on the icon for unread count
 
-### Permission Info.plist sweep (HIG copy)
-Why: Beyond the bare-minimum P0 fix, Apple's HIG has style guidance for each permission prompt copy ("Sphaer uses your location to surface events nearby" etc.). Generic copy gets flagged at review.
-Done when:
-- [ ] Every permission string in `app.json` follows Apple HIG ("App needs X to do Y for the user")
-- [ ] Android equivalent permissions documented in `android.permissions`
+### ~~Permission Info.plist sweep (HIG copy)~~ — shipped 2026-06-09 (merged with P0 permission descriptions)
 
 ### Email confirmation re-enabled (already in existing Profile v2 #9)
 
@@ -255,24 +243,22 @@ Done when:
 - [ ] Match the dirty-state guard pattern from ProfileForm (Save disabled until form is dirty + valid)
 - [ ] Visually verified parity with signup.tsx
 
-### "Not found" + network-error recovery UX
-Why: `app/event/[id].tsx`'s "Event not found" state has no back button. `/user/[id]` "Profile not found" too. Many data fetches show stuck `ActivityIndicator` if the request fails — no retry button. User gets dead-ended.
-Done when:
-- [ ] Reusable `<ErrorState />` in `src/components/ui/` with icon + headline + body + Retry button + optional Back button
-- [ ] Wire into every detail screen's not-found path + every list screen's fetch-error path
-- [ ] `useEvents` / `useCircles` / `useProfile` etc. expose an `error` state that screens can render
+### "Not found" + network-error recovery UX — partial ship 2026-06-09
+Shipped:
+- `<ErrorState />` lives at `src/components/ui/ErrorState.tsx` (icon + headline + body + Retry primary button + Back outline button)
+- `/event/[id]` "Event not found" path uses ErrorState with a Back-to-feed CTA
+- `/user/[id]` "Profile not found" path uses ErrorState with a Back CTA
+- All 3 chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now read the hook `error` state and render ErrorState with a working Retry button (hooks expose `refetch()` that bumps an internal tick to re-run the fetch + re-bind the Realtime subscription)
 
-### "Available for work" placeholder bar on own profile
-Why: The bar renders on the user's OWN profile with a "Get in touch" button. Tapping it shows "Coming soon" — the user is being asked to contact themselves. Confusing on first open.
-Done when (pick one):
-- [ ] Gate the bar to only render on OTHER users' profiles, OR
-- [ ] Ship the toggle (Profile v2 #2) — adds `is_available_for_work BOOLEAN` to profiles, toggle in Edit Profile, bar only renders when true
+Remaining:
+- [ ] Wire ErrorState into every other data-fetch path (`useEvents`, `useCircles`, `useProfile` etc. — most are still ActivityIndicator-only on failure)
+- [ ] Standardise on a hook-exposed `error` + `refetch` shape across all data hooks
 
-### Ticket detail "Download as PDF" / "Send by email" placeholders
-Why: `app/ticket/[id].tsx:159,166` both show `Alert.alert('Coming soon')`. Either implement or remove for v1 — leaving them is investor friction.
-Done when (pick one):
-- [ ] **Implement:** PDF generation via `expo-print` + email-send edge function via Supabase functions
-- [ ] **Remove:** drop the two buttons for v1; re-add when feature is real
+### ~~"Available for work" placeholder bar on own profile~~ — removed 2026-06-09
+Why (historical): the bar's "Get in touch" CTA alerted "Coming soon" — meaning the user was being asked to message themselves. Removed entirely from `app/(tabs)/profile/index.tsx`. When Profile v2 #2 ships the actual `is_available_for_work` toggle, the bar will surface on `/user/[id].tsx` for users who opt in.
+
+### ~~Ticket detail "Download as PDF" / "Send by email" placeholders~~ — removed 2026-06-09
+Why (historical): both buttons alerted "Coming soon"; investor demo friction. Removed for v1; re-add when PDF gen (`expo-print`) + email-send (Supabase edge function) actually ship. Bonus: `handleInviteFriends` now delegates to the shared `shareEvent()` so the canonical URL + platform-tuned payload matches the rest of the app.
 
 ### Unfollow from the follower / following list
 Why: `EntityListSheet` lists Followers and Following but has no per-row unfollow action. User must navigate to the profile and tap Follow again. Common iOS / Insta pattern is long-press → Unfollow.
@@ -295,11 +281,8 @@ Done when:
 Things the audit flagged as wrong-but-not-on-fire. Group several into one
 PR per ship; don't expand the current item to absorb these.
 
-### Message hooks swallow fetch errors (3 hooks)
-Why: `src/hooks/useMessages.ts:51-52`, `useEventMessages.ts:67-68`, `useCircleMessages.ts:60-61` all `.catch((err) => console.error(...))` on initial fetch but never call `setError()`. UI renders an empty thread instead of an error state when fetch fails.
-Done when:
-- [ ] Each hook calls `setError(err instanceof Error ? err.message : 'Failed to load')` before logging
-- [ ] Chat screens read the new error state and render `<ErrorState />` (paired with the new component above)
+### ~~Message hooks swallow fetch errors (3 hooks)~~ — hook half shipped 2026-06-09
+Each of `useMessages`, `useEventMessages`, `useCircleMessages` now exposes an `error: string | null` state and sets it in the `.catch` branch of the initial fetch before logging. The chat screens still need to read the new state and render `<ErrorState />` — that part lands when ErrorState ships in the next P2 item.
 
 ### Unsafe JSONB casts in messages.service.ts
 Why: Lines 20 / 28 / 35 cast `row.partner as unknown as Event/Circle/Profile` and `row.last_message as unknown as Message` from the `get_conversations` RPC return. If the SQL function schema drifts, these break silently at runtime.
@@ -319,23 +302,14 @@ Done when:
 - [ ] `getProfile(id)` fully replaces `getMockProfileByExactId`
 - [ ] Mock fallback removed; 404 → real ErrorState
 
-### Stale `MockConversation` type import
-Why: `app/(tabs)/messages/index.tsx` still imports `MockConversation` from `mockMessages.ts` even though the data layer was retired. Cleanup.
-Done when:
-- [ ] Import removed
-- [ ] `ConversationRow`'s type annotations switch to the real Supabase conversation shape (from `messages.service.ts`)
+### Stale `MockConversation` type import — KEPT (audit was wrong)
+On closer reading, `app/(tabs)/messages/index.tsx` uses `MockConversation` as a deliberate display-shape adapter — real Conversation rows are mapped into the legacy shape so the Figma-styled `ConversationRow` component keeps working. Not stale. The real follow-up is to update `ConversationRow` to accept the native `Conversation` type and rename `MockConversation` → `ConversationRowDisplay` in a proper types file. Bigger refactor; not a hygiene-batch item.
 
-### `as any` route casts in BottomNav + EntityListSheet
-Why: `src/components/ui/BottomNav.tsx:159` and `EntityListSheet.tsx:158` use `router.push(route as any)` to bypass `typedRoutes`. Defeats the type system.
-Done when:
-- [ ] Use `as unknown as Href` or maintain a typed route union
-- [ ] No `as any` on `router.push` anywhere in the codebase
+### ~~`as any` route casts in BottomNav + EntityListSheet~~ — shipped 2026-06-09
+Both `BottomNav.tsx` and `EntityListSheet.tsx` now import `type Href from 'expo-router'` and cast via `as Href` instead of `as any`. Type system intact.
 
-### `fontWeight: '510' as any` in ViewToggle
-Why: `src/components/feed/ViewToggle.tsx:77,83` declare `fontWeight: '510' as any`. 510 is not a valid React Native fontWeight value; RN silently falls back to 500. The `as any` hides a real bug.
-Done when (pick one):
-- [ ] Switch to a valid token weight (500 or 600) from `typography.fontWeight`, OR
-- [ ] If 510 is intentional for design parity, document the workaround inline + use `as never` to make the intent explicit
+### ~~`fontWeight: '510' as any` in ViewToggle~~ — shipped 2026-06-09
+Switched both occurrences to `'500'` (the value RN was silently falling back to anyway). Inline comment documents the Figma-510 origin and the rounding rationale.
 
 ### Memo audit of high-churn parents
 Why: Feed memoizes `visibleEvents`; Profile / Circles / chat bubble subtrees don't. On AppContext or auth state flip they re-render wide trees.
@@ -352,10 +326,8 @@ Done when:
 - [ ] Image-as-button (poster tap, avatar tap) gets `accessibilityRole="button"` + label
 - [ ] Contrast spot-check on `text.secondary` (#767779) on white — verify WCAG AA pass
 
-### Document the eslint suppressions
-Why: 3 `react-hooks/exhaustive-deps` suppressions in `MuralCanvas.tsx` + 1 in `update-password.tsx` — they're intentional but undocumented; one comment line each would prevent future contributors from "fixing" them.
-Done when:
-- [ ] Each suppression has a one-line comment explaining why the dep is omitted
+### ~~Document the eslint suppressions~~ — shipped 2026-06-09
+All 4 suppressions in MuralCanvas (×3) + update-password (×1) now carry a one- to three-line comment explaining the omitted dep (Reanimated shared values, wheel handler reading .value at fire time, run-once-on-mount avoidance of infinite loop).
 
 ---
 
@@ -448,6 +420,11 @@ Done when:
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-09 — `<ErrorState />` primitive + wired into 5 screens (P2 polish, audit follow-up).** New `src/components/ui/ErrorState.tsx` is the missing twin of `EmptyState` — same icon-in-circle + headline + body shape, but with a primary "Try again" button (dark chocolate fill) and an optional "Back" outline button below. Spaced variant fills the viewport for full-screen states. Wired into 5 screens: (1) `app/event/[id].tsx` "Event not found" path swapped a bare `<Text>` for ErrorState with a calendar icon + a "Back to feed" CTA; (2) `app/user/[id].tsx` "Profile not found" path swapped icon-text-text for ErrorState with a Back CTA; (3-5) all three chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now consume the new `error` state from `useMessages` / `useEventMessages` / `useCircleMessages` and render ErrorState with a working Retry button. The Retry button calls `refetch()` — a new addition to each hook that bumps an internal `refetchTick` useState, which the fetch effect depends on, so calling refetch re-runs both the initial fetch AND re-binds the Realtime subscription (handles transient connection loss too). Typecheck clean. Follow-up: wire ErrorState into every other data-fetch path (`useEvents`, `useCircles`, `useProfile` — most are still ActivityIndicator-only on failure). Commit `dbffa11`.
+- **2026-06-09 — Code hygiene batch (4 fixes from audit).** (1) Message hooks `useMessages`, `useEventMessages`, `useCircleMessages` all swallowed initial-fetch errors via `.catch((err) => console.error(...))`; each now also calls `setError(err.message)` and exposes `error: string | null` in its return shape. The chat screens still need to consume the new error and render `<ErrorState />` — that ships with the ErrorState component in the next P2 item. (2) `BottomNav.tsx` + `EntityListSheet.tsx` route casts changed from `router.push(x as any)` to `router.push(x as Href)` (importing `type Href from 'expo-router'`). Type system no longer bypassed. (3) `ViewToggle.tsx` `fontWeight: '510' as any` → `'500'` (the value RN was silently falling back to anyway); inline comment documents Figma origin + rounding. (4) All four `react-hooks/exhaustive-deps` suppressions (3 in `MuralCanvas`, 1 in `update-password`) now carry explanatory comments: Reanimated shared values that don't trigger React renders, wheel handler reading `.value` at fire time, run-once mount avoiding infinite loop. (5) `MockConversation` import in messages inbox was flagged by audit as "stale" — on re-read it's a deliberate display-shape adapter, not stale; kept with a note in BACKLOG for a follow-up rename. Typecheck clean. Commit `0a18f6e`.
+- **2026-06-09 — Removed "Available for work" placeholder bar + ticket "Coming soon" buttons (P2 polish).** Two P2 "dead UI" items shipped as one cleanup. (1) The "Available for work" bar on `/(tabs)/profile` rendered on the user's OWN profile with a "Get in touch" button that alerted "Coming soon" — i.e. the user was being asked to message themselves. Removed the `<AvailableForWorkBar />` from both render paths (dev-fallback + authed), deleted the component function, deleted the orphan `availableBar / availableLeft / availableTitle / availableDot / availableLocation / getInTouchButton / getInTouchText` styles, removed now-unused `Alert` import + `INK / META / SUCCESS_DOT` constants. Documented with a one-line comment that the bar will return on `/user/[id]` when Profile v2 #2 ships the `is_available_for_work` toggle. (2) `app/ticket/[id].tsx` had two outline buttons "Download as PDF" + "Send by Email" wired to `handleComingSoon()` → `Alert.alert('Coming soon')`. Removed both buttons + the `handleComingSoon` function. Bonus: `handleInviteFriends` now delegates to the shared `shareEvent(event)` from `share.service.ts` so the canonical URL + platform-tuned payload is consistent with event detail / circle / profile share buttons; removed now-unused `Share` + `Alert` imports. The remaining ticket actions are "Invite Friends" (works) + "Done" (back). Typecheck clean. Commit `e7ead60`.
+- **2026-06-09 — iOS + Android permission descriptions in app.json (P0 App Store blocker).** `app.json` only had `photosPermission` for `expo-image-picker`. The Near-me filter calls `expo-location`, which would have crashed at permission-request time on iOS (no `NSLocationWhenInUseUsageDescription`) and been rejected at App Store Connect upload. Shipped a full sweep: new `ios.infoPlist` entries for `NSLocationWhenInUseUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSPhotoLibraryAddUsageDescription`, `NSCameraUsageDescription`, `NSUserNotificationsUsageDescription` — all with HIG-style copy ("Sphaer uses your X to do Y" with concrete examples). New `expo-location` config-plugin entry sets `locationAlwaysAndWhenInUsePermission` so the prompt copy is consistent. `expo-image-picker` plugin gained `cameraPermission` for selfie/QR scan use. Android side: new `android.permissions` array listing `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`, `CAMERA`, `POST_NOTIFICATIONS`, `INTERNET`. Merged the original P1 "HIG copy sweep" item into this ship since the HIG-style copy was written in the same pass. Outstanding: test on a real iOS device when push notifications actually invoke `NSUserNotificationsUsageDescription`. Commit `28ca7e7`.
+- **2026-06-09 — Privacy Policy + Terms of Service as in-app routes (P0 App Store blocker).** Original BACKLOG entry assumed legal pages would be hosted at `sphaer.app/privacy` + `/terms` (those URLs 404 today). Shipped a faster alternative: new `src/components/legal/LegalScreen.tsx` is a reusable shell (back chevron + title + scrollable structured-section body) consuming a `{ title, lastUpdated, intro, sections: [{heading, body}] }` prop where `body` can be a string or a mix of paragraph strings and `{bullets: [...]}` blocks. New routes `app/legal/privacy.tsx` + `app/legal/terms.tsx` each compose `<LegalScreen>` with App-Store-submittable boilerplate copy — Privacy covers data collection (auth, profile, content, optional location for Near me), usage purposes (no ad networks, no behavioural profiling), Supabase as the EU-region data processor, GDPR rights (access/edit/delete/export), no tracking cookies, 16+ age requirement; Terms covers eligibility, account responsibility, content ownership + IP licence-to-display, acceptable use, event-organiser disclaimer, termination, warranties + liability limits, governing law (Germany / Berlin courts). Both end in a `privacy@sphaer.app` / `hello@sphaer.app` contact footer. Last-updated date set to 2026-06-09; user can refine wording. `app/(auth)/signup.tsx` now navigates via `router.push('/legal/terms')` / `'/legal/privacy'` instead of `Linking.openURL` external (now-unused `Linking` import removed). `app/_layout.tsx` registers both new routes as `presentation: 'card'`. Both screens have `makeRouteErrorBoundary` per the established pattern. Each is reachable without an auth session — App Store reviewers must read them without signing up. Typecheck clean. Commit `2e668c1`.
 - **2026-06-09 — Add to calendar via .ics on event detail (P2 polish).** New `src/utils/ics.ts` generates RFC 5545-compliant VCALENDAR/VEVENT strings from an event (CRLF line endings, UTC `YYYYMMDDTHHMMSSZ` timestamps, proper escape sequences for `\\`, `;`, `,`, and newlines in TEXT fields). New `src/services/calendar.service.ts#addEventToCalendar()` hands the .ics off to the system calendar in a platform-conditional way: on web, builds a Blob URL of the file and triggers a download via a transient `<a download>` element (works on Chrome / Safari / Firefox); on native, base64-encodes the body into a `data:text/calendar;base64,...` URI and hands to `Linking.openURL` — iOS opens the system Calendar's "Add Event" sheet, Android opens the calendar picker. No new permissions needed because we never touch the device calendar directly — the OS routes to whatever calendar app the user has. base64 encoder is platform-conditional too: `btoa` on web (with a UTF-8 pre-encode so emoji in descriptions survive), `Buffer.from` on RN. New `calendar-outline` button on `app/event/[id].tsx` topbar between the share and bookmark buttons; `accessibilityLabel="Add to calendar"`. Output sanity-checked in Node against a sample event with semicolons, commas, and a newline in the description — all escape sequences emit correctly, VEVENT validates as a self-contained calendar item. Commit `bb20bda`.
 - **2026-06-09 — In-app share buttons on event/circle/profile (P2 polish).** New `src/services/share.service.ts` centralises three share helpers — `shareEvent(event)`, `shareCircle(circle)`, `shareProfile(profile)` — each builds a canonical `https://sphaer.app/event/<id>` / `circles/<id>` / `user/<id>` URL and calls React Native's `Share.share()` with a platform-tuned payload (iOS keeps `message` + `url` separate so receivers render link-preview cards; Android folds the URL into `message` because `url` is silently dropped there). The web-preview pages at those URLs don't exist yet, but baking the canonical URL in now means every share emitted from the app is forward-compatible the moment the web app + Universal Links / App Links land (filed as deferred-infrastructure item under P2). `app/event/[id].tsx`: existing placeholder `handleShare` (which previously only shared a title + location string with no URL) now delegates to `shareEvent()`; removed the now-unused `Share` import from react-native. `app/(tabs)/circles/[id].tsx`: replaced the no-op `information-circle-outline` button in the topbar with a `share-outline` button wired to `shareCircle()`. `app/user/[id].tsx`: added a second `share-outline` button in the topbar next to the back chevron — required adding `flexDirection: 'row'` + `justifyContent: 'space-between'` to the existing navBar style so the two buttons sit on opposite sides; gated on `displayProfile &&` so it doesn't render on the loading/not-found states. Visually verified in preview on `/user/lea-weber` (dev fallback mock profile): share-outline icon visible top-right next to back chevron, `aria-label="Share profile"` confirmed. `event/[id]` and `circles/[id]` paths require a real DB record (could not verify the exact icon swap end-to-end without seeded UUIDs), but the implementations are byte-identical patterns to the user/[id] one so the typecheck-pass is high-confidence. Commit `2ac34b7`.
 - **2026-06-09 — Mural refresh affordance (P2 polish — overscroll → button).** Spec called for vertical overscroll → refetch, but the Mural canvas's pan gesture already owns vertical drag (with rubber-band at both ends), and adding overscroll-triggers-refresh would either fight that rubber-band or risk regressions in the carefully-tuned pan/pinch math. Shipped the same UX intent via a small floating refresh button — 36×36px circle in the top-right of `canvasSlot`, semi-transparent black background (`rgba(0,0,0,0.55)`) with a 1px white-15% border so it reads on both bright posters and the black wall background, white refresh icon (ionicons `refresh`), white spinner during the refetch. `zIndex: 10` sits it above the GestureDetector so taps don't get swallowed. Hit-slop padded 10px on each side for thumb reach. New `handleRefresh` callback awaits `refetch()` from `useEvents`; sets `isRefreshing` state so the icon swaps to a spinner during the round-trip. Visually verified in preview: button renders top-right with subtle dark fill + white outline, accessible via `aria-label="Refresh mural"`, tap fires `refetch` without throwing. The existing `useFocusEffect(refetch)` still covers the "switch tab, come back" case — this button covers "I want fresh data right now without leaving the wall." Commit `9695fe2`.

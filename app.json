@@ -17,6 +17,13 @@
       "bundleIdentifier": "com.sphaer.app",
       "config": {
         "googleMapsApiKey": "$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Sphaer uses your location to show events happening near you when you tap \"Near me\" on the feed. Your coordinates stay on your device and are never uploaded.",
+        "NSPhotoLibraryUsageDescription": "Sphaer accesses your photo library so you can upload posters for events and images for your profile.",
+        "NSPhotoLibraryAddUsageDescription": "Sphaer can save tickets and posters back to your photo library so you have them offline.",
+        "NSCameraUsageDescription": "Sphaer uses the camera so you can take photos for your profile or scan event QR codes.",
+        "NSUserNotificationsUsageDescription": "Sphaer sends notifications about new messages, follows, event reminders, and activity from circles you follow. You can control these from in-app settings."
       }
     },
     "android": {
@@ -29,7 +36,16 @@
         "googleMaps": {
           "apiKey": "$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"
         }
-      }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE",
+        "CAMERA",
+        "POST_NOTIFICATIONS",
+        "INTERNET"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -42,7 +58,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Sphaer to access your photos to upload event posters and profile images."
+          "photosPermission": "Sphaer accesses your photo library so you can upload posters for events and images for your profile.",
+          "cameraPermission": "Sphaer uses the camera so you can take photos for your profile or scan event QR codes."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Sphaer uses your location to show events happening near you when you tap \"Near me\" on the feed."
         }
       ],
       "expo-asset",
