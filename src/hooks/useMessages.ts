@@ -28,6 +28,12 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [partnerLastReadAt, setPartnerLastReadAt] = useState<string | null>(null);
+  // Bumping this re-runs the fetch effect — exposed as `refetch` for the
+  // UI's Retry button on the new ErrorState. Realtime subscription
+  // re-binds with the new effect run too, so a transient connection loss
+  // also gets reset.
+  const [refetchTick, setRefetchTick] = useState(0);
+  const refetch = useCallback(() => setRefetchTick((n) => n + 1), []);
 
   const messagesRef = useRef<OptimisticMessage[]>([]);
   useEffect(() => {
@@ -100,7 +106,7 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
       cancelled = true;
       channel.unsubscribe();
     };
-  }, [userId, partnerId]);
+  }, [userId, partnerId, refetchTick]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -176,5 +182,13 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
     [userId, partnerId]
   );
 
-  return { messages, isLoading, error, partnerLastReadAt, sendMessage, retryMessage };
+  return {
+    messages,
+    isLoading,
+    error,
+    partnerLastReadAt,
+    sendMessage,
+    retryMessage,
+    refetch,
+  };
 }

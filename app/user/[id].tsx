@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
 import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useAuthContext } from '@/context/AuthContext';
 import {
   getProfile,
@@ -206,13 +207,12 @@ export default function UserProfileScreen() {
       {status === 'loading' && <ProfileSkeleton />}
 
       {status === 'not_found' && (
-        <View style={styles.center}>
-          <Ionicons name="person-circle-outline" size={56} color={colors.text.tertiary} />
-          <Text style={styles.notFoundTitle}>Profile not found</Text>
-          <Text style={styles.notFoundMessage}>
-            This account doesn't exist or may have been removed.
-          </Text>
-        </View>
+        <ErrorState
+          icon="person-circle-outline"
+          title="Profile not found"
+          body="This account doesn't exist or may have been removed. Head back to find someone else."
+          onBack={() => router.back()}
+        />
       )}
 
       {status === 'found' && displayProfile && (

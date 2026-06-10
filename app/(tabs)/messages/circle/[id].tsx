@@ -15,6 +15,7 @@ import { colors, typography, spacing } from '@/constants/theme';
 import type { OptimisticMessage } from '@/types/message.types';
 import type { Circle } from '@/types/circle.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
 
@@ -57,7 +58,7 @@ export default function CircleChatScreen() {
     };
   }, [circleId, cachedCircle]);
 
-  const { messages, isLoading, sendMessage, retryMessage } = useCircleMessages(
+  const { messages, isLoading, error, sendMessage, retryMessage, refetch } = useCircleMessages(
     user?.id,
     circleId
   );
@@ -120,6 +121,14 @@ export default function CircleChatScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={colors.black} />
           </View>
+        ) : error ? (
+          <ErrorState
+            icon="chatbubble-ellipses-outline"
+            title="Couldn't load chat"
+            body={error}
+            onRetry={refetch}
+            onBack={() => router.back()}
+          />
         ) : (
           <FlatList
             data={display}

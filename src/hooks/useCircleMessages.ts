@@ -34,6 +34,8 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refetchTick, setRefetchTick] = useState(0);
+  const refetch = useCallback(() => setRefetchTick((n) => n + 1), []);
 
   const messagesRef = useRef<OptimisticMessage[]>([]);
   useEffect(() => {
@@ -105,7 +107,7 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
       cancelled = true;
       channel.unsubscribe();
     };
-  }, [userId, circleId]);
+  }, [userId, circleId, refetchTick]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -174,5 +176,5 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
     [userId, circleId]
   );
 
-  return { messages, isLoading, error, sendMessage, retryMessage };
+  return { messages, isLoading, error, sendMessage, retryMessage, refetch };
 }
