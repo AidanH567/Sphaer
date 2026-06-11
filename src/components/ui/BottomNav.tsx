@@ -2,15 +2,23 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, usePathname, type Href } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SphaerIcon } from '@/components/SphaerLogo';
+import {
+  ExploreGlyph,
+  CirclesGlyph,
+  PlusGlyph,
+  ChatsGlyph,
+} from '@/components/ui/icons/NavGlyphs';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, radius } from '@/constants/theme';
 
-const ICON_SIZE = 24;
-const AVATAR_SIZE = 28;
+// Figma menu-bar (6279:10543): 40px circular items, edge inset 21,
+// pt 12 / pb 8 above the home-indicator area. Glyphs 26px (rings 24×17).
+const ITEM_SIZE = 40;
+const GLYPH_SIZE = 26;
+// Figma: inactive profile ring is a one-off grey not in the Neutral ramp.
+const PROFILE_RING_INACTIVE = '#8F8F8F';
 
 interface NavItem {
   route: string;
@@ -46,34 +54,20 @@ function renderIcon(
   profileBits: ProfileBits,
   messagesUnread: number,
 ) {
+  // Figma active state: glyph flips to white on the filled chocolate circle.
+  const glyphColor = focused ? colors.white : colors.neutral.chocolate;
+
   switch (segment) {
     case 'feed':
-      return (
-        <MaterialCommunityIcons
-          name="binoculars"
-          size={ICON_SIZE}
-          color={focused ? colors.black : colors.text.tertiary}
-        />
-      );
+      return <ExploreGlyph size={GLYPH_SIZE} color={glyphColor} />;
     case 'circles':
-      return (
-        <SphaerIcon
-          size={ICON_SIZE + 10}
-          color={focused ? colors.black : colors.text.tertiary}
-        />
-      );
+      return <CirclesGlyph size={24} color={glyphColor} />;
     case 'create':
-      return (
-        <Ionicons name="add" size={32} color={colors.black} />
-      );
+      return <PlusGlyph size={GLYPH_SIZE} color={glyphColor} />;
     case 'messages':
       return (
         <View style={styles.iconWithBadge}>
-          <Ionicons
-            name={focused ? 'chatbubble' : 'chatbubble-outline'}
-            size={ICON_SIZE}
-            color={focused ? colors.black : colors.text.tertiary}
-          />
+          <ChatsGlyph size={GLYPH_SIZE} color={glyphColor} />
           {messagesUnread > 0 && (
             <View
               style={styles.badge}
@@ -89,31 +83,10 @@ function renderIcon(
     case 'profile': {
       const { avatarUrl, displayName, email } = profileBits;
       if (avatarUrl) {
-        return (
-          <View style={[styles.avatarRing, focused && styles.avatarRingActive]}>
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-          </View>
-        );
+        return <Image source={{ uri: avatarUrl }} style={styles.avatar} />;
       }
       const initials = getInitials(displayName, email);
-      if (initials) {
-        return (
-          <View style={[styles.avatarPlaceholder, focused && styles.avatarPlaceholderActive]}>
-            <Text style={[styles.initialsText, focused && styles.initialsTextActive]}>
-              {initials}
-            </Text>
-          </View>
-        );
-      }
-      return (
-        <View style={[styles.avatarPlaceholder, focused && styles.avatarPlaceholderActive]}>
-          <Ionicons
-            name="person"
-            size={16}
-            color={focused ? colors.white : colors.text.tertiary}
-          />
-        </View>
-      );
+      return <Text style={styles.initialsText}>{initials || '•'}</Text>;
     }
     default:
       return null;
@@ -122,7 +95,7 @@ function renderIcon(
 
 /**
  * Derive 1–2 character initials from a display name; fall back to the email
- * local-part. Returns '' if nothing usable — caller falls back to a person icon.
+ * local-part. Returns '' if nothing usable — caller falls back to a dot.
  */
 function getInitials(displayName?: string | null, email?: string | null): string {
   const name = displayName?.trim();
@@ -157,18 +130,29 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
   };
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom || spacing.sm }]}>
+    <View style={[styles.container, { paddingBottom: spacing.sm + (insets.bottom || 0) }]}>
       {NAV_ITEMS.map(({ route, segment }) => {
         const focused = pathname.includes(segment);
+        const isProfile = segment === 'profile';
 
         return (
           <TouchableOpacity
             key={segment}
-            style={styles.tab}
+            style={[
+              styles.tab,
+              // Figma: active tab = filled chocolate circle (white glyph);
+              // profile is ALWAYS a bordered appleMail circle, the border
+              // flipping grey → chocolate when active.
+              !isProfile && focused && styles.tabActive,
+              isProfile && styles.profileTab,
+              isProfile && focused && styles.profileTabActive,
+            ]}
             onPress={
               segment === 'create' ? onCreatePress : () => router.push(route as Href)
             }
             activeOpacity={0.7}
+            // 40px visual circle + 4px slop on every side = 48pt target.
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={TAB_LABELS[segment]}
             accessibilityState={{ selected: focused }}
@@ -182,61 +166,49 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
 }
 
 const styles = StyleSheet.create({
+  // Figma 6279:10544: white bar, pt 12 / pb 8 / px 21, justify-between,
+  // soft ambient shadow 0 0 4.5 @ 4% — no top border.
   container: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     backgroundColor: colors.white,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
+    paddingHorizontal: 21,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4.5,
     elevation: 8,
   },
   tab: {
-    flex: 1,
+    width: ITEM_SIZE,
+    height: ITEM_SIZE,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
   },
-  avatarRing: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
+  tabActive: {
+    backgroundColor: colors.neutral.chocolate,
+  },
+  profileTab: {
+    backgroundColor: colors.appleMail,
+    borderWidth: 1,
+    borderColor: PROFILE_RING_INACTIVE,
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: colors.border,
   },
-  avatarRingActive: {
-    borderColor: colors.black,
+  profileTabActive: {
+    borderColor: colors.neutral.chocolate,
   },
   avatar: {
     width: '100%',
     height: '100%',
   },
-  avatarPlaceholder: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  avatarPlaceholderActive: {
-    backgroundColor: colors.black,
-    borderColor: colors.black,
-  },
   initialsText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.tertiary,
-  },
-  initialsTextActive: {
-    color: colors.white,
+    color: colors.neutral.chocolate,
   },
 
   // Messages tab unread badge — Instagram-style coral pill positioned at
