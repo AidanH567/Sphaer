@@ -40,7 +40,10 @@ export async function geocodeAddress(
 ): Promise<GeocodeResult | null> {
   const key = config.googleMapsApiKey;
   if (!key) {
-    console.warn('[geocoding] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot geocode.');
+    // Diagnostic only — callers fail soft (event saves without coords).
+    if (__DEV__) {
+      console.warn('[geocoding] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot geocode.');
+    }
     return null;
   }
   const query = address.trim();
@@ -60,7 +63,7 @@ export async function geocodeAddress(
   try {
     const res = await fetch(url);
     if (!res.ok) {
-      console.warn(`[geocoding] HTTP ${res.status} for "${query}"`);
+      if (__DEV__) console.warn(`[geocoding] HTTP ${res.status} for "${query}"`);
       return null;
     }
     const json = (await res.json()) as GeocodeApiResponse;
@@ -70,11 +73,13 @@ export async function geocodeAddress(
 
     // OVER_QUERY_LIMIT / REQUEST_DENIED / INVALID_REQUEST: warn + null
     if (json.status !== 'OK') {
-      const errMsg = (json as { error_message?: string }).error_message;
-      console.warn(
-        `[geocoding] Google API status ${json.status} for "${query}"`,
-        errMsg ?? '',
-      );
+      if (__DEV__) {
+        const errMsg = (json as { error_message?: string }).error_message;
+        console.warn(
+          `[geocoding] Google API status ${json.status} for "${query}"`,
+          errMsg ?? '',
+        );
+      }
       return null;
     }
 
@@ -87,7 +92,7 @@ export async function geocodeAddress(
       formatted_address: first.formatted_address,
     };
   } catch (e) {
-    console.warn(`[geocoding] fetch failed for "${query}"`, e);
+    if (__DEV__) console.warn(`[geocoding] fetch failed for "${query}"`, e);
     return null;
   }
 }
@@ -101,17 +106,17 @@ interface GeocodeApiResponse {
     | 'REQUEST_DENIED'
     | 'INVALID_REQUEST'
     | 'UNKNOWN_ERROR';
-  results: Array<{
+  results: {
     formatted_address: string;
     geometry: {
       location: { lat: number; lng: number };
     };
-    address_components?: Array<{
+    address_components?: {
       long_name: string;
       short_name: string;
       types: string[];
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 export interface ReverseGeocodeResult {
@@ -144,7 +149,9 @@ export async function reverseGeocodeBerlinLocation(
 
   const key = config.googleMapsApiKey;
   if (!key) {
-    console.warn('[geocoding] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot reverse geocode.');
+    if (__DEV__) {
+      console.warn('[geocoding] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot reverse geocode.');
+    }
     return empty;
   }
 
@@ -160,15 +167,17 @@ export async function reverseGeocodeBerlinLocation(
   try {
     const res = await fetch(url);
     if (!res.ok) {
-      console.warn(`[geocoding] reverse HTTP ${res.status}`);
+      if (__DEV__) console.warn(`[geocoding] reverse HTTP ${res.status}`);
       return empty;
     }
     const json = (await res.json()) as GeocodeApiResponse;
 
     if (json.status === 'ZERO_RESULTS') return empty;
     if (json.status !== 'OK') {
-      const errMsg = (json as { error_message?: string }).error_message;
-      console.warn(`[geocoding] reverse API status ${json.status}`, errMsg ?? '');
+      if (__DEV__) {
+        const errMsg = (json as { error_message?: string }).error_message;
+        console.warn(`[geocoding] reverse API status ${json.status}`, errMsg ?? '');
+      }
       return empty;
     }
 
@@ -203,7 +212,7 @@ export async function reverseGeocodeBerlinLocation(
 
     return { neighbourhood, borough };
   } catch (e) {
-    console.warn('[geocoding] reverse fetch failed', e);
+    if (__DEV__) console.warn('[geocoding] reverse fetch failed', e);
     return empty;
   }
 }

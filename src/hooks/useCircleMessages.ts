@@ -63,7 +63,8 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error('[useCircleMessages] initial fetch failed:', err);
+        // Dev log only — `error` state below is the user-visible signal.
+        if (__DEV__) console.error('[useCircleMessages] initial fetch failed:', err);
         setError(err instanceof Error ? err.message : 'Failed to load chat.');
       })
       .finally(() => {
@@ -140,7 +141,8 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
           )
         );
       } catch (err) {
-        console.error('[useCircleMessages] sendMessage failed:', err);
+        // Dev log only — the bubble flips to 'failed' (user-visible) below.
+        if (__DEV__) console.error('[useCircleMessages] sendMessage failed:', err);
         setMessages((prev) =>
           prev.map((m) => (m.client_id === clientId ? { ...m, status: 'failed' } : m))
         );
@@ -167,7 +169,7 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
           )
         );
       } catch (err) {
-        console.error('[useCircleMessages] retryMessage failed:', err);
+        if (__DEV__) console.error('[useCircleMessages] retryMessage failed:', err);
         setMessages((prev) =>
           prev.map((m) => (m.client_id === clientId ? { ...m, status: 'failed' } : m))
         );

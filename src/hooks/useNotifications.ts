@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAppContext } from '@/context/AppContext';
 import type { Notification } from '@/types/message.types';
 
 export function useNotifications(userId: string | undefined) {
+  // Re-run the fetch/subscribe effect whenever the app returns to the
+  // foreground — the OS drops the Realtime socket while backgrounded, so
+  // this both refetches anything missed and re-binds the channel on the
+  // freshly reconnected socket (AppContext reconnects it on resume).
+  const { foregroundTick } = useAppContext();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,7 +57,7 @@ export function useNotifications(userId: string | undefined) {
       .subscribe();
 
     return () => { channel.unsubscribe(); };
-  }, [userId, refetchTick]);
+  }, [userId, refetchTick, foregroundTick]);
 
   async function markAllRead() {
     if (!userId) return;

@@ -1,4 +1,6 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
+import { supabase } from '@/lib/supabase';
 import type { EventFilters } from '@/types/event.types';
 
 type FeedView = 'list' | 'map' | 'mural';
@@ -33,6 +35,17 @@ interface AppContextValue {
    *  keep AppContext's render path clean — writes go through setPosterSize. */
   getPosterSize: (url: string) => PosterSize | undefined;
   setPosterSize: (url: string, size: PosterSize) => void;
+  /**
+   * Increments every time the app returns to the foreground
+   * (background/inactive → active). Hooks and screens can put it in an
+   * effect/useMemo dependency array to refetch or recompute on resume —
+   * e.g. useNotifications re-binds its Realtime channel + refetches, and
+   * time-window filters ("tonight" / "this weekend", which evaluate
+   * against `new Date()` at compute time) get a chance to recompute after
+   * the app slept past midnight or across a DST shift instead of serving
+   * yesterday's window.
+   */
+  foregroundTick: number;
 }
 
 const AppContext = createContext<AppContextValue>({
@@ -44,6 +57,7 @@ const AppContext = createContext<AppContextValue>({
   setUserCoords: () => {},
   getPosterSize: () => undefined,
   setPosterSize: () => {},
+  foregroundTick: 0,
 });
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -63,6 +77,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     posterSizesRef.current.set(url, size);
   }, []);
 
+  // ── Foreground resume ──────────────────────────────────────────────────
+  // iOS/Android freeze JS timers and silently drop the Realtime websocket
+  // while the app is backgrounded. On background→active we (a) reconnect
+  // the shared Realtime socket if it dropped, and (b) bump foregroundTick
+  // so consumers can refetch/recompute. The tick also addresses the
+  // "tonight" / "this weekend" staleness: those chip windows are computed
+  // against `new Date()` at render time, so a feed restored the next
+  // morning (or across a DST change) keeps showing the old window until a
+  // tick consumer re-renders it.
+  const [foregroundTick, setForegroundTick] = useState(0);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      const wasBackgrounded =
+        appStateRef.current === 'background' || appStateRef.current === 'inactive';
+      if (wasBackgrounded && next === 'active') {
+        if (!supabase.realtime.isConnected()) {
+          supabase.realtime.connect();
+        }
+        setForegroundTick((n) => n + 1);
+      }
+      appStateRef.current = next;
+    });
+    return () => sub.remove();
+  }, []);
+
   return (
     <AppContext.Provider
       value={{
@@ -74,6 +114,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUserCoords,
         getPosterSize,
         setPosterSize,
+        foregroundTick,
       }}
     >
       {children}

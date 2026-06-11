@@ -70,7 +70,8 @@ export function useEventMessages(userId: string | undefined, eventId: string | u
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error('[useEventMessages] initial fetch failed:', err);
+        // Dev log only — `error` state below is the user-visible signal.
+        if (__DEV__) console.error('[useEventMessages] initial fetch failed:', err);
         setError(err instanceof Error ? err.message : 'Failed to load chat.');
       })
       .finally(() => {
@@ -149,7 +150,8 @@ export function useEventMessages(userId: string | undefined, eventId: string | u
           )
         );
       } catch (err) {
-        console.error('[useEventMessages] sendMessage failed:', err);
+        // Dev log only — the bubble flips to 'failed' (user-visible) below.
+        if (__DEV__) console.error('[useEventMessages] sendMessage failed:', err);
         setMessages((prev) =>
           prev.map((m) => (m.client_id === clientId ? { ...m, status: 'failed' } : m))
         );
@@ -176,7 +178,7 @@ export function useEventMessages(userId: string | undefined, eventId: string | u
           )
         );
       } catch (err) {
-        console.error('[useEventMessages] retryMessage failed:', err);
+        if (__DEV__) console.error('[useEventMessages] retryMessage failed:', err);
         setMessages((prev) =>
           prev.map((m) => (m.client_id === clientId ? { ...m, status: 'failed' } : m))
         );

@@ -35,8 +35,15 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
  */
 export default function FeedScreen() {
   const router = useRouter();
-  const { feedView, setFeedView, feedFilters, setFeedFilters, userCoords, setUserCoords } =
-    useAppContext();
+  const {
+    feedView,
+    setFeedView,
+    feedFilters,
+    setFeedFilters,
+    userCoords,
+    setUserCoords,
+    foregroundTick,
+  } = useAppContext();
   const { user } = useAuthContext();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [nearMeBusy, setNearMeBusy] = useState(false);
@@ -89,6 +96,11 @@ export default function FeedScreen() {
   // upcoming server changes shift ordering. Then apply search + neighbourhood
   // filters client-side.
   const visibleEvents = useMemo(() => {
+    // foregroundTick: the tonight/this-weekend windows inside
+    // applyChipFilters are computed against `new Date()` at memo time, so
+    // recompute when the app resumes from background (overnight / DST) —
+    // otherwise a feed restored the next morning keeps yesterday's window.
+    void foregroundTick;
     const q = searchText.trim().toLowerCase();
     const hood = (feedFilters.neighborhood ?? '').toLowerCase();
     const base = [...events].sort(
@@ -153,6 +165,7 @@ export default function FeedScreen() {
     feedFilters.thisWeekend,
     feedFilters.isFree,
     userCoords,
+    foregroundTick,
   ]);
 
   // Tonight ⇄ This weekend are mutually exclusive — turning one on clears
@@ -414,6 +427,25 @@ export default function FeedScreen() {
                 : searchText
                 ? 'Try a different search, or clear the filter to see everything.'
                 : 'Your feed will fill in as artists and circles post events near you. Pull to refresh.'
+            }
+            // Cold-start CTA: only when the feed is *truly* empty (zero
+            // events, no search / chips / category / neighbourhood filter
+            // narrowing things down) — filtered-empty states keep their
+            // "clear the filter" copy instead. Circles are the densest
+            // discovery surface, so point fresh users there.
+            cta={
+              !searchText.trim() &&
+              !feedFilters.tonight &&
+              !feedFilters.thisWeekend &&
+              !feedFilters.isFree &&
+              !feedFilters.nearMe &&
+              !(feedFilters.categories?.length) &&
+              !feedFilters.neighborhood
+                ? {
+                    label: 'Browse circles',
+                    onPress: () => router.push('/(tabs)/circles'),
+                  }
+                : undefined
             }
             centered
             spaced

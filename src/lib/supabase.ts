@@ -18,7 +18,9 @@ const storage = Platform.OS === 'web'
       },
     }
   : (() => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // Deliberate lazy require — expo-secure-store must not be imported on
+      // web (no native module). Rule name updated for typescript-eslint v8.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const SecureStore = require('expo-secure-store');
       return {
         getItem: (key: string) => SecureStore.getItemAsync(key),
@@ -27,7 +29,45 @@ const storage = Platform.OS === 'web'
       };
     })();
 
+/**
+ * Hard timeout for every Supabase REST/auth/storage request. Without it a
+ * request that hits a dead network (cellular handoff, captive portal,
+ * backgrounded socket) can hang indefinitely — supabase-js never rejects,
+ * so any `isSubmitting` flag guarding a button stays true forever. 15s is
+ * generous for mobile latency while still unsticking the UI within one
+ * "is this broken?" moment.
+ */
+const FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * fetch wrapper passed to createClient via `global.fetch`. Aborts the
+ * request after FETCH_TIMEOUT_MS, while still honouring any caller-supplied
+ * AbortSignal (e.g. `.abortSignal()` on a PostgREST builder) — whichever
+ * fires first wins.
+ */
+const fetchWithTimeout: typeof fetch = (input, init) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  // Forward an upstream abort (caller's own signal) into our controller so
+  // both cancellation paths funnel through the single signal we pass down.
+  const upstream = init?.signal ?? undefined;
+  const forwardAbort = () => controller.abort();
+  if (upstream) {
+    if (upstream.aborted) controller.abort();
+    else upstream.addEventListener('abort', forwardAbort);
+  }
+
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+    clearTimeout(timer);
+    upstream?.removeEventListener('abort', forwardAbort);
+  });
+};
+
 export const supabase = createClient<Database>(config.supabaseUrl, config.supabaseAnonKey, {
+  global: {
+    fetch: fetchWithTimeout,
+  },
   auth: {
     storage,
     autoRefreshToken: true,

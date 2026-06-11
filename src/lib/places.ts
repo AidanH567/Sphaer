@@ -67,7 +67,10 @@ const BERLIN_RADIUS = 20000; // metres
 export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
   const key = config.googleMapsApiKey;
   if (!key) {
-    console.warn('[places] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot search.');
+    // Diagnostic only — autocomplete UI degrades gracefully on [].
+    if (__DEV__) {
+      console.warn('[places] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot search.');
+    }
     return [];
   }
   const q = query.trim();
@@ -94,8 +97,10 @@ export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
     });
 
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      console.warn(`[places] autocomplete HTTP ${res.status}`, errBody.slice(0, 200));
+      if (__DEV__) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`[places] autocomplete HTTP ${res.status}`, errBody.slice(0, 200));
+      }
       return [];
     }
 
@@ -111,7 +116,7 @@ export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
       };
     });
   } catch (e) {
-    console.warn('[places] autocomplete fetch failed', e);
+    if (__DEV__) console.warn('[places] autocomplete fetch failed', e);
     return [];
   }
 }
@@ -126,7 +131,9 @@ export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
   const key = config.googleMapsApiKey;
   if (!key) {
-    console.warn('[places] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot fetch details.');
+    if (__DEV__) {
+      console.warn('[places] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY missing — cannot fetch details.');
+    }
     return null;
   }
 
@@ -145,8 +152,10 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     );
 
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      console.warn(`[places] details HTTP ${res.status}`, errBody.slice(0, 200));
+      if (__DEV__) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`[places] details HTTP ${res.status}`, errBody.slice(0, 200));
+      }
       return null;
     }
 
@@ -170,7 +179,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
       borough: bezirk,
     };
   } catch (e) {
-    console.warn('[places] details fetch failed', e);
+    if (__DEV__) console.warn('[places] details fetch failed', e);
     return null;
   }
 }
@@ -226,7 +235,7 @@ function extractBerlinLocation(
 }
 
 interface AutocompleteResponse {
-  suggestions?: Array<{
+  suggestions?: {
     placePrediction: {
       placeId: string;
       text?: { text: string };
@@ -235,7 +244,7 @@ interface AutocompleteResponse {
         secondaryText?: { text: string };
       };
     };
-  }>;
+  }[];
 }
 
 interface DetailsResponse {

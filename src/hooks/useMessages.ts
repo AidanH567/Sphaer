@@ -59,8 +59,8 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
       .catch((err) => {
         if (cancelled) return;
         // Surface the error so the UI can render an error state instead of
-        // an empty thread. Logged for dev visibility too.
-        console.error('[useMessages] initial fetch failed:', err);
+        // an empty thread. Log gated to dev — `error` state carries the info.
+        if (__DEV__) console.error('[useMessages] initial fetch failed:', err);
         setError(err instanceof Error ? err.message : 'Failed to load messages.');
       })
       .finally(() => {
@@ -142,7 +142,8 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
           )
         );
       } catch (err) {
-        console.error('[useMessages] sendMessage failed:', err);
+        // Dev log only — the bubble flips to 'failed' (user-visible) below.
+        if (__DEV__) console.error('[useMessages] sendMessage failed:', err);
         setMessages((prev) =>
           prev.map((m) => (m.client_id === clientId ? { ...m, status: 'failed' } : m))
         );
@@ -173,7 +174,7 @@ export function useMessages(userId: string | undefined, partnerId: string | unde
           )
         );
       } catch (err) {
-        console.error('[useMessages] retryMessage failed:', err);
+        if (__DEV__) console.error('[useMessages] retryMessage failed:', err);
         setMessages((prev) =>
           prev.map((m) => (m.client_id === clientId ? { ...m, status: 'failed' } : m))
         );
