@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -220,7 +221,14 @@ export default function MessagesScreen() {
 
       {/* Title section — filter chips */}
       <View style={styles.titleSection}>
-        <View style={styles.filtersRow}>
+        {/* Six chips exceed a 390px screen — the row must actually scroll.
+            A plain View here clipped "Circles" off the right edge. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersScroll}
+          contentContainerStyle={styles.filtersRow}
+        >
           {FILTERS.map((f) => (
             <TouchableOpacity
               key={f.key}
@@ -240,16 +248,7 @@ export default function MessagesScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity
-            style={[styles.chip, styles.chipAdd]}
-            onPress={() => console.log('[Messages] add filter')}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="Add filter"
-          >
-            <Ionicons name="add" size={18} color={META} />
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
 
       {/* Encryption notice */}
@@ -322,17 +321,25 @@ const styles = StyleSheet.create({
 
   // Title section (filter chips)
   titleSection: {
-    paddingLeft: 20,
-    paddingRight: 16,
+    
+    
     paddingTop: 4,
     paddingBottom: 8,
     gap: 12,
   },
 
+  // react-native-web ScrollView ships flexGrow/flexShrink: 1 — pin both
+  // or the row collapses (same fix as the feed chip row).
+  filtersScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   filtersRow: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    paddingLeft: 20,
+    paddingRight: 16,
   },
   chip: {
     height: 34,
@@ -354,10 +361,6 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: INK,
-  },
-  chipAdd: {
-    width: 34,
-    paddingHorizontal: 0,
   },
 
   // Encryption notice
