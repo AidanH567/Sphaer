@@ -39,6 +39,9 @@ export default function CircleChatScreen() {
     return found?.kind === 'circle' ? found.circle : null;
   }, [conversations, circleId]);
   const [circle, setCircle] = useState<Circle | null>(cachedCircle);
+  // Figma chat header (6298:6104) shows a presence line under the title; we
+  // don't track presence, so the truthful equivalent is the member count.
+  const [membersCount, setMembersCount] = useState<number | null>(null);
   useEffect(() => {
     if (cachedCircle) {
       setCircle(cachedCircle);
@@ -53,6 +56,13 @@ export default function CircleChatScreen() {
       .maybeSingle()
       .then(({ data }) => {
         if (!cancelled && data) setCircle(data as Circle);
+        supabase
+          .from('circle_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('circle_id', circleId)
+          .then(({ count }) => {
+            if (!cancelled && typeof count === 'number') setMembersCount(count);
+          });
       });
     return () => {
       cancelled = true;
@@ -112,9 +122,16 @@ export default function CircleChatScreen() {
                 <Ionicons name="people" size={16} color={colors.text.tertiary} />
               </View>
             )}
-            <Text style={styles.circleTitle} numberOfLines={1}>
-              {circle.name}
-            </Text>
+            <View style={styles.headerText}>
+              <Text style={styles.circleTitle} numberOfLines={1}>
+                {circle.name}
+              </Text>
+              {membersCount !== null && (
+                <Text style={styles.headerMeta}>
+                  {membersCount.toLocaleString('de-DE')} {membersCount === 1 ? 'member' : 'members'}
+                </Text>
+              )}
+            </View>
           </TouchableOpacity>
         )}
         <View style={{ width: 40 }} />
@@ -181,19 +198,27 @@ export default function CircleChatScreen() {
   );
 }
 
-const THUMB = 32;
+// Figma 6298:6104: 48px circle avatar in the chat header.
+const THUMB = 48;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   flex: { flex: 1 },
+  // Figma Tabbar_Title Side 6298:6104: soft shadow instead of a border.
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.md,
+    paddingBottom: 10,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 1,
   },
   backButton: { padding: spacing.sm },
   circleInfo: {
@@ -213,11 +238,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerText: { flex: 1, gap: 2 },
   circleTitle: {
-    flex: 1,
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    color: colors.neutral.ink,
+  },
+  headerMeta: {
+    fontSize: 12,
+    fontWeight: typography.fontWeight.medium,
+    color: '#949494', // Figma neutral-500
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingVertical: spacing.base, flexGrow: 1 },
