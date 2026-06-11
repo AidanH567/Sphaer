@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/Avatar';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { EventRegistrationSheet } from '@/components/ui/EventRegistrationSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
@@ -19,6 +20,7 @@ import { register as registerForEvent } from '@/services/registrations.service';
 import { shareEvent } from '@/services/share.service';
 import { addEventToCalendar } from '@/services/calendar.service';
 import {
+  deleteEvent,
   isEventSaved as isEventSavedService,
   saveEvent,
   unsaveEvent,
@@ -48,6 +50,20 @@ export default function EventDetailScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+
+  // Refetch on re-focus (not on the initial mount — useEvent already fetched)
+  // so changes saved on the edit screen show immediately after router.back().
+  const hasFocusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
+      refetch();
+    }, [refetch])
+  );
 
   // Hydrate the bookmark icon state from the DB on mount.
   useEffect(() => {
@@ -152,6 +168,7 @@ export default function EventDetailScreen() {
   const displayPrice = priceLabel === 'FREE' ? 'Free' : priceLabel;
   const dateLabel = formatEventDateCompact(event.starts_at);
   const aboutParagraphs = (event.description ?? '').split('\n\n').filter(Boolean);
+  const isCreator = user?.id === event.creator_id;
 
   async function handleShare() {
     if (!event) return;
@@ -194,6 +211,26 @@ export default function EventDetailScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.navRight}>
+          {isCreator && (
+            <TouchableOpacity
+              onPress={() => router.push(`/event/edit/${id}`)}
+              style={styles.navButton}
+              accessibilityRole="button"
+              accessibilityLabel="Edit activity"
+            >
+              <Ionicons name="create-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
+          {isCreator && (
+            <TouchableOpacity
+              onPress={() => setDeleteConfirmVisible(true)}
+              style={styles.navButton}
+              accessibilityRole="button"
+              accessibilityLabel="Delete activity"
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
           {canAccessChat && (
             <TouchableOpacity
               onPress={() => router.push(`/ticket/${id}`)}
@@ -393,6 +430,22 @@ export default function EventDetailScreen() {
           <Text style={styles.bookButtonText}>Get Booked</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Creator-only delete confirm. On success we replace to the feed —
+          the sheet unmounts with the route, so no onClose on the happy path. */}
+      <ConfirmSheet
+        visible={deleteConfirmVisible}
+        title="Delete this activity?"
+        message="Registrations and saves will be removed."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={async () => {
+          if (!id) return;
+          await deleteEvent(id);
+          router.replace('/(tabs)/feed');
+        }}
+        onClose={() => setDeleteConfirmVisible(false)}
+      />
 
       {/* Event registration popup */}
       <EventRegistrationSheet
