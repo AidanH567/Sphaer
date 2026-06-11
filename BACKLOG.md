@@ -151,10 +151,32 @@ Commit `632e064`. `app/(auth)/welcome.tsx` interstitial — ~1.6s dwell, tap-to-
 
 ## P1 — Core flows
 
-### Profile editing flow polish — Figma visual match (remaining slice)
-Why: Inline validation + dirty-state Save shipped today. The "match Figma exactly" piece still needs the MCP rate limit to lift.
-Done when:
-- [ ] Edit Profile screen matches Figma exactly (paired with the Whole-app styling audit)
+### ~~Profile editing flow polish — Figma visual match (remaining slice)~~ — closed 2026-06-11: no Figma frame exists
+Surveyed the ENTIRE prototype board (`6239:6597`, 20385×4239) via high-res
+screenshot slices on 2026-06-11: there is **no Edit Profile screen in the
+Figma**. The board contains auth/onboarding, feed/map/mural, event
+detail + registration + ticket, circles browse/join, circle detail page +
+circle group chat, the create flow (menu sheet + Create Activity form +
+publish confirmation), the artist profile (`/user/[id]`, "Lea Weber"),
+and component sheets — nothing else. Our Edit Profile UI (inline
+validation + dirty-state Save, shipped 2026-06-08) follows the app's
+design tokens and IS the reference until a design lands. Reopen only if
+the designer adds a frame.
+
+**Board survey side-findings (frames that exist but were never in the
+audit queue — no node IDs known; board `get_metadata` times out, so get
+IDs from a pasted frame link when needed):**
+- Circle detail page (cover, Upcoming Activities, Members, posts) +
+  **circle group chat** — design reference for Messaging v2 / circle
+  page work below.
+- Create flow: create-menu sheet, full Create Activity form (topic
+  chips, title/subtitle/describe, cover+media, date/time, location,
+  price/spots, visibility, Preview/Publish), publish confirmation.
+  Our `create/` screens should be audited against these eventually.
+- Artist profile `/user/[id]`: verified badge, counts row, About,
+  Activity cards, Experience timeline, Testimonials, Images grid,
+  "Available for work" pill + Get in touch — matches the Profile v2
+  deferred items.
 
 ---
 
@@ -243,11 +265,8 @@ PR per ship; don't expand the current item to absorb these.
 ### ~~Message hooks swallow fetch errors (3 hooks)~~ — hook half shipped 2026-06-09
 Each of `useMessages`, `useEventMessages`, `useCircleMessages` now exposes an `error: string | null` state and sets it in the `.catch` branch of the initial fetch before logging. The chat screens still need to read the new state and render `<ErrorState />` — that part lands when ErrorState ships in the next P2 item.
 
-### Unsafe JSONB casts in messages.service.ts
-Why: Lines 20 / 28 / 35 cast `row.partner as unknown as Event/Circle/Profile` and `row.last_message as unknown as Message` from the `get_conversations` RPC return. If the SQL function schema drifts, these break silently at runtime.
-Done when:
-- [ ] Either regenerate types so the RPC return is properly typed, OR
-- [ ] Add a runtime validator (zod / io-ts) at the cast boundary that throws a clear error on shape mismatch
+### ~~Unsafe JSONB casts in messages.service.ts~~ — shipped 2026-06-11
+Hand-rolled runtime shape guards (no new deps) at the `getConversations` cast boundary: per-kind partner guards (Profile/Event/Circle) + Message guard, checking exactly the fields the inbox renders (NOT-NULL columns per the migration SQL as required strings, nullable ones as nullable). On drift the service throws `get_conversations: <column> row failed <shape> validation (got keys: ...)` into the existing error path instead of silently rendering blank rows. All four `as unknown as` casts removed.
 
 ### ~~Missing skeletons on `/user/[id]` + message threads~~ — shipped 2026-06-09
 `/user/[id]` already shows `ProfileSkeleton` during `status === 'loading'` — audit was wrong about that one. New `src/components/ui/skeletons/MessageBubbleSkeleton.tsx` exposes `MessageBubbleSkeleton` (single bubble — side / width / index props) and `MessageBubbleSkeletonList` (a 6-bubble alternating-sides stack mimicking real conversation rhythm). All three chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now render the list during `isLoading` instead of a centred `ActivityIndicator`.
@@ -335,7 +354,7 @@ Remaining:
 - [ ] Component smoke tests via @testing-library/react-native (signup form validation, create-event validation, save toggle)
 
 ### ~~TypeScript enums for `notification.type` and `circle_members.role`~~ — shipped 2026-06-09
-New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` already wired to use `NotificationType` (META_FOR_TYPE record + routeFor switch). Remaining: refactor all `'admin'`/`'member'` literals in `src/services/circles.service.ts` to use `CircleRole` — small follow-up, no real bug being fixed today.
+New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` already wired to use `NotificationType` (META_FOR_TYPE record + routeFor switch). Remaining slice shipped 2026-06-11: `joinCircle` gained a typed `role: CircleRole = 'member'` param (3 call sites unaffected) and `getAdminCircles` pins its filter with `'admin' satisfies CircleRole` (generated Supabase types widen the column to `string`, so `satisfies` restores typo protection).
 
 ---
 
