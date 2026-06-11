@@ -49,70 +49,79 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
     (event as MockEvent).priceLabel ?? formatPrice(event.price, event.is_free);
   const locationLabel = event.location_name ?? event.address ?? 'Berlin';
 
+  // The bookmark is a SIBLING of the card press surface, absolutely
+  // positioned over it — a button may not contain another button (invalid
+  // DOM on web, and a single merged focus stop for screen readers).
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/event/${event.id}`)}
-      activeOpacity={0.92}
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${event.title}`}
-    >
-      {/* Left — text area */}
-      <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={3}>
-          {event.title}
-        </Text>
-
-        <View style={styles.meta}>
-          <Text style={styles.metaLine}>{dateLabel}</Text>
-          <Text style={styles.metaLine}>{timeLabel}</Text>
-          <Text style={styles.metaLine} numberOfLines={1}>
-            {locationLabel}
+    <View style={styles.cardWrap}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push(`/event/${event.id}`)}
+        activeOpacity={0.92}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${event.title}`}
+      >
+        {/* Left — text area */}
+        <View style={styles.content}>
+          <Text style={styles.title} numberOfLines={3}>
+            {event.title}
           </Text>
-          <Text style={styles.price}>{priceLabel === 'FREE' ? 'Free' : priceLabel}</Text>
+
+          <View style={styles.meta}>
+            <Text style={styles.metaLine}>{dateLabel}</Text>
+            <Text style={styles.metaLine}>{timeLabel}</Text>
+            <Text style={styles.metaLine} numberOfLines={1}>
+              {locationLabel}
+            </Text>
+            <Text style={styles.price}>{priceLabel === 'FREE' ? 'Free' : priceLabel}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Right — poster image + bookmark */}
-      <View style={styles.imageWrap}>
-        {event.poster_url ? (
-          <Image source={{ uri: event.poster_url }} style={styles.image} contentFit="cover" />
-        ) : (
-          <View style={[styles.image, styles.imagePlaceholder]} />
-        )}
+        {/* Right — poster image */}
+        <View style={styles.imageWrap}>
+          {event.poster_url ? (
+            <Image source={{ uri: event.poster_url }} style={styles.image} contentFit="cover" />
+          ) : (
+            <View style={[styles.image, styles.imagePlaceholder]} />
+          )}
+        </View>
+      </TouchableOpacity>
 
-        {onSave && (
-          <TouchableOpacity
-            style={styles.bookmarkButton}
-            onPress={onSave}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save event'}
-          >
-            <Ionicons
-              name={isSaved ? 'bookmark' : 'bookmark-outline'}
-              size={19}
-              color={colors.text.primary}
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+      {onSave && (
+        <TouchableOpacity
+          style={styles.bookmarkButton}
+          onPress={onSave}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={isSaved ? 'Remove from saved' : 'Save event'}
+        >
+          <Ionicons
+            name={isSaved ? 'bookmark' : 'bookmark-outline'}
+            size={19}
+            color={colors.text.primary}
+          />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
 export const EventCard = React.memo(EventCardImpl);
 
 const styles = StyleSheet.create({
+  // Margins live on the wrapper so the absolutely-positioned bookmark
+  // anchors to the card box, not the list gutter.
+  cardWrap: {
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.md,
+  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     height: CARD_HEIGHT,
     backgroundColor: colors.white,
     borderRadius: radius.sm,
-    marginHorizontal: spacing.base,
-    marginBottom: spacing.md,
     paddingLeft: 2,
     overflow: 'hidden',
     // Figma: 0 0 3px rgba(0,0,0,.09), 1px 1px 1px rgba(0,0,0,.10)
