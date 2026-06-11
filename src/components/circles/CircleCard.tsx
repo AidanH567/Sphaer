@@ -17,7 +17,7 @@ const CARD_HEIGHT = 313;
 const IMAGE_SIZE = 148;
 const CONTENT_HEIGHT = 132;
 const CHOCOLATE = colors.neutral.chocolate; // Neutral/chocolate — card title
-const META = colors.neutral.neutral400; // neutral/neutral-400 — activity / member counts
+const META = colors.neutral.neutral600; // neutral/neutral-600 — activity / member counts
 
 /**
  * Vertical circle card for the Circles explore page category rows.
@@ -52,9 +52,13 @@ function CircleCardImpl({ circle, onPress }: CircleCardProps) {
         </Text>
 
         <View style={styles.infos}>
-          <Text style={styles.metaLine}>{circle.activities_count} activities</Text>
+          {/* Figma master copy is capitalised: "34 Activity" / "1.402 Members". */}
           <Text style={styles.metaLine}>
-            {circle.members_count.toLocaleString('de-DE')} members
+            {circle.activities_count} {circle.activities_count === 1 ? 'Activity' : 'Activities'}
+          </Text>
+          <Text style={styles.metaLine}>
+            {circle.members_count.toLocaleString('de-DE')}{' '}
+            {circle.members_count === 1 ? 'Member' : 'Members'}
           </Text>
         </View>
       </View>

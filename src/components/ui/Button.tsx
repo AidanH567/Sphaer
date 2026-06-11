@@ -39,7 +39,7 @@ export function Button({
       ]}
     >
       {isLoading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.white : colors.black} />
+        <ActivityIndicator color={variant === 'primary' ? colors.white : colors.neutral.chocolate} />
       ) : (
         <Text
           style={[
@@ -56,6 +56,9 @@ export function Button({
   );
 }
 
+// Figma design-system "long button" (6298:6301/6302): 49px pill, SF Pro
+// Medium 17; primary = chocolate fill / white text, secondary = white fill
+// with a 1.7px hidden-lines outline and chocolate text.
 const styles = StyleSheet.create({
   base: {
     borderRadius: radius.full,
@@ -64,25 +67,24 @@ const styles = StyleSheet.create({
   },
   sm: { height: 36, paddingHorizontal: spacing.base },
   md: { height: 44, paddingHorizontal: spacing.xl },
-  lg: { height: 52, paddingHorizontal: spacing.xl },
+  lg: { height: 49, paddingHorizontal: spacing.base },
 
   primary: {
-    backgroundColor: colors.black,
+    backgroundColor: colors.neutral.chocolate,
   },
   secondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: colors.black,
+    backgroundColor: colors.white,
+    borderWidth: 1.7,
+    borderColor: colors.neutral.hiddenLines,
   },
   disabled: { opacity: 0.4 },
 
   label: {
-    fontWeight: typography.fontWeight.semibold,
-    letterSpacing: 0.2,
+    fontWeight: typography.fontWeight.medium,
   },
   label_sm: { fontSize: typography.fontSize.sm },
   label_md: { fontSize: typography.fontSize.base },
-  label_lg: { fontSize: typography.fontSize.base },
+  label_lg: { fontSize: typography.fontSize.md },
   labelPrimary: { color: colors.white },
-  labelSecondary: { color: colors.black },
+  labelSecondary: { color: colors.neutral.chocolate },
 });
