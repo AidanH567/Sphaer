@@ -25,6 +25,10 @@ export default function AuthLayout() {
   // screen is active and a session might or might not exist (Supabase's
   // resend helper might briefly populate one).
   const onVerifyEmail = lastSeg === 'verify-email';
+  // welcome is the ~1.5s post-signup interstitial (Figma 5013:10915) —
+  // it mounts WITH a fresh session and routes itself to onboarding, so it
+  // needs the same fall-through or the redirect below would cut it short.
+  const onWelcome = lastSeg === 'welcome';
 
   if (isLoading) {
     return (
@@ -50,7 +54,7 @@ export default function AuthLayout() {
     // step 2 and the user never sees the form. update-password and
     // verify-email are also mid-flow auth screens with the same intercept
     // problem — same fall-through.
-    if (!onOnboarding && !onUpdatePassword && !onVerifyEmail) {
+    if (!onOnboarding && !onUpdatePassword && !onVerifyEmail && !onWelcome) {
       // First-timers (or anyone whose flag isn't set yet) get the flow.
       // `as never` because expo-router's generated route types are stale
       // until the dev server regenerates after we add the new file.
@@ -74,6 +78,8 @@ export default function AuthLayout() {
       <Stack.Screen name="reset-password" />
       <Stack.Screen name="update-password" />
       <Stack.Screen name="verify-email" />
+      {/* Cinematic interstitial — fade, not the default slide. */}
+      <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
       <Stack.Screen name="intro" />
     </Stack>
   );

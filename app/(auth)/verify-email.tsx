@@ -52,12 +52,13 @@ export default function VerifyEmailScreen() {
   const [resending, setResending] = useState(false);
 
   // Watch for the SIGNED_IN that follows the email click. When it arrives,
-  // the user is now authenticated and ready for onboarding — replace so the
-  // back stack doesn't keep this screen reachable.
+  // the user is now authenticated — show the "Welcome {name}" interstitial
+  // (it reads the name from user_metadata and routes on to onboarding).
+  // Replace so the back stack doesn't keep this screen reachable.
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        router.replace('/(auth)/onboarding' as never);
+        router.replace('/(auth)/welcome' as never);
       }
     });
     return () => sub.subscription.unsubscribe();

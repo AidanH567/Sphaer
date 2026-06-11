@@ -57,12 +57,15 @@ export default function SignUpScreen() {
       const result = await signUp(email, password, displayName.trim());
       // Branch on whether Supabase created an immediate session:
       //   - session present   → email confirmation is OFF in the dashboard,
-      //                         user is authed, jump straight to onboarding.
+      //                         user is authed → "Welcome {name}" interstitial
+      //                         (Figma 5013:10915), which routes to onboarding.
       //   - session === null  → confirmation is ON, Supabase has sent a
       //                         verification email; show the interstitial
       //                         that watches for SIGNED_IN.
       if (result?.session) {
-        router.replace('/(auth)/onboarding');
+        router.replace(
+          `/(auth)/welcome?name=${encodeURIComponent(displayName.trim())}` as never,
+        );
       } else {
         router.replace(
           `/(auth)/verify-email?email=${encodeURIComponent(email.trim())}` as never,
