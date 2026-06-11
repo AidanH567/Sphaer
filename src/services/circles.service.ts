@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { validateImageUpload } from '@/utils/upload-validation';
 import type { CircleInsert, CircleUpdate, CircleWithCounts } from '@/types/circle.types';
+import type { CircleRole } from '@/types/enums';
 
 export async function getCircles(search?: string): Promise<CircleWithCounts[]> {
   let query = supabase
@@ -65,10 +66,10 @@ export async function updateCircle(id: string, updates: CircleUpdate) {
   return data;
 }
 
-export async function joinCircle(userId: string, circleId: string) {
+export async function joinCircle(userId: string, circleId: string, role: CircleRole = 'member') {
   const { error } = await supabase
     .from('circle_members')
-    .insert({ user_id: userId, circle_id: circleId, role: 'member' });
+    .insert({ user_id: userId, circle_id: circleId, role });
   if (error) throw error;
 }
 
@@ -121,7 +122,7 @@ export async function getAdminCircles(userId: string): Promise<CircleWithCounts[
       )
     `)
     .eq('user_id', userId)
-    .eq('role', 'admin');
+    .eq('role', 'admin' satisfies CircleRole);
   if (error) throw error;
 
   const circles = (data ?? [])

@@ -9,32 +9,107 @@ import type { Profile } from '@/types/user.types';
 import type { Event } from '@/types/event.types';
 import type { Circle } from '@/types/circle.types';
 
+// ── get_conversations JSONB guards ───────────────────────────────────────────
+// The RPC returns `partner` / `last_message` as untyped JSONB built in SQL.
+// These guards check only the fields the inbox actually renders
+// (app/(tabs)/messages/index.tsx + MessagesContext keying), so drift in the
+// SQL function's shape fails loudly here instead of rendering blank rows.
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNullableString(value: unknown): boolean {
+  return value === null || value === undefined || typeof value === 'string';
+}
+
+/** DM partner row: id (keying/routing) + username / display_name / avatar_url. */
+function isProfileShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    isNullableString(value.username) &&
+    isNullableString(value.display_name) &&
+    isNullableString(value.avatar_url)
+  );
+}
+
+/** Event chat row: id (keying/routing) + title / poster_url. */
+function isEventShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.title === 'string' &&
+    isNullableString(value.poster_url)
+  );
+}
+
+/** Circle chat row: id (keying/routing) + name / avatar_url. */
+function isCircleShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    isNullableString(value.avatar_url)
+  );
+}
+
+/** Inbox preview line: content / sender_id + created_at timestamp. */
+function isMessageShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.content === 'string' &&
+    typeof value.sender_id === 'string' &&
+    isNullableString(value.created_at)
+  );
+}
+
+function validateShape<T>(
+  value: unknown,
+  column: 'partner' | 'last_message',
+  shape: string,
+  guard: (v: unknown) => boolean
+): T {
+  if (guard(value)) return value as T;
+  const got = isRecord(value)
+    ? `keys: ${Object.keys(value).join(', ') || '<empty object>'}`
+    : `type: ${value === null ? 'null' : typeof value}`;
+  throw new Error(`get_conversations: ${column} row failed ${shape} validation (got ${got})`);
+}
+
 export async function getConversations(userId: string): Promise<Conversation[]> {
   const { data, error } = await supabase.rpc('get_conversations', { p_user_id: userId });
   if (error) throw error;
 
   return (data ?? []).map((row): Conversation => {
+    const last_message =
+      row.last_message === null
+        ? null
+        : validateShape<Message>(row.last_message, 'last_message', 'Message', isMessageShape);
+    const unread_count = Number(row.unread_count ?? 0);
+
     if (row.kind === 'event') {
       return {
         kind: 'event',
-        event: row.partner as unknown as Event,
-        last_message: row.last_message as unknown as Message | null,
-        unread_count: Number(row.unread_count ?? 0),
+        event: validateShape<Event>(row.partner, 'partner', 'Event', isEventShape),
+        last_message,
+        unread_count,
       };
     }
     if (row.kind === 'circle') {
       return {
         kind: 'circle',
-        circle: row.partner as unknown as Circle,
-        last_message: row.last_message as unknown as Message | null,
-        unread_count: Number(row.unread_count ?? 0),
+        circle: validateShape<Circle>(row.partner, 'partner', 'Circle', isCircleShape),
+        last_message,
+        unread_count,
       };
     }
     return {
       kind: 'dm',
-      partner: row.partner as unknown as Profile,
-      last_message: row.last_message as unknown as Message | null,
-      unread_count: Number(row.unread_count ?? 0),
+      partner: validateShape<Profile>(row.partner, 'partner', 'Profile', isProfileShape),
+      last_message,
+      unread_count,
     };
   });
 }
