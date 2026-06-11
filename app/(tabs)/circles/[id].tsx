@@ -17,6 +17,13 @@ import {
   getCircleMembers,
 } from '@/services/circles.service';
 import { shareCircle } from '@/services/share.service';
+import {
+  getProfile,
+  followUser,
+  unfollowUser,
+  isFollowing as isFollowingUser,
+} from '@/services/profile.service';
+import type { ProfileWithCounts } from '@/types/user.types';
 import { supabase } from '@/lib/supabase';
 import type { EventWithRelations } from '@/types/event.types';
 import type { Profile } from '@/types/user.types';
@@ -71,6 +78,68 @@ export default function CircleDetailScreen() {
       active = false;
     };
   }, [id, user]);
+
+  // ── Organizer (Figma 6274:7785 lower block) ─────────────────────
+  const [organizer, setOrganizer] = useState<ProfileWithCounts | null>(null);
+  const [organizerCircles, setOrganizerCircles] = useState(0);
+  const [organizerActivities, setOrganizerActivities] = useState(0);
+  const [followingOrganizer, setFollowingOrganizer] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  useEffect(() => {
+    const creatorId = circle?.creator_id;
+    if (!creatorId) return;
+    let active = true;
+
+    Promise.all([
+      getProfile(creatorId).catch(() => null),
+      supabase
+        .from('circle_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', creatorId)
+        .then(({ count }) => count ?? 0),
+      supabase
+        .from('events')
+        .select('*', { count: 'exact', head: true })
+        .eq('creator_id', creatorId)
+        .then(({ count }) => count ?? 0),
+      user && user.id !== creatorId
+        ? isFollowingUser(user.id, creatorId).catch(() => false)
+        : Promise.resolve(false),
+    ]).then(([profile, circlesCount, activitiesCount, following]) => {
+      if (!active) return;
+      setOrganizer(profile);
+      setOrganizerCircles(circlesCount);
+      setOrganizerActivities(activitiesCount);
+      setFollowingOrganizer(following);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [circle?.creator_id, user]);
+
+  const handleFollowOrganizer = useCallback(async () => {
+    if (!organizer) return;
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in to follow artists.');
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      if (followingOrganizer) {
+        await unfollowUser(user.id, organizer.id);
+        setFollowingOrganizer(false);
+      } else {
+        await followUser(user.id, organizer.id);
+        setFollowingOrganizer(true);
+      }
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setFollowBusy(false);
+    }
+  }, [organizer, user, followingOrganizer]);
 
   const handleMembership = useCallback(async () => {
     if (!user || !circle) {
@@ -315,6 +384,90 @@ export default function CircleDetailScreen() {
               </View>
             </TouchableOpacity>
           )}
+
+          {organizer && (
+            <>
+              <View style={styles.divider} />
+
+              {/* Organizer — Figma 6274:7785 */}
+              <Text style={styles.sectionHeading}>Organizer</Text>
+              <View style={styles.organizer}>
+                <TouchableOpacity
+                  style={styles.organizerIdentity}
+                  onPress={() => router.push(`/user/${organizer.id}`)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${organizer.display_name ?? 'organizer'}'s profile`}
+                >
+                  {organizer.avatar_url ? (
+                    <Image source={{ uri: organizer.avatar_url }} style={styles.organizerAvatar} />
+                  ) : (
+                    <View style={[styles.organizerAvatar, styles.avatarPlaceholder]}>
+                      <Ionicons name="person" size={32} color={colors.text.tertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.organizerName}>{organizer.display_name}</Text>
+                  {(organizer.disciplines?.length || organizer.location) && (
+                    <Text style={styles.organizerRole}>
+                      {organizer.disciplines?.length ? organizer.disciplines.join(' & ') : ''}
+                      {organizer.disciplines?.length && organizer.location ? '\n' : ''}
+                      {organizer.location ?? ''}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.organizerStats}>
+                  <View style={styles.statBlock}>
+                    <Text style={styles.statLabel}>Followers</Text>
+                    <Text style={styles.statValue}>
+                      {organizer.followers_count.toLocaleString('de-DE')}
+                    </Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statBlock}>
+                    <Text style={styles.statLabel}>Circles</Text>
+                    <Text style={styles.statValue}>{organizerCircles}</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statBlock}>
+                    <Text style={styles.statLabel}>Activities</Text>
+                    <Text style={styles.statValue}>{organizerActivities}</Text>
+                  </View>
+                </View>
+
+                {user?.id !== organizer.id && (
+                  <View style={styles.organizerButtons}>
+                    <TouchableOpacity
+                      style={[styles.followButton, followBusy && { opacity: 0.6 }]}
+                      onPress={handleFollowOrganizer}
+                      disabled={followBusy}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel={followingOrganizer ? 'Unfollow organizer' : 'Follow organizer'}
+                      accessibilityState={{ selected: followingOrganizer }}
+                    >
+                      {followBusy ? (
+                        <ActivityIndicator color="#FFFEFB" />
+                      ) : (
+                        <Text style={styles.followButtonText}>
+                          {followingOrganizer ? 'Following' : 'Follow'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.contactButton}
+                      onPress={() => router.push(`/messages/${organizer.id}`)}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Contact organizer"
+                    >
+                      <Text style={styles.contactButtonText}>Contact</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -500,6 +653,91 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.regular,
     color: colors.neutral.chocolate,
     marginLeft: spacing.md,
+  },
+
+  // ── Organizer (Figma 6274:7785) ───────────────────────────────────
+  organizer: { alignItems: 'center', gap: spacing.xl },
+  organizerIdentity: { alignItems: 'center', gap: spacing.sm },
+  organizerAvatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 2,
+    borderColor: '#DBDBDB', // Figma one-off avatar ring on this block
+    backgroundColor: colors.surface,
+  },
+  organizerName: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 22,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.ink,
+  },
+  organizerRole: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.neutral600,
+    textAlign: 'center',
+  },
+  organizerStats: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.lg,
+  },
+  statBlock: { width: 60, alignItems: 'center', gap: 5 },
+  statLabel: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    fontWeight: typography.fontWeight.medium,
+    color: '#949494', // Figma neutral-500
+    textAlign: 'center',
+  },
+  statValue: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 38,
+    backgroundColor: colors.neutral.divider,
+  },
+  organizerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  followButton: {
+    height: 45,
+    minWidth: 100,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral.chocolate,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followButtonText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    color: '#FFFEFB', // Figma Slave Cream
+  },
+  contactButton: {
+    height: 45,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.neutral.hiddenLines,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactButtonText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.chocolate,
   },
 });
 
