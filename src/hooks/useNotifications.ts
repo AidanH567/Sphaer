@@ -1,13 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Notification } from '@/types/message.types';
 
 export function useNotifications(userId: string | undefined) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // Bumping this re-runs the fetch effect — exposed as `refetch` for the
+  // UI's Retry button on the ErrorState. The Realtime channel re-binds
+  // with the new effect run too, so a dropped subscription also gets
+  // reset (same rationale as useMessages).
+  const [refetchTick, setRefetchTick] = useState(0);
+  const refetch = useCallback(() => setRefetchTick((n) => n + 1), []);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
 
     supabase
       .from('notifications')
@@ -15,11 +28,14 @@ export function useNotifications(userId: string | undefined) {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error: queryError }) => {
+        if (queryError) {
+          setError(queryError.message || 'Failed to load notifications');
+        } else if (data) {
           setNotifications(data);
           setUnreadCount(data.filter((n) => !n.is_read).length);
         }
+        setIsLoading(false);
       });
 
     const channel = supabase
@@ -35,7 +51,7 @@ export function useNotifications(userId: string | undefined) {
       .subscribe();
 
     return () => { channel.unsubscribe(); };
-  }, [userId]);
+  }, [userId, refetchTick]);
 
   async function markAllRead() {
     if (!userId) return;
@@ -48,5 +64,5 @@ export function useNotifications(userId: string | undefined) {
     setUnreadCount(0);
   }
 
-  return { notifications, unreadCount, markAllRead };
+  return { notifications, unreadCount, isLoading, error, refetch, markAllRead };
 }

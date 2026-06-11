@@ -30,7 +30,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { event, isLoading } = useEvent(id);
+  const { event, isLoading, error, refetch } = useEvent(id);
   const { user } = useAuthContext();
   const { conversations } = useMessagesContext();
 
@@ -89,6 +89,26 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
         </View>
         <EventDetailSkeleton />
+      </SafeAreaView>
+    );
+  }
+
+  // Network / fetch failure — recoverable, offer retry.
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load this event"
+          body={error}
+          onRetry={refetch}
+          onBack={() => router.back()}
+        />
       </SafeAreaView>
     );
   }

@@ -234,9 +234,10 @@ Shipped:
 - `/user/[id]` "Profile not found" path uses ErrorState with a Back CTA
 - All 3 chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now read the hook `error` state and render ErrorState with a working Retry button (hooks expose `refetch()` that bumps an internal tick to re-run the fetch + re-bind the Realtime subscription)
 
-Remaining:
-- [ ] Wire ErrorState into every other data-fetch path (`useEvents`, `useCircles`, `useProfile` etc. — most are still ActivityIndicator-only on failure)
-- [ ] Standardise on a hook-exposed `error` + `refetch` shape across all data hooks
+Remaining — shipped 2026-06-11 (closes the item):
+- Uniform shape everywhere: `{ data, isLoading, error: string | null, refetch }`, error cleared at fetch start. `useEvent` + `useCircle` gained memoized-fetch refetch; `useNotifications` gained isLoading/error/refetch (tick re-binds the Realtime channel too); `MessagesContext` surfaces `error`.
+- Consumers wired: event detail, ticket (own registration error + dual-fetch retry), circle detail (network error split from not-found), feed map native+web + mural (ErrorState only when cache empty — stale data preferred), notifications (new loading spinner + retryable error), DM inbox, `/user/[id]` (error vs not_found distinguished; secondary count/gallery queries still degrade silently).
+- Excluded by design: `useProfile` (decorative DM-header use only), own-profile extras (degrade to zeros), auth mutations (own UX).
 
 ### ~~"Available for work" placeholder bar on own profile~~ — removed 2026-06-09
 Why (historical): the bar's "Get in touch" CTA alerted "Coming soon" — meaning the user was being asked to message themselves. Removed entirely from `app/(tabs)/profile/index.tsx`. When Profile v2 #2 ships the actual `is_available_for_work` toggle, the bar will surface on `/user/[id].tsx` for users who opt in.

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CircleActivityCard } from '@/components/circles/CircleActivityCard';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useCircle } from '@/hooks/useCircles';
 import { useAuthContext } from '@/context/AuthContext';
@@ -28,7 +29,7 @@ export default function CircleDetailScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
 
-  const { circle, isLoading } = useCircle(id);
+  const { circle, isLoading, error, refetch } = useCircle(id);
 
   const [memberStatus, setMemberStatus] = useState<'unknown' | 'in' | 'out'>('unknown');
   const [activities, setActivities] = useState<EventWithRelations[]>([]);
@@ -110,6 +111,25 @@ export default function CircleDetailScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load this circle"
+          body={error}
+          onRetry={refetch}
+          onBack={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (!circle) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -119,7 +139,13 @@ export default function CircleDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
-          <Text style={styles.notFound}>Circle not found</Text>
+          <ErrorState
+            icon="people-outline"
+            title="Circle not found"
+            body="This circle may have been removed. Head back to browse other communities."
+            onBack={() => router.back()}
+            backLabel="Back to circles"
+          />
         </View>
       </SafeAreaView>
     );
@@ -308,7 +334,6 @@ const COVER_HEIGHT = 190;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  notFound: { fontSize: typography.fontSize.base, color: colors.text.tertiary },
 
   navBar: {
     flexDirection: 'row',

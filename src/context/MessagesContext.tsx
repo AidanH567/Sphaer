@@ -33,6 +33,7 @@ interface MessagesContextValue {
   conversations: Conversation[];
   totalUnread: number;
   isLoading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
   markRead: (target: MarkReadTarget) => Promise<void>;
 }
@@ -41,6 +42,7 @@ const MessagesContext = createContext<MessagesContextValue>({
   conversations: [],
   totalUnread: 0,
   isLoading: true,
+  error: null,
   refresh: async () => {},
   markRead: async () => {},
 });
@@ -59,6 +61,7 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
   const userId = user?.id;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const conversationsRef = useRef<Conversation[]>([]);
   useEffect(() => {
@@ -79,10 +82,12 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
+      setError(null);
       const data = await messagesService.getConversations(userId);
       setConversations(data);
     } catch (err) {
       console.error('[MessagesContext] refresh failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load conversations');
     } finally {
       setIsLoading(false);
     }
@@ -470,8 +475,8 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ conversations, totalUnread, isLoading, refresh, markRead }),
-    [conversations, totalUnread, isLoading, refresh, markRead]
+    () => ({ conversations, totalUnread, isLoading, error, refresh, markRead }),
+    [conversations, totalUnread, isLoading, error, refresh, markRead]
   );
 
   return <MessagesContext.Provider value={value}>{children}</MessagesContext.Provider>;

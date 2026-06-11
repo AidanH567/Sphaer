@@ -32,13 +32,21 @@ export function useCircle(id: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    circlesService
-      .getCircleById(id)
-      .then(setCircle)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load circle'))
-      .finally(() => setIsLoading(false));
+  const fetchCircle = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setCircle(await circlesService.getCircleById(id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load circle');
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
 
-  return { circle, isLoading, error };
+  useEffect(() => {
+    fetchCircle();
+  }, [fetchCircle]);
+
+  return { circle, isLoading, error, refetch: fetchCircle };
 }

@@ -49,7 +49,8 @@ export default function UserProfileScreen() {
   const isOwnProfile = Boolean(user?.id && id && user.id === id);
 
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
-  const [status, setStatus] = useState<'loading' | 'found' | 'not_found'>('loading');
+  const [status, setStatus] = useState<'loading' | 'found' | 'not_found' | 'error'>('loading');
+  const [retryTick, setRetryTick] = useState(0);
 
   // Follow state for the displayed user — loaded on mount, persisted on toggle.
   // followBusy guards against double-tap while the network call is in flight.
@@ -137,13 +138,13 @@ export default function UserProfileScreen() {
         }
       })
       .catch(() => {
-        if (active) setStatus('not_found');
+        if (active) setStatus('error');
       });
 
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, retryTick]);
 
   // ── Lazy fetch for the three stats popups (same pattern as /profile)
   useEffect(() => {
@@ -207,6 +208,16 @@ export default function UserProfileScreen() {
           icon="person-circle-outline"
           title="Profile not found"
           body="This account doesn't exist or may have been removed. Head back to find someone else."
+          onBack={() => router.back()}
+        />
+      )}
+
+      {status === 'error' && (
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load this profile"
+          body="Check your connection and try again."
+          onRetry={() => setRetryTick((t) => t + 1)}
           onBack={() => router.back()}
         />
       )}
@@ -277,34 +288,33 @@ export default function UserProfileScreen() {
 
 /**
  * Fetch a real user from Supabase, with all the same secondary queries the
- * personal /profile screen uses (counts + gallery). Returns null if no row
- * for this id exists — caller falls back to mock by id then "not found."
+ * personal /profile screen uses (counts + gallery). Returns null only when
+ * no row for this id exists (genuine not-found); network/query errors from
+ * getProfile propagate so the caller can show a retryable error state.
+ * Secondary count/gallery queries still degrade silently — they must never
+ * fail the whole page.
  */
 async function fetchRealProfile(id: string): Promise<MockProfile | null> {
-  try {
-    const fullProfile = await getProfile(id);
-    if (!fullProfile) return null;
+  const fullProfile = await getProfile(id);
+  if (!fullProfile) return null;
 
-    const [images, circleIds, activityCount] = await Promise.all([
-      getProfileImages(id).catch(() => [] as ProfileImage[]),
-      getMyCircleIds(id).catch(() => [] as string[]),
-      getRegistrationCount(id).catch(() => 0),
-    ]);
+  const [images, circleIds, activityCount] = await Promise.all([
+    getProfileImages(id).catch(() => [] as ProfileImage[]),
+    getMyCircleIds(id).catch(() => [] as string[]),
+    getRegistrationCount(id).catch(() => 0),
+  ]);
 
-    return adaptProfileToDisplay(
-      id,
-      fullProfile,
-      {
-        followers: fullProfile.followers_count ?? 0,
-        following: fullProfile.following_count ?? 0,
-        circles: circleIds.length,
-        activities: activityCount,
-      },
-      images,
-    );
-  } catch {
-    return null;
-  }
+  return adaptProfileToDisplay(
+    id,
+    fullProfile,
+    {
+      followers: fullProfile.followers_count ?? 0,
+      following: fullProfile.following_count ?? 0,
+      circles: circleIds.length,
+      activities: activityCount,
+    },
+    images,
+  );
 }
 
 const styles = StyleSheet.create({

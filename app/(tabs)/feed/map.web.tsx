@@ -15,6 +15,7 @@ import { config } from '@/constants/config';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { formatEventDateShort } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 /**
  * Web build of the Map view. Uses @vis.gl/react-google-maps so we get the
@@ -31,7 +32,7 @@ import { formatPrice } from '@/utils/format';
 export default function MapScreenWeb() {
   const router = useRouter();
   const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
-  const { events } = useEvents({ categories: feedFilters.categories });
+  const { events, error, refetch } = useEvents({ categories: feedFilters.categories });
   const [openInfoEventId, setOpenInfoEventId] = useState<string | null>(null);
 
   // Same filter logic as the native map screen — shared lens on the data.
@@ -113,6 +114,15 @@ export default function MapScreenWeb() {
               Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local and reload.
             </Text>
           </View>
+        ) : error && events.length === 0 ? (
+          // Failed fetch with nothing cached — distinct from the missing-key
+          // branch above. Header stays so the user can switch views.
+          <ErrorState
+            icon="cloud-offline-outline"
+            title="Couldn't load the map"
+            body={error}
+            onRetry={refetch}
+          />
         ) : (
           <APIProvider apiKey={config.googleMapsApiKey}>
             <Map

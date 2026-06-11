@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,7 +36,8 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 export default function NotificationsScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
-  const { notifications, unreadCount, markAllRead } = useNotifications(user?.id);
+  const { notifications, unreadCount, isLoading, error, refetch, markAllRead } =
+    useNotifications(user?.id);
 
   // Per-row mark-as-read. The hook doesn't expose this today; do it
   // directly here and patch the local list via an in-memory map. Keeps the
@@ -92,6 +94,18 @@ export default function NotificationsScreen() {
           body="Notifications about follows, messages, and event activity show up here once you log in."
           onBack={() => router.back()}
           backLabel="Back"
+        />
+      ) : isLoading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.black} />
+        </View>
+      ) : error && notifications.length === 0 ? (
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load notifications"
+          body={error}
+          onRetry={refetch}
+          onBack={() => router.back()}
         />
       ) : notifications.length === 0 ? (
         <View style={styles.empty}>
@@ -247,6 +261,7 @@ const styles = StyleSheet.create({
 
   list: { paddingVertical: spacing.sm },
   empty: { flex: 1 },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   row: {
     flexDirection: 'row',

@@ -19,6 +19,7 @@ import { useMuralLayout } from '@/hooks/useMuralLayout';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { applyChipFilters } from '@/utils/event-filters';
 import { colors, spacing, typography } from '@/constants/theme';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
@@ -45,7 +46,7 @@ export default function MuralScreen() {
   const searchText = feedFilters.search ?? '';
   const neighborhood = feedFilters.neighborhood ?? '';
 
-  const { events, isLoading, refetch } = useEvents({
+  const { events, isLoading, error, refetch } = useEvents({
     categories: feedFilters.categories,
   });
 
@@ -208,9 +209,12 @@ export default function MuralScreen() {
   }, [refetch, isRefreshing]);
 
   const viewportReady = viewport.width > 0 && viewport.height > 0;
+  // Failed fetch with nothing cached: ErrorState replaces the wall instead
+  // of the misleading "No posters on the wall yet" empty copy.
+  const showError = !isLoading && !!error && events.length === 0;
   const showSkeleton = !viewportReady || !dimensionsReady || isLoading;
   const showEmpty =
-    !isLoading && dimensionsReady && visibleEvents.length === 0;
+    !isLoading && dimensionsReady && visibleEvents.length === 0 && !showError;
 
   return (
     <View style={styles.container}>
@@ -231,13 +235,26 @@ export default function MuralScreen() {
       </View>
 
       <View style={styles.canvasSlot} onLayout={onViewportLayout}>
-        {viewportReady && !showSkeleton && !showEmpty && (
+        {viewportReady && !showSkeleton && !showEmpty && !showError && (
           <MuralCanvas
             layout={layout}
             viewportWidth={viewport.width}
             viewportHeight={viewport.height}
             onPosterTap={handlePosterTap}
           />
+        )}
+
+        {/* Light wrapper (same colour as the header) — the canvas background
+            is colors.black and ErrorState's title uses dark text.primary. */}
+        {showError && error !== null && (
+          <View style={styles.errorWrap}>
+            <ErrorState
+              icon="cloud-offline-outline"
+              title="Couldn't load the wall"
+              body={error}
+              onRetry={refetch}
+            />
+          </View>
         )}
 
         {showSkeleton && viewportReady && (
@@ -349,6 +366,7 @@ const styles = StyleSheet.create({
   // BottomNav border — gives a "framed" feel instead of "clipped at the
   // edge of the screen."
   canvasSlot: { flex: 1, marginBottom: 8 },
+  errorWrap: { flex: 1, backgroundColor: colors.appleMail },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyText: {

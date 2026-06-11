@@ -32,13 +32,21 @@ export function useEvent(id: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    eventsService
-      .getEventById(id)
-      .then(setEvent)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load event'))
-      .finally(() => setIsLoading(false));
+  const fetchEvent = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      setEvent(await eventsService.getEventById(id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load event');
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
 
-  return { event, isLoading, error };
+  useEffect(() => {
+    fetchEvent();
+  }, [fetchEvent]);
+
+  return { event, isLoading, error, refetch: fetchEvent };
 }

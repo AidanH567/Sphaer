@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import type { MockConversation } from '@/data/mockMessages';
 import { typography } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
@@ -170,7 +171,7 @@ function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute 
 export default function MessagesScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
-  const { conversations, isLoading } = useMessagesContext();
+  const { conversations, isLoading, error, refresh } = useMessagesContext();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
   const rows: RowWithRoute[] = useMemo(() => {
@@ -256,6 +257,15 @@ export default function MessagesScreen() {
       {isLoading ? (
         <View style={styles.emptyState}>
           <ActivityIndicator color={INK} />
+        </View>
+      ) : error && conversations.length === 0 ? (
+        <View style={styles.emptyState}>
+          <ErrorState
+            icon="cloud-offline-outline"
+            title="Couldn't load your chats"
+            body={error}
+            onRetry={refresh}
+          />
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.emptyState}>

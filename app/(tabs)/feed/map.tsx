@@ -12,6 +12,7 @@ import { applyChipFilters } from '@/utils/event-filters';
 import type { EventWithRelations } from '@/types/event.types';
 import { formatEventDateShort } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // react-native-maps is iOS/Android only — lazy-require so the web bundle
@@ -38,7 +39,7 @@ export default function MapScreen() {
   const router = useRouter();
   const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
 
-  const { events } = useEvents({ categories: feedFilters.categories });
+  const { events, error, refetch } = useEvents({ categories: feedFilters.categories });
 
   // Apply search + neighbourhood + category filters client-side. Matches
   // the same logic feed/index.tsx uses, so both views always show the same
@@ -127,7 +128,17 @@ export default function MapScreen() {
         onNeighborhoodChange={setNeighborhood}
       />
 
-      {Platform.OS === 'web' ? (
+      {/* Failed fetch with nothing cached: keep the header (so the user can
+          switch back to list view) but replace the pin-less map with a
+          retryable error instead of zero feedback. */}
+      {error && events.length === 0 ? (
+        <ErrorState
+          icon="cloud-offline-outline"
+          title="Couldn't load the map"
+          body={error}
+          onRetry={refetch}
+        />
+      ) : Platform.OS === 'web' ? (
         <View style={styles.webFallback}>
           <Text style={styles.webFallbackText}>Loading map…</Text>
         </View>

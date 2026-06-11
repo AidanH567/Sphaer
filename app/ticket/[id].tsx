@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useEvent } from '@/hooks/useEvents';
 import { useAuthContext } from '@/context/AuthContext';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { getRegistration } from '@/services/registrations.service';
 import { shareEvent } from '@/services/share.service';
 import { colors, typography, spacing } from '@/constants/theme';
@@ -34,28 +35,40 @@ export default function TicketDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuthContext();
-  const { event, isLoading: eventLoading } = useEvent(eventId);
+  const {
+    event,
+    isLoading: eventLoading,
+    error: eventError,
+    refetch: refetchEvent,
+  } = useEvent(eventId);
   const [registration, setRegistration] = useState<EventRegistration | null>(null);
   const [regLoading, setRegLoading] = useState(true);
+  const [regError, setRegError] = useState<string | null>(null);
+  const [regTick, setRegTick] = useState(0);
 
   useEffect(() => {
+    setRegError(null);
     if (!user?.id || !eventId) {
       setRegLoading(false);
       return;
     }
     let cancelled = false;
+    setRegLoading(true);
     getRegistration(eventId, user.id)
       .then((r) => {
         if (!cancelled) setRegistration(r);
       })
-      .catch((err) => console.error('[Ticket] load registration failed:', err))
+      .catch((err) => {
+        console.error('[Ticket] load registration failed:', err);
+        if (!cancelled) setRegError('Failed to load your ticket');
+      })
       .finally(() => {
         if (!cancelled) setRegLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [user?.id, eventId]);
+  }, [user?.id, eventId, regTick]);
 
   const isLoading = eventLoading || regLoading;
 
@@ -76,6 +89,32 @@ export default function TicketDetailScreen() {
       <View style={[styles.backdrop, styles.center]}>
         <ActivityIndicator color={colors.white} />
       </View>
+    );
+  }
+
+  if (eventError || regError) {
+    return (
+      <SafeAreaView style={styles.backdrop} edges={['top']}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+        {/* ErrorState is light-themed (dark title text) and the backdrop is
+            #1B1B18, so give it a white card surface to sit on. */}
+        <View style={styles.errorCard}>
+          <ErrorState
+            icon="ticket-outline"
+            title="Couldn't load your ticket"
+            body={eventError ?? regError ?? ''}
+            onRetry={() => {
+              refetchEvent();
+              setRegTick((t) => t + 1);
+            }}
+            onBack={() => router.back()}
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -216,6 +255,15 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: spacing.base,
     paddingTop: spacing.md,
+  },
+
+  // White sheet behind ErrorState — same surface + radius as the ticket
+  // card so the failure screen still reads as "a ticket that didn't load."
+  errorCard: {
+    flex: 1,
+    backgroundColor: CARD_BG,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
   },
 
   // Ticket card
