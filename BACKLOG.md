@@ -122,19 +122,19 @@ Items verified against code with file evidence; none duplicate earlier sections.
 Why: zero report/block affordances on events, circles, profiles, or DMs. Apple Guideline 1.2 requires UGC apps to ship content reporting + user blocking + (for chat) a way to filter abusive users. Needs: `reports` table + `blocked_users` table (migrations), report action on event/circle/profile/message long-press or overflow, block from profile + DM, blocked users filtered from feed/chat queries.
 Scope: L. Do before submission.
 
-### App icons are 1×1-pixel placeholder stubs (REJECTION guaranteed)
+### ~~App icons are 1×1-pixel placeholder stubs~~ — shipped 2026-06-12 (`33bdd56`): generate-app-icons.ts emits real icon + adaptive; web favicon still a stub (filed below)
 Why: `assets/images/icon.png` + `adaptive-icon.png` are 69-byte 1×1 PNGs; only splash.png is real. Generate a 1024×1024 icon + Android adaptive (foreground/background, 108dp safe zone) from the SphaerIcon hoops via `scripts/generate-splash.ts`'s sharp pipeline.
 Scope: S.
 
-### eas.json missing + no version strategy
+### ~~eas.json missing + no version strategy~~ — shipped 2026-06-12 (`33bdd56`)
 Why: no eas.json → no build profiles, no `runtimeVersion`, no auto-increment `buildNumber`/`versionCode` (app.json hardcodes 1.0.0). Blocks any store build. Create eas.json (development/preview/production), set `autoIncrement`, decide on expo-updates OTA.
 Scope: M.
 
-### Env-var startup validation (silent-broken-app risk)
+### ~~Env-var startup validation~~ — shipped 2026-06-12 (`33bdd56`)
 Why: `src/constants/config.ts` defaults missing `EXPO_PUBLIC_*` vars to `''` — auth/maps fail silently. Add a startup assert that throws a clear error screen in dev and logs loudly in prod when required vars are empty.
 Scope: S.
 
-### app.json store metadata incomplete
+### ~~app.json store metadata incomplete~~ — app.json half shipped 2026-06-12 (`33bdd56`); App Store Connect form items remain ops
 Why: missing description/category/privacy fields; bundle ids + scheme are set. Fill what app.json owns; track the App Store Connect form items (privacy URL, age rating with UGC implications) alongside.
 Scope: S–M (partly ops).
 
@@ -144,25 +144,37 @@ Scope: M. (User call on vendor.)
 
 ---
 
+### NEW (2026-06-12): apply migration `20260612000000_circle_owner_delete_rls.sql`
+Authorization-gated like the other two pending migrations. Until applied, circle delete + member kick UI silently no-op (RLS matches 0 rows).
+
+### NEW (2026-06-12): web favicon.png is still a 1×1 stub
+One more sharp output in scripts/generate-app-icons.ts. Scope: S.
+
+### NEW (2026-06-12): conditional useState in EventRegistrationSheet (rules-of-hooks)
+Real pre-existing bug surfaced by eslint (~line 130) — hook called conditionally; rule downgraded to warn for that file only. Fix the hook order, restore the rule to error. Scope: S.
+
+### NEW (2026-06-12): eslint 52-warning burn-down + expo-doctor failures
+Lint passes with 52 warnings (incl. duplicate react import in feed/index.tsx); expo-doctor reports 2 failed checks + 4 outdated packages (logged, non-blocking in CI). Burn both down. Scope: S–M.
+
 ## P1 — App audit 2026-06-11 (broken or missing expected features)
 
-### Event-detail Follow button is cosmetic
+### ~~Event-detail Follow button is cosmetic~~ — shipped 2026-06-12 (`8546173`)
 Why: the artist-row Follow on `app/event/[id].tsx` (~336) only flips local state — never calls `followUser()`, never hydrates from `isFollowing()`, resets on every visit. Wire it like the circle-detail Organizer follow (shipped `ce45511`).
 Scope: S.
 
-### Cancel registration
+### ~~Cancel registration~~ — shipped 2026-06-12 (`8546173`)
 Why: `unregister()` exists in registrations.service.ts but no screen calls it. Add "Cancel registration" to the ticket screen (and/or event detail when registered) with ConfirmSheet.
 Scope: M.
 
-### Creator attendee list
+### ~~Creator attendee list~~ — shipped 2026-06-12 (`8546173`); RLS already world-readable, works now
 Why: creators can edit/delete events but can't see who registered. Add an attendees sheet (EntityListSheet pattern) on event detail, creator-only for v1.
 Scope: M.
 
-### Circle edit & delete (parity with events)
+### ~~Circle edit & delete (parity with events)~~ — shipped 2026-06-12 (`5a7ad34` + RLS migration `e1881fd`); INERT until migration applied
 Why: events gained creator edit/delete (`c4406a4`); circles have neither — `updateCircle` exists, no delete service, no UI. Mirror the event pattern incl. RLS check for circle delete.
 Scope: M.
 
-### "FEW TICKETS LEFT" badge is hardcoded
+### ~~"FEW TICKETS LEFT" badge is hardcoded~~ — removed 2026-06-12 (`8546173`) until a spots column ships
 Why: EventRegistrationSheet always renders the scarcity badge regardless of data. Wire to real spots/registration counts or hide until spots exist (Spots field is itself a filed create-form gap).
 Scope: S.
 
@@ -170,7 +182,7 @@ Scope: S.
 Why: no `linking` config / initial-URL handling — notification taps and OS-level URL opens won't route on cold start. Prerequisite for the push-notifications item.
 Scope: M.
 
-### Cold-start feed discovery CTA
+### ~~Cold-start feed discovery CTA~~ — shipped 2026-06-12 (`c68ba48`)
 Why: a zero-follow user sees explanatory text but no action. Add "Browse circles" CTA to the feed empty state.
 Scope: S.
 
@@ -182,43 +194,43 @@ Scope: M.
 
 ## P2 — App audit 2026-06-11 (robustness & quality)
 
-### Double-tap mutation guards
+### ~~Double-tap mutation guards~~ — shipped 2026-06-12 (`8546173`/`5a7ad34`)
 Why: `handleMembership` (circles/[id].tsx) checks `busy` only via disabled prop timing; event-detail save rollback can invert state under double-tap. Add entry guards + functional setState rollbacks on join/leave/save/follow/register.
 Scope: S.
 
-### CircleJoinSheet welcome-timer null guard
+### ~~CircleJoinSheet welcome-timer null guard~~ — shipped 2026-06-12 (`5a7ad34`); real bug: dismissed sheet still navigated 2.6s later
 Why: the 2.6s dwell timer closes over `shown`; backdrop-close mid-dwell nulls it → potential crash at `goToCircle(shown.id)`. Guard + add `shown` to the effect deps.
 Scope: S.
 
-### Organizer fetch hardening
+### ~~Organizer fetch hardening~~ — shipped 2026-06-12 (`5a7ad34`)
 Why: the two count queries in circles/[id].tsx Promise.all lack catches (one failure rejects the batch); `handleFollowOrganizer` reads possibly-stale `followingOrganizer` under rapid taps. Catch per-query, use functional toggle.
 Scope: S.
 
-### Realtime re-subscribe on app foreground
+### ~~Realtime re-subscribe on app foreground~~ — shipped 2026-06-12 (`c68ba48`): AppState listener + foregroundTick in AppContext
 Why: auth token refresh handles resume, but dropped Realtime channels stay dead until a manual refetch. Add AppState listener → `supabase.realtime` reconnect / bump refetch ticks on active.
 Scope: M.
 
-### Supabase fetch timeout
+### ~~Supabase fetch timeout~~ — shipped 2026-06-12 (`c68ba48`): 15s AbortController wrapper
 Why: no fetch override — a hung request leaves buttons disabled forever on flaky mobile networks. Add an AbortController-based timeout (~15s) in the client factory.
 Scope: S.
 
-### Circle-create partial failure UX
+### ~~Circle-create partial failure UX~~ — shipped 2026-06-12 (`5a7ad34`)
 Why: circle row inserts before cover upload; an upload failure leaves the circle cover-less with only an alert. Offer retry-upload or proceed-without-cover messaging (row itself is fine).
 Scope: S.
 
-### ESLint + expo-doctor in CI
+### ~~ESLint + expo-doctor in CI~~ — shipped 2026-06-12 (`c68ba48`): 0 errors / 52 warnings, lint blocking, doctor non-blocking
 Why: CI runs tsc+jest only; no eslint config exists, so `as any` router casts (CircleJoinSheet/CreateMenuSheet) and style drift go uncaught. Add eslint-config-expo + a CI step + expo-doctor.
 Scope: S.
 
-### Production console noise sweep
+### ~~Production console noise sweep~~ — shipped 2026-06-12 (`c68ba48`): 17 calls gated behind __DEV__
 Why: ~32 unguarded console.log/warn across geocoding/places/hooks ship to prod. Gate behind `__DEV__` or strip via babel in production builds.
 Scope: S.
 
-### Circle member management (creator kick)
+### ~~Circle member management (creator kick)~~ — shipped 2026-06-12 (`5a7ad34`); INERT until RLS migration applied
 Why: Members sheet is read-only; creators can't remove members. Long-press remove (EntityListSheet already supports long-press actions).
 Scope: M.
 
-### "Tonight / This weekend" DST note
+### ~~"Tonight / This weekend" DST note~~ — shipped 2026-06-12 (`c68ba48`): windows recompute on foregroundTick
 Why: boundaries computed in device-local time; a timezone change or DST transition mid-session leaves filters stale until reload. Low impact — recompute on app foreground alongside the Realtime resume work.
 Scope: S.
 
@@ -516,6 +528,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-12 — Audit unblocked batch (5 commits + earlier inbox fix).** `feat(db) e1881fd` circles-delete + creator-kick RLS (authored, NOT applied). `chore(ops) 33bdd56` real app icons (were 1×1 stubs) + eas.json + env validation + store metadata. `feat(events) 8546173` real Follow (was cosmetic), cancel registration, creator attendee list, scarcity-badge removal, save/follow double-tap guards. `feat(circles) 5a7ad34` circle edit screen + delete, member kick, welcome-timer dismiss bug fixed, organizer hardening, partial-upload recovery. `chore(infra) c68ba48` 15s fetch timeout, AppState foreground resume + DST recompute, console gating, eslint+expo-doctor CI (0 errors), feed Browse-circles CTA. Earlier: `fix(messages) b277eee` inbox chip row scrolls (Circles was unreachable on phones) + dead Add-filter chip removed. 75/75 tests green throughout.
 - **2026-06-11 — Unblocked-backlog batch (4 commits).** `feat(events) c4406a4` creator edit & delete (ConfirmSheet delete with cascade-accurate copy; new prefilled edit screen with create-parity validation; RLS verified). `style(messages) 3c46692` DM + event chat headers to Figma 6298:6104 (48px thumbs, ink titles, shadow bar, @username subtitle) + MockConversation→ConversationRowDisplay rename. `chore(theme) 605d2eb` hex→token sweep, 22 replacements/13 files + neutral500 token. `feat(circles) 44e53c6` circle cover upload on creation. Earlier same day: Create-Activity style pass (`4c51ce6`), circle chat header (`84f03be`), circle-detail Organizer section (`ce45511`). 75/75 tests green throughout.
 - **2026-06-11 — Figma structural follow-ups: greeting header + Welcome interstitial + UX pass (UP NEXT #1 closed).** All three items from the audit's structural filing shipped, one commit each. **(1) `style(feed) 5097fa3` — greeting header (`4045:8204`):** SearchFilterBar gained an optional `greeting={{city, rest}}` prop — resting state renders location pin + serif "Berlin what's on Today?!" (20px/148%, `colors.neutral.ink`, city in Medium + underline) with a 45px circular white search button; tapping expands to the standard input + Cancel, Cancel collapses back. Crossfade at `motion.duration.standard` (240ms ease-out, opacity-only, row minHeight-pinned so rows below never shift), skipped under OS reduce-motion. Header inset 16px per frame. FeedHeader passes the prop so Feed/Map/Mural inherit; Circles keeps the audited pill. Design context fetched fresh per the handoff's step zero — corrected three assumptions (button 45px not 50, text ink `#1B1B18` not chocolate, copy "Berlin what's on Today?!" capital-T no comma). **(2) `feat(auth) 632e064` — Welcome interstitial (`5013:10915`):** new `app/(auth)/welcome.tsx` — centered serif "Welcome {firstName}" (26px ink, name Medium) on white, 320ms fade-in (reduce-motion skips), ~1.6s dwell then routes to onboarding, tap anywhere skips, routes exactly once. Name precedence: route param → user_metadata.display_name → profile row. signup.tsx session branch + verify-email.tsx SIGNED_IN listener both route here; (auth) layout got a `welcome` fall-through and a fade stack animation. **(3) UX pass (ui-ux-pro-max):** both interactions audited — timings inside the 150–300ms band, one animated element per view, ease-out entering, 45px ≥ 44pt touch target with press feedback + accessibilityLabel on the icon-only button, h1 heading role on the interstitial, ~15:1 text contrast, graceful one-line truncation at narrow widths / large type. No violations to fix. **Verification note:** the preview tab is headless (visibility:hidden, zero rAF ticks) so JS-driver fades can't play live there — verified via computed styles + behaviour (auto-route landed on /onboarding twice); the fade mechanism is identical to the feed crossfade, which screenshots show completing. **Remaining from the filing:** the filter-icon-in-toggle-row product decision — promoted to UP NEXT #1.
 - **2026-06-10 — Figma styling audit COMPLETE — all 14 frames (UP NEXT #1 closed).** Unblocked by switching the MCP fileKey from the Starter-capped personal-drafts copy (`iuCO8ENAhfYIJly1JGAeU1`) to the **original Pro-owned file** (`HIVq6Vaymj01dZ37AvwCUF`) the user was invited to — Figma preserves node IDs across a duplicate, so the queue mapped 1:1. Walked all 12 remaining frames (after the 2 prior splash/tagline). **Fixed inline (4 commits, one per screen):** (1) `style(auth) fc924f3` — Sign Up `2012:1711`: shared `AuthControls` textfield border `#C1C1C1`→`#E0E4EB` (the `--hidden-lines` token), placeholder `#9A9A9A`→`#949494`, Google icon 20→24px (propagates to all 6 auth screens). (2) `style(location) b11e8be` — reveal `2012:1797`: title/circular-button vertical distribution via flex spacers (1.4/1.9/1.0) to match the Figma's upper-third/lower-third spread vs our centred group. (3) `style(feed) 82642af` — event card `4045:8204`: price weight bold→Heavy (added `typography.fontWeight.heavy = '800'` for SF Pro Heavy 860) + colour `#363530`→`#3A3A3A`; meta weight medium→regular + colour `#505049`→`#5A5A5A` (scoped to EventCard so unaudited ProfileActivityCard tokens stay put). (4) `style(circles) fbc4d9a` — `2665:12253`: search placeholder → "Find your scene, find your thing!", section subtitle → "Join {N} {category} circles across Berlin". **Verified already-compliant (purpose-built against their nodes in prior sessions, confirmed via preview screenshots at 390×844):** Sign Up filled (`5013:10790`), Location prompt + searching (`2012:1787`/`5108:8379`), Event detail + price-range variant (`3491:2499`/`4484:10814` — hero/title/location/artist-row/sticky price+date+button bar all align), Registration sheet (`4025:5033` — title/organiser/stepper/calendar+pin+ticket rows/FEW-TICKETS badge/total/Register), Ticket card (`4025:5294`). **Filed as new P0 — Investor demo polish items (structural, out of scope for an inline token pass):** Feed header restructure (greeting + circular search button vs our search input), Feed filter-icon-in-toggle-row, and the `5013:10915` "Welcome {name}" post-signup transition screen we never built. Known limitation across all serif text: Test Martina Plantijn `.otf` still isn't bundled (Georgia/system-serif fallback) — separate backlog item, unchanged by this audit.
