@@ -46,6 +46,9 @@ export function FeedHeader({
       searchText={searchText}
       onSearchChange={handleSearchChange}
       searchPlaceholder="Berlin, what’s on today?!"
+      // Figma 4045:8204 resting header: pin + "Berlin what's on Today?!"
+      // (city underlined) + circular search button. Exact frame copy.
+      greeting={{ city: 'Berlin', rest: 'what’s on Today?!' }}
       selectedCategories={selectedCategories ?? []}
       onToggleCategory={onToggleCategory}
       selectedNeighborhood={selectedNeighborhood}
