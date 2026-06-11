@@ -37,44 +37,114 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ## ▶ UP NEXT
 
-### 1. ~~Figma styling audit — 12 of 14 screens remaining~~ — COMPLETE 2026-06-10
+### 1. Figma structural follow-ups — feed header, Welcome screen, UX pass (HANDOFF 2026-06-11)
 
-**RESOLVED.** All 14 frames audited (2 prior splash/tagline + 12 this
-session). Unblock came from pointing the MCP at the **original Pro-owned
-file** `HIVq6Vaymj01dZ37AvwCUF` (the user was invited to it) instead of
-the Starter-capped personal-drafts copy `iuCO8ENAhfYIJly1JGAeU1`. Node IDs
-were preserved across the duplicate so the whole queue mapped directly.
+**State.** The 14-frame styling audit itself is **COMPLETE** — frame-by-frame
+outcomes, commit hashes, and tokens are in the ✓ Shipped entry dated
+2026-06-10, and the audit record table is kept below. Three structural
+items were filed out of the audit, and the user then asked (via the
+ui-ux-pro-max skill) to apply them:
 
-Result (see ✓ Shipped 2026-06-10 for detail):
-- **Fixed inline** (4 commits): Sign Up field tokens (`2012:1711` →
-  AuthControls), Location reveal distribution (`2012:1797`), Feed event
-  card price/meta tokens (`4045:8204`), Circles search + subtitle copy
-  (`2665:12253`).
-- **Verified already-compliant** (purpose-built against their nodes):
-  Sign Up filled (`5013:10790`), Location prompt/searching
-  (`2012:1787` / `5108:8379`), Event detail + variant (`3491:2499` /
-  `4484:10814`), Registration sheet (`4025:5033`), Ticket card
-  (`4025:5294`).
-- **Filed as new items** (structural / missing — not inline token fixes):
-  Feed header restructure (greeting + circular search button vs our
-  always-on input), Feed filter-icon-in-toggle-row, `5013:10915`
-  "Welcome {name}" post-signup transition screen. See P0 — Investor demo
-  polish below.
+1. Feed header restructure — greeting + circular search button (`4045:8204`)
+2. "Welcome {name}" post-signup transition screen (`5013:10915`)
+3. Review both against UX best practices (ui-ux-pro-max)
 
-**Figma file (original, Pro-owned — use this fileKey):**
-`HIVq6Vaymj01dZ37AvwCUF` — `Sphaer_Prototype_RA` (NOT the personal-drafts
-copy `iuCO8…`, which is Starter-capped).
+The implementing session hit the context limit mid-item-1. This entry is
+the cold-start handoff — everything needed to resume is here.
 
-**Blocker status (re-diagnosed 2026-06-10):** the earlier `net::ERR_FAILED`
-was a Claude-side MCP transport outage affecting ALL connectors — it has
-resolved (`whoami` works, Supabase + Vercel MCPs work). The REAL remaining
-blocker is the **Figma Starter-plan tool-call cap**: `get_design_context`
-returns the upgrade paywall. Editor seat does NOT lift it — it's a team
-plan limit (both of the user's teams show `tier: "starter"`). Resume the
-audit the moment the team plan is upgraded, or use the Dev Mode paste
-fallback below.
+(A fourth filed item — the filter icon in the Feed/Map/Mural toggle row,
+also from `4045:8204` — needs a product decision from the user first.
+Leave it in `P0 — Investor demo polish`; do NOT build it unprompted.)
 
-**Already shipped (do NOT re-audit):**
+**Figma access (works — use these exact coordinates).**
+- fileKey `HIVq6Vaymj01dZ37AvwCUF` (`Sphaer_Prototype_RA`, the original
+  Pro-owned file the user was invited to). Do NOT use the personal-drafts
+  copy `iuCO8ENAhfYIJly1JGAeU1` — it is Starter-plan-capped and
+  `get_design_context` returns the upgrade paywall.
+- `get_design_context` / `get_screenshot` work with an explicit `nodeId`.
+  Node IDs are preserved across the file duplicate, so old references map
+  1:1. Never query the giant board node `6239:6597` (20385×4239px) — it
+  times out; go straight to individual frame nodeIds.
+
+**⚠️ Step zero — verify the design before building.** The header spec
+below was written from audit-session screenshot notes and was NOT
+re-verified with `get_design_context(nodeId: '4045:8204')` in the
+implementing session. Fetch it first and correct the spec (exact copy,
+sizes, colors) against what the frame actually says.
+
+**Item 1 — Feed header greeting variant (IN PROGRESS, scaffold in tree).**
+Expected design: resting header = greeting line "📍 Berlin what's on
+Today?!" (location pin + display-serif text, "Berlin" underlined) with a
+small circular white search button on the right — replacing our always-on
+input pill. Tapping the button expands into the standard search input +
+Cancel; Cancel collapses back to the greeting.
+
+An **uncommitted scaffold** already sits in
+`src/components/feed/SearchFilterBar.tsx` (typecheck-clean, safe to build
+on or redo):
+- imports gained `useEffect`, `AccessibilityInfo`, `Animated`, `Easing`
+  (unused until the implementation lands);
+- `SearchFilterBarProps` gained `greeting?: { city: string; rest: string }`
+  with a doc comment locking the contract: greeting set → resting state is
+  the greeting line + circular search button; tap expands to input +
+  Cancel; Cancel collapses back; Circles (omits the prop) keeps the pill.
+
+Remaining implementation, as designed:
+- Branch the resting render: when `greeting` is set and
+  `!searchActive && !hasSearchText`, render the greeting row instead of
+  the placeholder pill — Ionicons pin + `typography.fontFamily.display`
+  text with `{city}` in a nested `<Text>` carrying
+  `textDecorationLine: 'underline'`, then a circular white button (50×50,
+  borderRadius 25, same shadow as `styles.searchBar`, `search-outline`
+  icon) whose onPress is the existing `activateSearch()`. The state
+  machine needs NO changes — `showTextInput = searchActive ||
+  hasSearchText` already gates the swap and `cancelSearch()` already
+  returns to resting.
+- Animate expand/collapse at 150–300ms (`Animated.timing` + `Easing`);
+  skip/shorten when `AccessibilityInfo.isReduceMotionEnabled()` resolves
+  true (that is why the scaffold imports exist).
+- Wire-up: `src/components/feed/FeedHeader.tsx` passes
+  `greeting={{ city: 'Berlin', rest: "what's on Today?!" }}` — confirm
+  exact copy against the frame (our current placeholder copy is
+  "Berlin, what's on today?!"). Feed/Map/Mural all render FeedHeader so
+  all three inherit it; Circles calls SearchFilterBar directly without
+  the prop → keeps its audited input pill (`fbc4d9a`).
+- `middleSlot` (ViewToggle), category chips, and the neighbourhood row
+  stay untouched.
+- Verify in web preview at 390×844: resting greeting → expand → type →
+  Cancel-collapse, and chips still clickable (mind the blur-before-click
+  history documented at the top of SearchFilterBar.tsx).
+- Commit: `style(feed): match Figma 4045:8204 — greeting header with
+  collapsible search`.
+
+**Item 2 — "Welcome {name}" transition (NOT started).**
+Fetch `get_design_context(nodeId: '5013:10915')` first. Filed spec:
+transient full-screen interstitial — centered display-serif
+"Welcome {firstName}", white bg — shown right after sign-up for ~1.5s,
+then routes on to onboarding. Match the serif treatment of the tagline /
+location-reveal screens; respect reduced motion. Signup routing lives in
+`app/(auth)/signup.tsx` (it already branches on `data.session` for the
+verify-email interstitial — same pattern). Commit:
+`feat(auth): Welcome {name} post-signup transition — Figma 5013:10915`.
+
+**Item 3 — UX pass (NOT started).** After items 1+2, run the
+ui-ux-pro-max design-system search over both interactions
+(micro-interaction timing 150–300ms, prefers-reduced-motion, ≥44px touch
+target on the circular button) and fix or file what it surfaces.
+
+**Done when.**
+- [ ] `4045:8204` design context fetched; greeting header verified/corrected, built, preview-checked at 390×844
+- [ ] `5013:10915` fetched; Welcome screen built + routed + preview-checked
+- [ ] UX pass done; findings fixed or filed
+- [ ] One commit per item; branch merged to main + pushed; this entry moved to ✓ Shipped
+
+**Standing blockers (unchanged — need explicit user authorization, do not
+work around):** deploy `supabase/functions/delete-account`, apply the two
+pending migrations (`20260609000000_saved_events_reminder.sql`,
+`20260609010000_denormalized_follow_counts.sql`), then regenerate
+`src/types/supabase.ts` and simplify `getProfile()`.
+
+**Frame-by-frame audit record (historical — do NOT re-audit):**
 - ✅ `2012:1757` — Splash Screen (1×1 placeholder PNG → Figma-matched
   splash.png via new scripts/generate-splash.ts). Commit `bf3cd71`.
 - ✅ `2012:1683` — Tagline screen ("Your City. Your Sphaer."). Size
@@ -98,39 +168,13 @@ fallback below.
 | 11 | `4484:10814` | Event detail (price-range variant) | ✅ already-compliant (= #9) |
 | 12 | `4025:5294` | Ticket card | ✅ compliant (deferred PDF/email buttons noted) |
 
-**Per-screen workflow.**
-1. `get_design_context(fileKey: 'iuCO8ENAhfYIJly1JGAeU1', nodeId: <node>)`
-2. Identify which React Native screen/component the Figma frame corresponds
-   to — match by content (e.g. tagline frame → `app/(auth)/index.tsx`).
-3. Compare per-element: spacing, font size/weight/family, color, radius,
-   shadow, icon size, alignment. The Figma uses `Test_Martina_Plantijn` for
-   display text — match via `typography.fontFamily.display`. Cream bg
-   `#FFFFFF` ↔ `colors.white`. Chocolate ink `#2B2A27` ↔ `colors.neutral.chocolate`.
-4. Trivial deltas (token swaps, off-by-2 padding, weight tweaks) fix
-   inline. Non-trivial (component restructure, missing feature, new layout)
-   file as their own BACKLOG item.
-5. Commit per screen: `style(<screen>): match Figma <nodeId>` with a body
-   listing the deltas. Push and merge to main per the standard solo-dev
-   workflow in CLAUDE.md.
-6. Update this BACKLOG entry's queue table (move shipped row into the
-   "Already shipped" list above).
-
-**Done when.**
-- [ ] All 12 queued screens audited (2 already shipped → 14/14 total)
-- [ ] Each shipped commit references its Figma node ID
-- [ ] Non-trivial deltas filed as their own items in `P0 — Investor demo polish`
-- [ ] `tailwind.config.js` and `theme.ts` stay in lockstep — any new token
-      added on one side is mirrored on the other
-
-**Rate-limit fallback.** If the user hasn't upgraded yet and the MCP is
-capped, ask the user to open the frame in Figma's Dev Mode panel (right
-side), copy the spec, and paste into chat. Audit against the paste, no
-MCP calls needed. Slower but works.
-
-**Out of scope.** Map-marker styling, custom font-file loading (separate
-backlog item — Test Martina Plantijn is referenced via
-`typography.fontFamily.display` but not loaded; falls back to system
-serif until the .otf files land).
+**Reusable audit conventions (apply to the follow-up items above):** Figma
+display text is `Test_Martina_Plantijn` → match via
+`typography.fontFamily.display` (the `.otf` isn't bundled yet — system
+serif fallback, tracked separately). Cream bg `#FFFFFF` ↔ `colors.white`;
+chocolate ink `#2B2A27` ↔ `colors.neutral.chocolate`. Any new token added
+to `theme.ts` must be mirrored in `tailwind.config.js`. Commit format
+`style(<screen>): match Figma <nodeId>` with the deltas in the body.
 
 ---
 
