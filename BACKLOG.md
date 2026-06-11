@@ -113,6 +113,125 @@ must register / configure those before any of this can be tested.
 
 ---
 
+## P0 — App audit 2026-06-11 (launch blockers — NEW)
+
+Fresh three-angle analysis (user journeys / code robustness / launch ops).
+Items verified against code with file evidence; none duplicate earlier sections.
+
+### Report & block — UGC moderation (App Store REJECTION risk)
+Why: zero report/block affordances on events, circles, profiles, or DMs. Apple Guideline 1.2 requires UGC apps to ship content reporting + user blocking + (for chat) a way to filter abusive users. Needs: `reports` table + `blocked_users` table (migrations), report action on event/circle/profile/message long-press or overflow, block from profile + DM, blocked users filtered from feed/chat queries.
+Scope: L. Do before submission.
+
+### App icons are 1×1-pixel placeholder stubs (REJECTION guaranteed)
+Why: `assets/images/icon.png` + `adaptive-icon.png` are 69-byte 1×1 PNGs; only splash.png is real. Generate a 1024×1024 icon + Android adaptive (foreground/background, 108dp safe zone) from the SphaerIcon hoops via `scripts/generate-splash.ts`'s sharp pipeline.
+Scope: S.
+
+### eas.json missing + no version strategy
+Why: no eas.json → no build profiles, no `runtimeVersion`, no auto-increment `buildNumber`/`versionCode` (app.json hardcodes 1.0.0). Blocks any store build. Create eas.json (development/preview/production), set `autoIncrement`, decide on expo-updates OTA.
+Scope: M.
+
+### Env-var startup validation (silent-broken-app risk)
+Why: `src/constants/config.ts` defaults missing `EXPO_PUBLIC_*` vars to `''` — auth/maps fail silently. Add a startup assert that throws a clear error screen in dev and logs loudly in prod when required vars are empty.
+Scope: S.
+
+### app.json store metadata incomplete
+Why: missing description/category/privacy fields; bundle ids + scheme are set. Fill what app.json owns; track the App Store Connect form items (privacy URL, age rating with UGC implications) alongside.
+Scope: S–M (partly ops).
+
+### Crash monitoring + minimal analytics
+Why: ErrorBoundary logs to console only — production crashes are invisible. Wire Sentry (expo plugin) into ErrorBoundary + global handler; decide on privacy-friendly analytics (PostHog/none) per the no-tracking ethos.
+Scope: M. (User call on vendor.)
+
+---
+
+## P1 — App audit 2026-06-11 (broken or missing expected features)
+
+### Event-detail Follow button is cosmetic
+Why: the artist-row Follow on `app/event/[id].tsx` (~336) only flips local state — never calls `followUser()`, never hydrates from `isFollowing()`, resets on every visit. Wire it like the circle-detail Organizer follow (shipped `ce45511`).
+Scope: S.
+
+### Cancel registration
+Why: `unregister()` exists in registrations.service.ts but no screen calls it. Add "Cancel registration" to the ticket screen (and/or event detail when registered) with ConfirmSheet.
+Scope: M.
+
+### Creator attendee list
+Why: creators can edit/delete events but can't see who registered. Add an attendees sheet (EntityListSheet pattern) on event detail, creator-only for v1.
+Scope: M.
+
+### Circle edit & delete (parity with events)
+Why: events gained creator edit/delete (`c4406a4`); circles have neither — `updateCircle` exists, no delete service, no UI. Mirror the event pattern incl. RLS check for circle delete.
+Scope: M.
+
+### "FEW TICKETS LEFT" badge is hardcoded
+Why: EventRegistrationSheet always renders the scarcity badge regardless of data. Wire to real spots/registration counts or hide until spots exist (Spots field is itself a filed create-form gap).
+Scope: S.
+
+### Cold-start deep link handling
+Why: no `linking` config / initial-URL handling — notification taps and OS-level URL opens won't route on cold start. Prerequisite for the push-notifications item.
+Scope: M.
+
+### Cold-start feed discovery CTA
+Why: a zero-follow user sees explanatory text but no action. Add "Browse circles" CTA to the feed empty state.
+Scope: S.
+
+### User search
+Why: events + circles are searchable; artists aren't. Decide placement (feed search scope toggle vs circles-style browse) then implement.
+Scope: M.
+
+---
+
+## P2 — App audit 2026-06-11 (robustness & quality)
+
+### Double-tap mutation guards
+Why: `handleMembership` (circles/[id].tsx) checks `busy` only via disabled prop timing; event-detail save rollback can invert state under double-tap. Add entry guards + functional setState rollbacks on join/leave/save/follow/register.
+Scope: S.
+
+### CircleJoinSheet welcome-timer null guard
+Why: the 2.6s dwell timer closes over `shown`; backdrop-close mid-dwell nulls it → potential crash at `goToCircle(shown.id)`. Guard + add `shown` to the effect deps.
+Scope: S.
+
+### Organizer fetch hardening
+Why: the two count queries in circles/[id].tsx Promise.all lack catches (one failure rejects the batch); `handleFollowOrganizer` reads possibly-stale `followingOrganizer` under rapid taps. Catch per-query, use functional toggle.
+Scope: S.
+
+### Realtime re-subscribe on app foreground
+Why: auth token refresh handles resume, but dropped Realtime channels stay dead until a manual refetch. Add AppState listener → `supabase.realtime` reconnect / bump refetch ticks on active.
+Scope: M.
+
+### Supabase fetch timeout
+Why: no fetch override — a hung request leaves buttons disabled forever on flaky mobile networks. Add an AbortController-based timeout (~15s) in the client factory.
+Scope: S.
+
+### Circle-create partial failure UX
+Why: circle row inserts before cover upload; an upload failure leaves the circle cover-less with only an alert. Offer retry-upload or proceed-without-cover messaging (row itself is fine).
+Scope: S.
+
+### ESLint + expo-doctor in CI
+Why: CI runs tsc+jest only; no eslint config exists, so `as any` router casts (CircleJoinSheet/CreateMenuSheet) and style drift go uncaught. Add eslint-config-expo + a CI step + expo-doctor.
+Scope: S.
+
+### Production console noise sweep
+Why: ~32 unguarded console.log/warn across geocoding/places/hooks ship to prod. Gate behind `__DEV__` or strip via babel in production builds.
+Scope: S.
+
+### Circle member management (creator kick)
+Why: Members sheet is read-only; creators can't remove members. Long-press remove (EntityListSheet already supports long-press actions).
+Scope: M.
+
+### "Tonight / This weekend" DST note
+Why: boundaries computed in device-local time; a timezone change or DST transition mid-session leaves filters stale until reload. Low impact — recompute on app foreground alongside the Realtime resume work.
+Scope: S.
+
+### Storage bucket posture review (extends existing MIME item)
+Why: all three buckets are public-read. Posters/avatars arguably fine; decide whether profile-gallery should be signed-URL private before scale.
+Scope: decision + M.
+
+### i18n / German localization (product decision)
+Why: Berlin-first app, all copy hardcoded English (de-DE number formats already used). Decide v1 language stance; if bilingual, ~40+ strings need extraction (expo-localization + i18n-js).
+Scope: L. (User call.)
+
+---
+
 ## P0 — App Store launch blockers (audit 2026-06-09 — promote candidates)
 
 These are submission-blockers, not polish. Each is a near-guaranteed App
