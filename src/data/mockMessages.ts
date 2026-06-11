@@ -1,49 +1,18 @@
 /**
  * Mock conversation data for the Messages page.
  *
- * Centralised + typed so the UI can be swapped to live Supabase data later
- * (the `messages` table already exists in supabase/migrations). When wiring,
- * replace `MOCK_CONVERSATIONS` with a query that joins messages → profiles /
- * circles, grouping by sender / circle and picking the latest row.
+ * The display shape (`ConversationRowDisplay`, formerly `MockConversation`)
+ * lives in `src/types/message.types.ts`. The inbox now renders live Supabase
+ * data via `useMessagesContext()`; this fixture is kept for design/dev
+ * reference only.
  */
 
-export type ConversationType = 'user' | 'circle';
-
-export type PreviewKind =
-  | 'text' // plain text
-  | 'typing' // "Mom is typing..." — italic
-  | 'location' // location pin icon before text
-  | 'voice' // mic icon before text ("Voice message")
-  | 'reaction'; // "You reacted 😘 to ..."
-
-export type DeliveryStatus = 'delivered' | 'read';
-
-export interface MockConversation {
-  id: string;
-  name: string;
-  avatar: string;
-  type: ConversationType;
-  preview: string;
-  previewKind: PreviewKind;
-  /** True when the last message was sent by the current user → shows check marks. */
-  isOwn?: boolean;
-  /** Only meaningful when `isOwn` — 'delivered' = grey checks, 'read' = blue checks. */
-  status?: DeliveryStatus;
-  /** Display-ready timestamp e.g. "16:14" | "Yesterday" | "Mon". */
-  timestamp: string;
-  isPinned?: boolean;
-  /** Show the "@" mention indicator next to the badge. */
-  hasMention?: boolean;
-  /** Numeric unread count — renders a small dark-blue badge. */
-  unreadCount?: number;
-  /** True for an Instagram-style story ring around the avatar. */
-  hasStoryRing?: boolean;
-}
+import type { ConversationRowDisplay } from '@/types/message.types';
 
 const face = (n: number) => `https://i.pravatar.cc/150?img=${n}`;
 const circleImg = (seed: string) => `https://picsum.photos/seed/${seed}/150/150`;
 
-export const MOCK_CONVERSATIONS: MockConversation[] = [
+export const MOCK_CONVERSATIONS: ConversationRowDisplay[] = [
   {
     id: 'lea-weber',
     name: 'Lea Weber',
@@ -136,6 +105,6 @@ export const MOCK_CONVERSATIONS: MockConversation[] = [
   },
 ];
 
-export function getConversationById(id?: string): MockConversation | undefined {
+export function getConversationById(id?: string): ConversationRowDisplay | undefined {
   return MOCK_CONVERSATIONS.find((c) => c.id === id);
 }

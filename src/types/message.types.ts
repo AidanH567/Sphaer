@@ -57,3 +57,43 @@ export function conversationKey(conv: Conversation): string {
 }
 
 export type Notification = Database['public']['Tables']['notifications']['Row'];
+
+// ─── Inbox row display shape ────────────────────────────────────────────────
+
+export type ConversationType = 'user' | 'circle';
+
+export type PreviewKind =
+  | 'text' // plain text
+  | 'typing' // "Mom is typing..." — italic
+  | 'location' // location pin icon before text
+  | 'voice' // mic icon before text ("Voice message")
+  | 'reaction'; // "You reacted 😘 to ..."
+
+export type DeliveryStatus = 'delivered' | 'read';
+
+/**
+ * Display-ready shape consumed by `ConversationRow` (Figma node 2457:3651).
+ * Real `Conversation` data is mapped into this shape in `messages/index.tsx`.
+ * (Formerly `MockConversation` in `src/data/mockMessages.ts`.)
+ */
+export interface ConversationRowDisplay {
+  id: string;
+  name: string;
+  avatar: string;
+  type: ConversationType;
+  preview: string;
+  previewKind: PreviewKind;
+  /** True when the last message was sent by the current user → shows check marks. */
+  isOwn?: boolean;
+  /** Only meaningful when `isOwn` — 'delivered' = grey checks, 'read' = blue checks. */
+  status?: DeliveryStatus;
+  /** Display-ready timestamp e.g. "16:14" | "Yesterday" | "Mon". */
+  timestamp: string;
+  isPinned?: boolean;
+  /** Show the "@" mention indicator next to the badge. */
+  hasMention?: boolean;
+  /** Numeric unread count — renders a small dark-blue badge. */
+  unreadCount?: number;
+  /** True for an Instagram-style story ring around the avatar. */
+  hasStoryRing?: boolean;
+}

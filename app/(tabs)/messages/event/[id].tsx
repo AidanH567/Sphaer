@@ -184,19 +184,28 @@ export default function EventChatScreen() {
   );
 }
 
-const POSTER_SIZE = 32;
+// Figma 6298:6104: 48px-tall thumb in the chat header. Posters keep their
+// existing square crop + soft corners (rounding scaled with the size bump).
+const POSTER_SIZE = 48;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   flex: { flex: 1 },
+  // Figma Tabbar_Title Side 6298:6104: soft shadow instead of a border.
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.md,
+    paddingBottom: 10,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 1,
   },
   backButton: { padding: spacing.sm },
   eventInfo: {
@@ -209,7 +218,7 @@ const styles = StyleSheet.create({
   posterThumb: {
     width: POSTER_SIZE,
     height: POSTER_SIZE,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: colors.surface,
   },
   posterFallback: {
@@ -218,9 +227,9 @@ const styles = StyleSheet.create({
   },
   eventTitle: {
     flex: 1,
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    color: colors.neutral.ink,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingVertical: spacing.base, flexGrow: 1 },

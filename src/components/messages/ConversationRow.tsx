@@ -3,10 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
-import type { MockConversation } from '@/data/mockMessages';
+import type { ConversationRowDisplay } from '@/types/message.types';
 
 interface ConversationRowProps {
-  conversation: MockConversation;
+  conversation: ConversationRowDisplay;
   onPress: () => void;
 }
 

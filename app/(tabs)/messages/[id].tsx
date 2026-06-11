@@ -107,8 +107,20 @@ export default function ConversationScreen() {
             accessibilityRole="button"
             accessibilityHint="Opens their profile"
           >
-            <Avatar uri={partner.avatar_url} name={partner.display_name ?? ''} size={32} />
-            <Text style={styles.partnerName}>{partner.display_name ?? partner.username}</Text>
+            <Avatar uri={partner.avatar_url} name={partner.display_name ?? ''} size={THUMB} />
+            <View style={styles.headerText}>
+              <Text style={styles.partnerName} numberOfLines={1}>
+                {partner.display_name ?? partner.username}
+              </Text>
+              {/* Figma 6298:6104 shows a meta line under the title; the truthful
+                  cheap equivalent here is the @handle — skip it when it would
+                  just repeat the title (no display_name). */}
+              {partner.display_name && partner.username ? (
+                <Text style={styles.headerMeta} numberOfLines={1}>
+                  @{partner.username}
+                </Text>
+              ) : null}
+            </View>
           </TouchableOpacity>
         )}
         <View style={{ width: 40 }} />
@@ -156,24 +168,46 @@ export default function ConversationScreen() {
   );
 }
 
+// Figma 6298:6104: 48px avatar in the chat header.
+const THUMB = 48;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   flex: { flex: 1 },
+  // Figma Tabbar_Title Side 6298:6104: soft shadow instead of a border.
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.md,
+    paddingBottom: 10,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 1,
   },
   backButton: { padding: spacing.sm },
-  partnerInfo: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  partnerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  headerText: { flex: 1, gap: 2 },
   partnerName: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    color: colors.neutral.ink,
+  },
+  headerMeta: {
+    fontSize: 12,
+    fontWeight: typography.fontWeight.medium,
+    color: '#949494', // Figma neutral-500
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingVertical: spacing.base },

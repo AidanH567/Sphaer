@@ -13,16 +13,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import type { MockConversation } from '@/data/mockMessages';
 import { typography } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { formatMessageTime } from '@/utils/date';
-import type { Conversation } from '@/types/message.types';
+import type { Conversation, ConversationRowDisplay } from '@/types/message.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // NOTE: real Supabase data via `useMessagesContext()`. Each row is mapped
-// into the legacy `MockConversation` shape so the existing Figma-styled
+// into the `ConversationRowDisplay` shape so the existing Figma-styled
 // `ConversationRow` keeps working. Replace the mapping with native real-data
 // rendering once `ConversationRow` is updated to accept `Conversation`.
 
@@ -99,7 +98,7 @@ function emptyCopyForFilter(
 }
 
 interface RowWithRoute {
-  row: MockConversation;
+  row: ConversationRowDisplay;
   route: string;
 }
 
