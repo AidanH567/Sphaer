@@ -14,8 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useEvent } from '@/hooks/useEvents';
 import { useAuthContext } from '@/context/AuthContext';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { getRegistration } from '@/services/registrations.service';
+import { getRegistration, unregister } from '@/services/registrations.service';
 import { shareEvent } from '@/services/share.service';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { EventRegistration } from '@/services/registrations.service';
@@ -45,6 +46,7 @@ export default function TicketDetailScreen() {
   const [regLoading, setRegLoading] = useState(true);
   const [regError, setRegError] = useState<string | null>(null);
   const [regTick, setRegTick] = useState(0);
+  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
 
   useEffect(() => {
     setRegError(null);
@@ -148,6 +150,10 @@ export default function TicketDetailScreen() {
   const dateLabel = formatTicketDate(event.starts_at);
   const qrPayload = `https://sphaer.app/check-in?e=${event.id}&u=${user?.id ?? ''}`;
   const showQuantityBadge = (registration.quantity ?? 1) > 1;
+  // Hosts are auto-registered for their own activity by a DB trigger —
+  // cancelling that row makes no sense (delete the activity instead), so the
+  // cancel affordance is attendee-only.
+  const canCancel = user?.id != null && user.id !== event.creator_id;
 
   return (
     <SafeAreaView style={styles.backdrop} edges={['top']}>
@@ -223,8 +229,40 @@ export default function TicketDetailScreen() {
           >
             <Text style={styles.actionOutlineText}>Done</Text>
           </TouchableOpacity>
+
+          {canCancel && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.actionOutline]}
+              onPress={() => setCancelConfirmVisible(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel registration"
+            >
+              <Text style={styles.actionDangerText}>Cancel Registration</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
+
+      {/* Cancel-registration confirm. On success we replace to the event
+          page — the sheet unmounts with the route, so no onClose on the
+          happy path (same pattern as event-detail delete). Event detail
+          reflects the cancellation via its on-focus refetch + the
+          MessagesContext realtime subscription on event_registrations. */}
+      <ConfirmSheet
+        visible={cancelConfirmVisible}
+        title="Cancel your registration?"
+        message="Your ticket will be void."
+        confirmLabel="Cancel registration"
+        cancelLabel="Keep ticket"
+        destructive
+        onConfirm={async () => {
+          if (!user?.id || !eventId) return;
+          await unregister(eventId, user.id);
+          router.replace(`/event/${eventId}`);
+        }}
+        onClose={() => setCancelConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -397,6 +435,12 @@ const styles = StyleSheet.create({
   },
   actionOutlineText: {
     color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  // Outline button variant with danger text — "Cancel Registration".
+  actionDangerText: {
+    color: colors.badge.red,
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
   },

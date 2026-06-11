@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/supabase';
 import type { EventWithRelations } from '@/types/event.types';
+import type { Profile } from '@/types/user.types';
 
 export type EventRegistration = Database['public']['Tables']['event_registrations']['Row'];
 
@@ -84,6 +85,26 @@ export async function getRegistrationCount(userId: string): Promise<number> {
     .eq('user_id', userId);
   if (error) throw error;
   return count ?? 0;
+}
+
+/**
+ * Every profile registered for an event, newest registration first. Powers
+ * the creator-only "Attendees" sheet on event detail. Includes the creator
+ * themselves (the `register_event_creator` trigger auto-registers them).
+ *
+ * RLS: covered by `event_registrations_read_all` (SELECT USING TRUE,
+ * 20260527010000_activities_v2.sql) — no creator-specific policy needed.
+ */
+export async function getEventRegistrants(eventId: string): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from('event_registrations')
+    .select('registered_at, user:profiles!event_registrations_user_id_fkey(*)')
+    .eq('event_id', eventId)
+    .order('registered_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? [])
+    .map((row) => (row as { user: Profile | null }).user)
+    .filter((p): p is Profile => p !== null);
 }
 
 /** All registrations for an event (e.g. "23 people are going"). */

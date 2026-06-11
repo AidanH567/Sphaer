@@ -21,8 +21,6 @@ const CHOCOLATE = colors.neutral.chocolate;
 const INK = colors.neutral.ink;
 const GREY = '#B6B6AF';
 const DIVIDER = colors.neutral.divider;
-const BADGE_RED = '#B93D36';
-const BADGE_TEXT = '#FAF9F5';
 const SECONDARY = 'rgba(30,30,30,0.6)';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -276,12 +274,11 @@ export function EventRegistrationSheet({
             </View>
           </View>
 
-          {/* Bottom bar — badge, price summary, Register */}
+          {/* Bottom bar — price summary, Register */}
           <View style={[styles.bottomBar, { paddingBottom: insets.bottom || spacing.lg }]}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>FEW TICKETS LEFT</Text>
-            </View>
-
+            {/* Scarcity badge ("FEW TICKETS LEFT") removed — it was hardcoded with no
+                spots data behind it. Restore when a real spots/capacity column ships
+                (filed as a create-form gap in BACKLOG). */}
             <View style={styles.priceRow}>
               <Ionicons name="information-circle-outline" size={18} color={INK} />
               <Text style={styles.priceText}>€{total.toFixed(2)}</Text>
@@ -435,25 +432,10 @@ const styles = StyleSheet.create({
     paddingTop: spacing.base,
     marginTop: spacing.base,
   },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: BADGE_RED,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 11,
-    fontWeight: typography.fontWeight.bold,
-    letterSpacing: 0.4,
-    color: BADGE_TEXT,
-  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.md,
     marginBottom: spacing.base,
   },
   priceText: {

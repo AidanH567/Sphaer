@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/Avatar';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
+import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { EventRegistrationSheet } from '@/components/ui/EventRegistrationSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
@@ -16,7 +17,10 @@ import { EventDetailSkeleton } from '@/components/ui/skeletons/EventDetailSkelet
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
-import { register as registerForEvent } from '@/services/registrations.service';
+import {
+  getEventRegistrants,
+  register as registerForEvent,
+} from '@/services/registrations.service';
 import { shareEvent } from '@/services/share.service';
 import { addEventToCalendar } from '@/services/calendar.service';
 import {
@@ -25,6 +29,12 @@ import {
   saveEvent,
   unsaveEvent,
 } from '@/services/events.service';
+import {
+  followUser,
+  unfollowUser,
+  isFollowing as isFollowingService,
+} from '@/services/profile.service';
+import type { Profile } from '@/types/user.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function EventDetailScreen() {
@@ -51,6 +61,16 @@ export default function EventDetailScreen() {
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+
+  // Creator-only attendees sheet (people registered for this activity).
+  const [attendeesOpen, setAttendeesOpen] = useState(false);
+  const [attendees, setAttendees] = useState<Profile[]>([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
+
+  // In-flight guards — rapid taps on Save / Follow must not double-fire the
+  // network call. Refs (not state) so the guard flips synchronously.
+  const saveBusyRef = useRef(false);
+  const followBusyRef = useRef(false);
 
   // Refetch on re-focus (not on the initial mount — useEvent already fetched)
   // so changes saved on the edit screen show immediately after router.back().
@@ -79,10 +99,28 @@ export default function EventDetailScreen() {
     };
   }, [user?.id, id]);
 
+  // Hydrate the artist-row Follow state from the DB once the event (and its
+  // creator id) is known. Skipped on own events — the button isn't rendered.
+  useEffect(() => {
+    const creatorId = event?.creator_id;
+    if (!user?.id || !creatorId || user.id === creatorId) return;
+    let cancelled = false;
+    isFollowingService(user.id, creatorId)
+      .then((following) => {
+        if (!cancelled) setIsFollowing(following);
+      })
+      .catch((err) => console.error('[EventDetail] load isFollowing failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, event?.creator_id]);
+
   async function handleToggleSave() {
     if (!user?.id || !id) return;
+    if (saveBusyRef.current) return; // double-tap guard
+    saveBusyRef.current = true;
     const wasSaved = isSaved;
-    setIsSaved(!wasSaved);
+    setIsSaved((v) => !v); // optimistic flip
     try {
       if (wasSaved) {
         await unsaveEvent(user.id, id);
@@ -91,8 +129,41 @@ export default function EventDetailScreen() {
       }
     } catch (err) {
       console.error('[EventDetail] toggleSave failed:', err);
-      setIsSaved(wasSaved);
+      setIsSaved((v) => !v); // roll back the optimistic flip
+    } finally {
+      saveBusyRef.current = false;
     }
+  }
+
+  async function handleToggleFollow() {
+    const creatorId = event?.creator_id;
+    if (!user?.id || !creatorId || user.id === creatorId) return;
+    if (followBusyRef.current) return; // double-tap guard
+    followBusyRef.current = true;
+    const wasFollowing = isFollowing;
+    setIsFollowing((v) => !v); // optimistic flip
+    try {
+      if (wasFollowing) {
+        await unfollowUser(user.id, creatorId);
+      } else {
+        await followUser(user.id, creatorId);
+      }
+    } catch (err) {
+      console.error('[EventDetail] toggleFollow failed:', err);
+      setIsFollowing((v) => !v); // roll back the optimistic flip
+    } finally {
+      followBusyRef.current = false;
+    }
+  }
+
+  function handleOpenAttendees() {
+    if (!id) return;
+    setAttendeesOpen(true);
+    setAttendeesLoading(true);
+    getEventRegistrants(id)
+      .then(setAttendees)
+      .catch((err) => console.error('[EventDetail] load attendees failed:', err))
+      .finally(() => setAttendeesLoading(false));
   }
 
   // Loading state — covers initial fetch
@@ -231,6 +302,16 @@ export default function EventDetailScreen() {
               <Ionicons name="trash-outline" size={22} color={colors.text.primary} />
             </TouchableOpacity>
           )}
+          {isCreator && (
+            <TouchableOpacity
+              onPress={handleOpenAttendees}
+              style={styles.navButton}
+              accessibilityRole="button"
+              accessibilityLabel="View attendees"
+            >
+              <Ionicons name="people-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
           {canAccessChat && (
             <TouchableOpacity
               onPress={() => router.push(`/ticket/${id}`)}
@@ -333,19 +414,27 @@ export default function EventDetailScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.followButton, isFollowing && styles.followButtonActive]}
-              onPress={() => setIsFollowing((v) => !v)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isFollowing }}
-            >
-              <Text
-                style={[styles.followText, isFollowing && styles.followTextActive]}
+            {/* Hidden on your own event — you can't follow yourself. */}
+            {!isCreator && (
+              <TouchableOpacity
+                style={[styles.followButton, isFollowing && styles.followButtonActive]}
+                onPress={handleToggleFollow}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isFollowing
+                    ? `Unfollow ${event.creator?.display_name ?? 'host'}`
+                    : `Follow ${event.creator?.display_name ?? 'host'}`
+                }
+                accessibilityState={{ selected: isFollowing }}
               >
-                {isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[styles.followText, isFollowing && styles.followTextActive]}
+                >
+                  {isFollowing ? 'Following' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.divider} />
@@ -446,6 +535,22 @@ export default function EventDetailScreen() {
         }}
         onClose={() => setDeleteConfirmVisible(false)}
       />
+
+      {/* Creator-only attendee list. RLS allows the read for everyone
+          (event_registrations_read_all), but the affordance is creator-only
+          by design — it's a host tool. */}
+      {isCreator && (
+        <EntityListSheet
+          type="user"
+          visible={attendeesOpen}
+          title="Attendees"
+          subtitle={attendeesLoading ? undefined : `${attendees.length} registered`}
+          items={attendees}
+          isLoading={attendeesLoading}
+          emptyMessage="No one has registered yet."
+          onClose={() => setAttendeesOpen(false)}
+        />
+      )}
 
       {/* Event registration popup */}
       <EventRegistrationSheet
