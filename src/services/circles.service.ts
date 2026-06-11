@@ -233,3 +233,17 @@ export async function uploadCircleImage(
   const { data } = supabase.storage.from('circle-images').getPublicUrl(path);
   return `${data.publicUrl}?v=${Date.now()}`;
 }
+
+/**
+ * Upload a circle cover image. Thin wrapper over uploadCircleImage with
+ * kind='cover' — lands at `circle-images/<userId>/<circleId>-cover.<ext>`,
+ * right next to the circle's avatar, and runs the same validateImageUpload
+ * MIME/size guardrails.
+ */
+export async function uploadCircleCover(
+  userId: string,
+  circleId: string,
+  uri: string
+): Promise<string> {
+  return uploadCircleImage(userId, circleId, uri, 'cover');
+}

@@ -8,9 +8,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Tag } from '@/components/ui/Tag';
-import { colors, typography, spacing } from '@/constants/theme';
+import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
-import { createCircle, updateCircle, uploadCircleImage } from '@/services/circles.service';
+import {
+  createCircle,
+  updateCircle,
+  uploadCircleImage,
+  uploadCircleCover,
+} from '@/services/circles.service';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
@@ -22,6 +27,7 @@ export default function CreateCircleScreen() {
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [coverUri, setCoverUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [nameError, setNameError] = useState<string | undefined>();
 
@@ -45,6 +51,23 @@ export default function CreateCircleScreen() {
     });
     if (!result.canceled) {
       setAvatarUri(result.assets[0].uri);
+    }
+  }
+
+  async function pickCover() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to add a cover image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.9,
+    });
+    if (!result.canceled) {
+      setCoverUri(result.assets[0].uri);
     }
   }
 
@@ -80,6 +103,14 @@ export default function CreateCircleScreen() {
         avatar_url: avatarUrl,
         cover_url: null,
       });
+
+      // Cover uploads AFTER the insert and lands via updateCircle — keeps
+      // the insert payload simple and mirrors how the detail page edits
+      // covers later. Any UploadValidationError bubbles to the catch below.
+      if (coverUri) {
+        const coverUrl = await uploadCircleCover(user.id, circleId, coverUri);
+        await updateCircle(circleId, { cover_url: coverUrl });
+      }
 
       // Trigger has already added the creator as admin. Navigate straight
       // to the circles page — useFocusEffect there will refetch and the
@@ -119,7 +150,23 @@ export default function CreateCircleScreen() {
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Ionicons name="image-outline" size={28} color={colors.text.tertiary} />
-              <Text style={styles.avatarHint}>Add photo</Text>
+              <Text style={styles.pickerHint}>Add photo</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Cover image picker */}
+        <TouchableOpacity
+          onPress={pickCover}
+          accessibilityRole="button"
+          accessibilityLabel={coverUri ? 'Change cover image' : 'Add cover image'}
+        >
+          {coverUri ? (
+            <Image source={{ uri: coverUri }} style={styles.coverImage} contentFit="cover" />
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Ionicons name="image-outline" size={28} color={colors.text.tertiary} />
+              <Text style={styles.pickerHint}>Add cover</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -206,9 +253,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
   },
-  avatarHint: {
+  pickerHint: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+  coverImage: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: radius.md,
+  },
+  coverPlaceholder: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   form: { gap: spacing.base },
   sectionLabel: {
