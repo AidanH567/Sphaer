@@ -37,19 +37,33 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ## ▶ UP NEXT
 
-### 1. Figma styling audit — 12 of 14 screens remaining
+### 1. ~~Figma styling audit — 12 of 14 screens remaining~~ — COMPLETE 2026-06-10
 
-**Why.** Investor demo will hit screens we never matched against Figma; visual
-drift on any of them makes the app feel half-finished even when the logic
-is sound. Today we got the first 2 of 14 screens shipped before the Figma
-MCP hit its Starter-plan total-calls cap. **The user said they will buy a
-Figma subscription so this audit can resume at full bandwidth.** When the
-rate limit lifts (either via the upgrade, a daily reset, or — worst case —
-the Dev Mode paste fallback below), the remaining 12 ship per-screen as
-their own commits per the standard workflow.
+**RESOLVED.** All 14 frames audited (2 prior splash/tagline + 12 this
+session). Unblock came from pointing the MCP at the **original Pro-owned
+file** `HIVq6Vaymj01dZ37AvwCUF` (the user was invited to it) instead of
+the Starter-capped personal-drafts copy `iuCO8ENAhfYIJly1JGAeU1`. Node IDs
+were preserved across the duplicate so the whole queue mapped directly.
 
-**Figma file (use this fileKey for every call):**
-`iuCO8ENAhfYIJly1JGAeU1` — `Sphaer_Prototype_RA (Copy)` in user's drafts.
+Result (see ✓ Shipped 2026-06-10 for detail):
+- **Fixed inline** (4 commits): Sign Up field tokens (`2012:1711` →
+  AuthControls), Location reveal distribution (`2012:1797`), Feed event
+  card price/meta tokens (`4045:8204`), Circles search + subtitle copy
+  (`2665:12253`).
+- **Verified already-compliant** (purpose-built against their nodes):
+  Sign Up filled (`5013:10790`), Location prompt/searching
+  (`2012:1787` / `5108:8379`), Event detail + variant (`3491:2499` /
+  `4484:10814`), Registration sheet (`4025:5033`), Ticket card
+  (`4025:5294`).
+- **Filed as new items** (structural / missing — not inline token fixes):
+  Feed header restructure (greeting + circular search button vs our
+  always-on input), Feed filter-icon-in-toggle-row, `5013:10915`
+  "Welcome {name}" post-signup transition screen. See P0 — Investor demo
+  polish below.
+
+**Figma file (original, Pro-owned — use this fileKey):**
+`HIVq6Vaymj01dZ37AvwCUF` — `Sphaer_Prototype_RA` (NOT the personal-drafts
+copy `iuCO8…`, which is Starter-capped).
 
 **Blocker status (re-diagnosed 2026-06-10):** the earlier `net::ERR_FAILED`
 was a Claude-side MCP transport outage affecting ALL connectors — it has
@@ -67,22 +81,22 @@ fallback below.
   24→26, "Your Sphaer." weight bold→medium on app/(auth)/index.tsx.
   Commit `bc36700`.
 
-**Remaining queue (12 screens — user dropped these URLs in chat 2026-06-09):**
+**Final queue status (all 12 resolved 2026-06-10):**
 
-| # | Node ID | Likely screen (confirm via screenshot first) |
-|---|---|---|
-| 1 | `2012:1711` | Auth flow (3rd of 3 splash-flow screens?) |
-| 2 | `5013:10790` | Sign Up form (Figma Sign Up Flow Screen 1.1 per existing comments) |
-| 3 | `5013:10915` | Sign Up form variant 2 (per existing comments) |
-| 4 | `2012:1787` | Location-onboarding prompt phase (per existing comments) |
-| 5 | `5108:8379` | Location-onboarding searching/intermediate (per existing comments) |
-| 6 | `2012:1797` | Location-onboarding "We Found You" (per existing comments) |
-| 7 | `4045:8204` | Likely a feed/list screen — confirm |
-| 8 | `2665:12253` | Likely an event detail or profile — confirm |
-| 9 | `3491:2499` | Confirm via screenshot |
-| 10 | `4025:5033` | Confirm via screenshot |
-| 11 | `4484:10814` | Confirm via screenshot |
-| 12 | `4025:5294` | Confirm via screenshot |
+| # | Node ID | Actual screen | Outcome |
+|---|---|---|---|
+| 1 | `2012:1711` | Sign Up form | ✅ fixed — AuthControls field tokens (`fc924f3`) |
+| 2 | `5013:10790` | Sign Up (filled state) | ✅ covered by #1 |
+| 3 | `5013:10915` | "Welcome {name}" transition | 📋 missing screen — filed |
+| 4 | `2012:1787` | Location prompt | ✅ already-compliant |
+| 5 | `5108:8379` | Location searching | ✅ already-compliant (reuses prompt) |
+| 6 | `2012:1797` | Location reveal | ✅ fixed — vertical distribution (`b11e8be`) |
+| 7 | `4045:8204` | Feed list | ✅ card fixed (`82642af`); header restructure filed |
+| 8 | `2665:12253` | Circles browse | ✅ fixed — placeholder + subtitle (`fbc4d9a`) |
+| 9 | `3491:2499` | Event detail | ✅ already-compliant |
+| 10 | `4025:5033` | Event registration sheet | ✅ already-compliant |
+| 11 | `4484:10814` | Event detail (price-range variant) | ✅ already-compliant (= #9) |
+| 12 | `4025:5294` | Ticket card | ✅ compliant (deferred PDF/email buttons noted) |
 
 **Per-screen workflow.**
 1. `get_design_context(fileKey: 'iuCO8ENAhfYIJly1JGAeU1', nodeId: <node>)`
@@ -181,6 +195,25 @@ Why (historical): `app.json` only set `photosPermission` for image-picker. The N
 
 Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
 spec when scheduled.
+
+### Feed header — greeting + circular search button (Figma 4045:8204)
+Why: Figma feed header is a greeting line "📍 Berlin what's on Today?!" (location pin + display-serif text, "Berlin" underlined) with a small circular white **search button** on the right that presumably expands to a search field. We ship an always-on full-width search input pill instead. Structural restructure of `FeedHeader`, not a token swap.
+Done when:
+- [ ] Header shows the greeting line + circular search button per the frame
+- [ ] Tapping the search button expands/reveals the search input
+- [ ] Same treatment mirrored on Map + Mural headers for consistency
+
+### Feed filter icon in the Feed/Map/Mural row (Figma 4045:8204)
+Why: Figma places a sliders/filter icon button (45px, rounded, rotated) at the right end of the Feed/Map/Mural toggle row — presumably opening a filter sheet. We use the Near me / Tonight / This weekend / Free chip row beneath the header instead. Decide: adopt the filter-sheet pattern, keep chips, or both.
+Done when:
+- [ ] Product decision on filter affordance (icon→sheet vs chips)
+- [ ] If adopting: filter icon in the toggle row + a filter sheet
+
+### "Welcome {name}" post-signup transition (Figma 5013:10915)
+Why: Figma has a brief full-screen "Welcome {firstName}" interstitial (centered display-serif, white bg) shown right after sign-up, before onboarding. We don't build it — signup goes straight to onboarding. A small cinematic touch matching the "We Found You" / tagline serif treatment.
+Done when:
+- [ ] New transient screen shows "Welcome {name}" for ~1.5s post-signup, then routes to onboarding
+- [ ] Matches the serif treatment of the tagline / location-reveal screens
 
 ---
 
@@ -404,6 +437,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-10 — Figma styling audit COMPLETE — all 14 frames (UP NEXT #1 closed).** Unblocked by switching the MCP fileKey from the Starter-capped personal-drafts copy (`iuCO8ENAhfYIJly1JGAeU1`) to the **original Pro-owned file** (`HIVq6Vaymj01dZ37AvwCUF`) the user was invited to — Figma preserves node IDs across a duplicate, so the queue mapped 1:1. Walked all 12 remaining frames (after the 2 prior splash/tagline). **Fixed inline (4 commits, one per screen):** (1) `style(auth) fc924f3` — Sign Up `2012:1711`: shared `AuthControls` textfield border `#C1C1C1`→`#E0E4EB` (the `--hidden-lines` token), placeholder `#9A9A9A`→`#949494`, Google icon 20→24px (propagates to all 6 auth screens). (2) `style(location) b11e8be` — reveal `2012:1797`: title/circular-button vertical distribution via flex spacers (1.4/1.9/1.0) to match the Figma's upper-third/lower-third spread vs our centred group. (3) `style(feed) 82642af` — event card `4045:8204`: price weight bold→Heavy (added `typography.fontWeight.heavy = '800'` for SF Pro Heavy 860) + colour `#363530`→`#3A3A3A`; meta weight medium→regular + colour `#505049`→`#5A5A5A` (scoped to EventCard so unaudited ProfileActivityCard tokens stay put). (4) `style(circles) fbc4d9a` — `2665:12253`: search placeholder → "Find your scene, find your thing!", section subtitle → "Join {N} {category} circles across Berlin". **Verified already-compliant (purpose-built against their nodes in prior sessions, confirmed via preview screenshots at 390×844):** Sign Up filled (`5013:10790`), Location prompt + searching (`2012:1787`/`5108:8379`), Event detail + price-range variant (`3491:2499`/`4484:10814` — hero/title/location/artist-row/sticky price+date+button bar all align), Registration sheet (`4025:5033` — title/organiser/stepper/calendar+pin+ticket rows/FEW-TICKETS badge/total/Register), Ticket card (`4025:5294`). **Filed as new P0 — Investor demo polish items (structural, out of scope for an inline token pass):** Feed header restructure (greeting + circular search button vs our search input), Feed filter-icon-in-toggle-row, and the `5013:10915` "Welcome {name}" post-signup transition screen we never built. Known limitation across all serif text: Test Martina Plantijn `.otf` still isn't bundled (Georgia/system-serif fallback) — separate backlog item, unchanged by this audit.
 - **2026-06-10 — Feed chip-row clipping fix + test suite bootstrap (61 unit tests).** (1) The Near me / Tonight / This weekend / Free chips rendered clipped (user screenshot showed pills cut to half height). Root cause via DOM inspection: react-native-web's ScrollView ships `{ flexGrow: 1, flexShrink: 1 }` base style — the FlatList below shrank the chip row to 4px. Fix: `style={{ flexGrow: 0, flexShrink: 0 }}` + paddingVertical on the content container. Verified at 390×844: pills full height, horizontal scroll intact, Tonight toggle filters correctly. Commit `e1d48a9`. (2) First test coverage in the repo: jest + jest-expo@~55, `npm test`, six suites / 61 tests over the pure utils (validators, event-filters with pinned clock, ics RFC-5545 compliance, upload-validation allowlist + size boundary, profile-completion, geo haversine against real Berlin landmark distances). tsconfig gains `"jest"` types. All green, tsc clean. Commit `64fd5f4`.
 - **2026-06-09 — Denormalised follower / following counts migration (data integrity).** `supabase/migrations/20260609010000_denormalized_follow_counts.sql` adds `profiles.followers_count INT NOT NULL DEFAULT 0` + `profiles.following_count INT NOT NULL DEFAULT 0`, backfills both from the existing `follows` rows (per-side aggregation joined back into `profiles`), and installs trigger function `follows_update_counts()` (SECURITY DEFINER + locked search_path) wired to `AFTER INSERT` and `AFTER DELETE` on `follows`. Atomic `count = count + 1` and `GREATEST(0, count - 1)` keep the columns consistent under concurrent inserts. Service-layer follow-up: once `supabase db push` runs and types regenerate, `getProfile()` can drop its two parallel COUNT queries against `follows` and read the columns directly — tracked in BACKLOG. Forward-compat scaffolding for now (columns exist but service still uses COUNT until the regenerate). **Apply with:** `npx supabase db push`. Commit `6b236d6`.
 - **2026-06-09 — First-time-user 3-screen intro tutorial (later-backlog promoted).** New `app/(auth)/intro.tsx` — paged horizontal ScrollView with 3 screens (Discover Berlin / Follow artists & circles / Save & get reminded). Each: 112px icon-in-soft-circle, display-serif title, 24-line body, max 320px wide. Top-right Skip button on pages 1+2, "Next" CTA advances `scrollTo` on pages 1+2 then becomes "Get Started" on page 3 which writes the AsyncStorage flag and `router.replace('/(auth)')`. Page-indicator dot row with a width-stretched active dot. Landing screen (`app/(auth)/index.tsx`) now reads `INTRO_SEEN_KEY` on mount; first-timers get `router.replace('/(auth)/intro')` before the landing's fade-in animation has a chance to play. Storage failures fall through to the landing — a missed intro beats a permanently broken first launch. Route registered in `(auth)/_layout.tsx`. Closes the "Onboarding tutorial" backlog (later) entry. Typecheck clean. Commit `fd55297`.
