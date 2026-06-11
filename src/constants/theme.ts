@@ -29,6 +29,7 @@ export const colors = {
     meta:      '#767779',   // Neutral/meta — secondary metadata text
     neutral400:'#9E9D94',   // Neutral/neutral-400 — tertiary text / subtle borders
     neutral600:'#5A5A5A',   // neutral/neutral-600 — card meta (date/time/counts)
+    neutral700:'#3A3A3A',   // neutral/neutral-700 — card price / choice-chip outline
     divider:   '#CFCEC9',   // Neutral/divider — hairline dividers on light bg
     hiddenLines:'#E0E4EB',  // --hidden-lines — light outline on secondary buttons & text fields
   },

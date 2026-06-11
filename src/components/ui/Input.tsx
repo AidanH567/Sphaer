@@ -86,12 +86,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral.hiddenLines,
+    borderRadius: radius.sm,
     backgroundColor: colors.white,
     paddingHorizontal: spacing.md,
-    height: 52,
+    height: 50,
   },
   containerFocused: {
     borderColor: colors.black,

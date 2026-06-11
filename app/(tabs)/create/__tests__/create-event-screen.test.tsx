@@ -145,7 +145,7 @@ describe('CreateScreen — create-event form validation', () => {
     const view = await renderCreateScreen();
 
     // Submit CTA is exposed as an accessible button.
-    expect(view.getByRole('button', { name: 'Publish activity' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Publish' })).toBeTruthy();
 
     // Screen chrome + a11y sweep regressions.
     expect(view.getByText('Create Activity')).toBeTruthy();
@@ -164,7 +164,7 @@ describe('CreateScreen — create-event form validation', () => {
   it('shows inline required-field errors on empty submit and calls no create service', async () => {
     const view = await renderCreateScreen();
 
-    fireEvent.press(view.getByRole('button', { name: 'Publish activity' }));
+    fireEvent.press(view.getByRole('button', { name: 'Publish' }));
 
     // Both required-field errors surface at once (not sequential popups).
     expect(await view.findByText(TITLE_ERROR)).toBeTruthy();
@@ -179,7 +179,7 @@ describe('CreateScreen — create-event form validation', () => {
   it('clears the title error as soon as the user types into the title field', async () => {
     const view = await renderCreateScreen();
 
-    fireEvent.press(view.getByRole('button', { name: 'Publish activity' }));
+    fireEvent.press(view.getByRole('button', { name: 'Publish' }));
     expect(await view.findByText(TITLE_ERROR)).toBeTruthy();
 
     // The Title input has no unique placeholder or accessibility label

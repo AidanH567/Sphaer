@@ -8,6 +8,12 @@ interface TagProps {
   selected?: boolean;
   onPress?: () => void;
   style?: ViewStyle;
+  /**
+   * 'filter' — 35px pill with chocolate outline + selected ✕ (feed/circles).
+   * 'choice' — Figma "One pressed_button" (create-flow topic chips,
+   * 6277:10010): 49px, 1.7px neutral-700 outline, Medium 17, no ✕.
+   */
+  variant?: 'filter' | 'choice';
 }
 
 /**
@@ -16,11 +22,20 @@ interface TagProps {
  * On:  chocolate fill, white label + trailing ✕ (the pill doubles as its
  *      own "remove" affordance once selected).
  */
-export function Tag({ label, selected = false, onPress, style }: TagProps) {
+export function Tag({ label, selected = false, onPress, style, variant = 'filter' }: TagProps) {
+  const isChoice = variant === 'choice';
   const content = (
     <>
-      <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
-      {selected && (
+      <Text
+        style={[
+          styles.label,
+          isChoice && styles.labelChoice,
+          selected && styles.labelSelected,
+        ]}
+      >
+        {label}
+      </Text>
+      {selected && !isChoice && (
         <Ionicons name="close" size={14} color={colors.white} style={styles.clearIcon} />
       )}
     </>
@@ -31,7 +46,7 @@ export function Tag({ label, selected = false, onPress, style }: TagProps) {
       <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.7}
-        style={[styles.tag, selected && styles.tagSelected, style]}
+        style={[styles.tag, isChoice && styles.tagChoice, selected && styles.tagSelected, style]}
         accessibilityRole="button"
         accessibilityState={{ selected }}
       >
@@ -41,7 +56,7 @@ export function Tag({ label, selected = false, onPress, style }: TagProps) {
   }
 
   return (
-    <View style={[styles.tag, selected && styles.tagSelected, style]}>{content}</View>
+    <View style={[styles.tag, isChoice && styles.tagChoice, selected && styles.tagSelected, style]}>{content}</View>
   );
 }
 
@@ -56,6 +71,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral.chocolate,
   },
+  tagChoice: {
+    height: 49,
+    paddingHorizontal: 16,
+    borderWidth: 1.7,
+    borderColor: colors.neutral.neutral700,
+  },
   tagSelected: {
     backgroundColor: colors.neutral.chocolate,
     borderColor: colors.neutral.chocolate,
@@ -65,6 +86,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: typography.fontWeight.regular,
     color: colors.neutral.chocolate,
+  },
+  labelChoice: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
   },
   labelSelected: {
     color: colors.white,

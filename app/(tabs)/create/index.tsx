@@ -200,12 +200,13 @@ export default function CreateScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>Choose topics</Text>
+        <Text style={styles.sectionLabel}>Choose topics?</Text>
         <View style={styles.tags}>
           {EVENT_CATEGORIES.map((cat) => (
             <Tag
               key={cat}
               label={cat}
+              variant="choice"
               selected={categories.includes(cat)}
               onPress={() => toggleCategory(cat)}
             />
@@ -384,14 +385,13 @@ export default function CreateScreen() {
             <Image source={{ uri: posterUri }} style={styles.posterPreview} contentFit="cover" />
           ) : (
             <View style={styles.posterPlaceholder}>
-              <Ionicons name="image-outline" size={32} color={colors.text.tertiary} />
-              <Text style={styles.posterHint}>Add poster image</Text>
+              <Ionicons name="add" size={24} color="#9FA7B3" />
             </View>
           )}
         </TouchableOpacity>
 
         <Button
-          label="Publish activity"
+          label="Publish"
           onPress={handleCreate}
           isLoading={isLoading}
           style={styles.cta}
@@ -425,16 +425,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  // Figma Tabbar 6277:10003: SF Bold 18 ink, soft shadow, no border.
   navTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral.ink,
   },
   scroll: { padding: spacing.base, gap: spacing.xl, paddingBottom: spacing['4xl'] },
+  // Figma form labels: SF Semibold 17 chocolate (Primary/Category Header).
   sectionLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: -spacing.sm },
   form: { gap: spacing.base },
@@ -452,13 +454,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   textarea: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral.hiddenLines,
+    borderRadius: radius.sm,
     padding: spacing.md,
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
-    minHeight: 100,
+    minHeight: 144,
     textAlignVertical: 'top',
   },
   priceRow: {
@@ -473,7 +475,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
-  priceToggleActive: { backgroundColor: colors.black },
+  priceToggleActive: { backgroundColor: colors.neutral.chocolate },
   priceToggleText: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.medium,
@@ -497,8 +499,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   circlePillActive: {
-    backgroundColor: colors.black,
-    borderColor: colors.black,
+    backgroundColor: colors.neutral.chocolate,
+    borderColor: colors.neutral.chocolate,
   },
   circlePillText: {
     fontSize: typography.fontSize.sm,
@@ -508,17 +510,17 @@ const styles = StyleSheet.create({
   circlePillTextActive: { color: colors.white },
   posterPicker: { borderRadius: 12, overflow: 'hidden' },
   posterPreview: { width: '100%', height: 240 },
+  // Figma 6277:10054: 60px dashed square, 2px #9FA7B3, radius 9.
   posterPlaceholder: {
-    height: 160,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    width: 60,
+    height: 60,
+    borderWidth: 2,
+    borderColor: '#9FA7B3',
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
   },
-  posterHint: { fontSize: typography.fontSize.sm, color: colors.text.tertiary },
   cta: {},
 });
 

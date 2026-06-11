@@ -23,6 +23,7 @@ module.exports = {
         'apple-mail': '#F1F3F6',
         'hidden-lines': '#E0E4EB',
         'neutral-600': '#5A5A5A',
+        'neutral-700': '#3A3A3A',
       },
       fontFamily: {
         sans: ['System'],
