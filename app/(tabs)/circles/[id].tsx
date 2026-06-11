@@ -210,7 +210,7 @@ export default function CircleDetailScreen() {
         <View style={styles.body}>
           <Text style={styles.name}>{circle.name}</Text>
           <Text style={styles.meta}>
-            {circle.members_count.toLocaleString('de-DE')} members{'  ·  '}
+            {circle.members_count.toLocaleString('de-DE')} members{' · '}
             {circle.activities_count} activities
           </Text>
           {circle.description && (
@@ -251,7 +251,7 @@ export default function CircleDetailScreen() {
               onPress={() => router.push(`/messages/circle/${id}`)}
               accessibilityRole="button"
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
+              <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.white} />
               <Text style={styles.conversationText}>Join conversation</Text>
             </TouchableOpacity>
           )}
@@ -358,8 +358,10 @@ async function fetchCircleMembersPreview(circleId: string, limit: number): Promi
     .filter((p): p is Profile => p !== null);
 }
 
-const AVATAR_SIZE = 88;
-const COVER_HEIGHT = 190;
+// Figma Circle_detail page 6274:7785: 160px cover, 90px avatar with a
+// 2px white ring, content inset 16.
+const AVATAR_SIZE = 90;
+const COVER_HEIGHT = 160;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
@@ -386,7 +388,7 @@ const styles = StyleSheet.create({
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 4,
+    borderWidth: 2,
     borderColor: colors.white,
     backgroundColor: colors.surface,
   },
@@ -399,22 +401,25 @@ const styles = StyleSheet.create({
 
   name: {
     fontFamily: typography.fontFamily.display,
-    fontSize: 24,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.chocolate,
   },
   meta: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 14,
-    color: colors.text.tertiary,
-    marginTop: spacing.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.neutral600,
+    marginTop: spacing.sm,
   },
   description: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 15,
-    color: colors.text.secondary,
-    lineHeight: 22,
-    marginTop: spacing.sm,
+    fontSize: 14,
+    // Figma one-off body grey on this page (between neutral-600 and 500).
+    color: '#666560',
+    lineHeight: 18,
+    maxWidth: 347,
+    marginTop: spacing.md,
   },
 
   membershipButton: {
@@ -422,49 +427,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    height: 50,
+    height: 49,
     borderRadius: radius.full,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.neutral.hiddenLines,
+    backgroundColor: colors.white,
     marginTop: spacing.lg,
   },
-  membershipButtonJoin: { backgroundColor: colors.black, borderColor: colors.black },
+  membershipButtonJoin: {
+    backgroundColor: colors.neutral.chocolate,
+    borderColor: colors.neutral.chocolate,
+  },
   membershipText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 16,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.chocolate,
   },
-  membershipTextJoin: { color: colors.white },
+  membershipTextJoin: { color: '#FFFEFB' },
 
   conversationButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    height: 50,
+    height: 49,
     borderRadius: radius.full,
-    backgroundColor: colors.black,
-    marginTop: spacing.md,
+    backgroundColor: colors.neutral.chocolate,
+    marginTop: spacing.sm,
   },
   conversationText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 16,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
     color: colors.white,
   },
 
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
+    backgroundColor: colors.neutral.divider,
     marginVertical: spacing.lg,
   },
 
   sectionHeading: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 20,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
     marginBottom: spacing.md,
   },
 
@@ -477,19 +486,19 @@ const styles = StyleSheet.create({
 
   membersRow: { flexDirection: 'row', alignItems: 'center' },
   memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
     borderWidth: 2,
     borderColor: colors.white,
     backgroundColor: colors.surface,
   },
-  memberAvatarOverlap: { marginLeft: -12 },
+  memberAvatarOverlap: { marginLeft: -10 },
   memberMore: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 15,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: typography.fontWeight.regular,
+    color: colors.neutral.chocolate,
     marginLeft: spacing.md,
   },
 });
