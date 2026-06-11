@@ -132,6 +132,26 @@ Why (historical): `app.json` only set `photosPermission` for image-picker. The N
 Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
 spec when scheduled.
 
+### Create Activity screen — Figma audit (node `6277:10002`, fileKey `HIVq6Vaymj01dZ37AvwCUF`)
+Why: the user supplied the design-system + create-flow node IDs on 2026-06-11. The create form (app/(tabs)/create/index.tsx) was built before the frame was available — audit topic chips (now Figma-correct via Tag), Title/Sub Title/Describe fields, Cover image + Media pickers, Date/Time/Location/Price/Spots rows with leading icons, "Who can see this?" radio rows (Anyone / Invite only by link), Preview + Publish buttons.
+Done when:
+- [ ] get_design_context fetched; per-element deltas fixed; commit `style(create): match Figma 6277:10002`
+
+### Circle detail — Organizer section (Figma 6274:7785, lower block)
+Why: frame shows a 90px-avatar Organizer card (name + SealCheck badge, role/location Medium 13, Followers/Circles/Activities stat row, Follow + Contact 45px buttons). Needs the creator profile joined into the circle query + follow/contact wiring.
+Done when:
+- [ ] Organizer block on circle detail wired to circles.creator_id
+
+### Circle detail — "From the community" posts (Figma 6274:7785, middle block)
+Why: frame shows appleMail post cards (title Semibold 17, body 14, pin+timestamp meta 13 #949494, Share/Save 40px outline buttons, "Get in touch" 40px chocolate CTA). NO posts table exists — needs schema + service + UI. Product call on scope before building.
+Done when:
+- [ ] Schema decision, then build, or explicitly drop from v1
+
+### Chat header bars — Figma design-system `6298:6104`/`6298:6173` (Tabbar_Title Side)
+Why: unverified against the masters (circle chat header with avatar + "N online"; share/bookmark detail header). Likely close — quick audit.
+Done when:
+- [ ] Compared + deltas fixed
+
 ### ~~Feed header — greeting + circular search button (Figma 4045:8204)~~ — shipped 2026-06-11
 Commit `5097fa3`. SearchFilterBar `greeting` prop: pin + serif greeting (city underlined) + 45px circular search button, expands to input + Cancel. Feed/Map/Mural inherit via FeedHeader; Circles keeps the pill. See ✓ Shipped.
 
