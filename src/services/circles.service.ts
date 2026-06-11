@@ -66,6 +66,17 @@ export async function updateCircle(id: string, updates: CircleUpdate) {
   return data;
 }
 
+/**
+ * Delete a circle. Creator-only by RLS (`circles_delete_own`,
+ * 20260612000000). FKs handle the fallout: members / follows / chat
+ * messages cascade away, and events keep existing with circle_id = NULL
+ * (they become independent activities — core design decision).
+ */
+export async function deleteCircle(id: string) {
+  const { error } = await supabase.from('circles').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function joinCircle(userId: string, circleId: string, role: CircleRole = 'member') {
   const { error } = await supabase
     .from('circle_members')
@@ -79,6 +90,21 @@ export async function leaveCircle(userId: string, circleId: string) {
     .delete()
     .eq('user_id', userId)
     .eq('circle_id', circleId);
+  if (error) throw error;
+}
+
+/**
+ * Remove (kick) a member from a circle. Same row delete as leaveCircle but
+ * issued by the circle creator against someone else's membership — allowed
+ * by RLS policy `circle_members_creator_delete` (20260612000000). Without
+ * that policy applied the delete silently matches zero rows.
+ */
+export async function removeMember(circleId: string, userId: string) {
+  const { error } = await supabase
+    .from('circle_members')
+    .delete()
+    .eq('circle_id', circleId)
+    .eq('user_id', userId);
   if (error) throw error;
 }
 

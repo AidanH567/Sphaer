@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CircleActivityCard } from '@/components/circles/CircleActivityCard';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { colors, typography, spacing, radius } from '@/constants/theme';
@@ -14,7 +15,9 @@ import {
   isMember as isCircleMember,
   joinCircle,
   leaveCircle,
+  deleteCircle,
   getCircleMembers,
+  removeMember,
 } from '@/services/circles.service';
 import { shareCircle } from '@/services/share.service';
 import {
@@ -43,10 +46,30 @@ export default function CircleDetailScreen() {
   const [membersPreview, setMembersPreview] = useState<Profile[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // Creator-only delete confirm (navBar trash button).
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  // Creator-only member kick confirm — set when the creator long-presses a
+  // row in the Members sheet. null means no confirm pending.
+  const [kickTarget, setKickTarget] = useState<Profile | null>(null);
+
   // Full Members popup state — lazy-loaded when first opened
   const [membersSheetVisible, setMembersSheetVisible] = useState(false);
   const [allMembers, setAllMembers] = useState<Profile[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+
+  // Refetch on re-focus (not on the initial mount — useCircle already
+  // fetched) so changes saved on the edit screen show immediately after
+  // router.back(). Mirrors the event detail pattern.
+  const hasFocusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnce.current) {
+        hasFocusedOnce.current = true;
+        return;
+      }
+      refetch();
+    }, [refetch])
+  );
 
   function openMembersSheet() {
     if (!id) return;
@@ -85,6 +108,10 @@ export default function CircleDetailScreen() {
   const [organizerActivities, setOrganizerActivities] = useState(0);
   const [followingOrganizer, setFollowingOrganizer] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
+  // Refs mirror the follow state so rapid taps read the *current* values —
+  // React state lags a frame, which let double-taps fire duplicate writes.
+  const followingOrganizerRef = useRef(false);
+  const followBusyRef = useRef(false);
 
   useEffect(() => {
     const creatorId = circle?.creator_id;
@@ -93,16 +120,24 @@ export default function CircleDetailScreen() {
 
     Promise.all([
       getProfile(creatorId).catch(() => null),
+      // Count queries get rejection fallbacks (0) so one network failure
+      // can't reject the whole batch and blank the organizer block.
       supabase
         .from('circle_members')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', creatorId)
-        .then(({ count }) => count ?? 0),
+        .then(
+          ({ count }) => count ?? 0,
+          () => 0
+        ),
       supabase
         .from('events')
         .select('*', { count: 'exact', head: true })
         .eq('creator_id', creatorId)
-        .then(({ count }) => count ?? 0),
+        .then(
+          ({ count }) => count ?? 0,
+          () => 0
+        ),
       user && user.id !== creatorId
         ? isFollowingUser(user.id, creatorId).catch(() => false)
         : Promise.resolve(false),
@@ -112,6 +147,7 @@ export default function CircleDetailScreen() {
       setOrganizerCircles(circlesCount);
       setOrganizerActivities(activitiesCount);
       setFollowingOrganizer(following);
+      followingOrganizerRef.current = following;
     });
 
     return () => {
@@ -125,23 +161,34 @@ export default function CircleDetailScreen() {
       Alert.alert('Sign in required', 'Please sign in to follow artists.');
       return;
     }
+    // Synchronous entry guard — the `disabled` prop only updates after a
+    // re-render, so two taps in the same frame both got through.
+    if (followBusyRef.current) return;
+    followBusyRef.current = true;
     setFollowBusy(true);
     try {
-      if (followingOrganizer) {
-        await unfollowUser(user.id, organizer.id);
-        setFollowingOrganizer(false);
-      } else {
+      // Toggle off the current value (ref), never the render-time closure,
+      // so rapid taps can't desync local state from the server.
+      const next = !followingOrganizerRef.current;
+      if (next) {
         await followUser(user.id, organizer.id);
-        setFollowingOrganizer(true);
+      } else {
+        await unfollowUser(user.id, organizer.id);
       }
+      followingOrganizerRef.current = next;
+      setFollowingOrganizer(next);
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Try again.');
     } finally {
+      followBusyRef.current = false;
       setFollowBusy(false);
     }
-  }, [organizer, user, followingOrganizer]);
+  }, [organizer, user]);
 
   const handleMembership = useCallback(async () => {
+    // Double-tap guard at function entry — the button's `disabled` prop only
+    // kicks in after the next render, so a fast second tap slipped through.
+    if (busy || memberStatus === 'unknown') return;
     if (!user || !circle) {
       Alert.alert('Sign in required', 'Please sign in to join circles.');
       return;
@@ -163,7 +210,7 @@ export default function CircleDetailScreen() {
     } finally {
       setBusy(false);
     }
-  }, [user, circle, memberStatus]);
+  }, [user, circle, memberStatus, busy]);
 
   if (isLoading) {
     return (
@@ -236,6 +283,7 @@ export default function CircleDetailScreen() {
   }
 
   const isMemberFlag = memberStatus === 'in';
+  const isCreator = user?.id === circle.creator_id;
   const hiddenMembers = Math.max(0, circle.members_count - membersPreview.length);
 
   return (
@@ -249,14 +297,38 @@ export default function CircleDetailScreen() {
         >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => circle && shareCircle(circle).catch(() => {})}
-          accessibilityRole="button"
-          accessibilityLabel="Share circle"
-        >
-          <Ionicons name="share-outline" size={22} color={colors.text.primary} />
-        </TouchableOpacity>
+        <View style={styles.navRight}>
+          {isCreator && (
+            <TouchableOpacity
+              style={styles.navButton}
+              // Cast: typed-routes d.ts regenerates on the next `expo start`;
+              // the cast keeps tsc green until the new route is picked up.
+              onPress={() => router.push(`/circles/edit/${circle.id}` as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="Edit circle"
+            >
+              <Ionicons name="create-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
+          {isCreator && (
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setDeleteConfirmVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Delete circle"
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => circle && shareCircle(circle).catch(() => {})}
+            accessibilityRole="button"
+            accessibilityLabel="Share circle"
+          >
+            <Ionicons name="share-outline" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -480,6 +552,52 @@ export default function CircleDetailScreen() {
         isLoading={membersLoading}
         emptyMessage="No members yet — be the first to join."
         onClose={() => setMembersSheetVisible(false)}
+        onLongPressUser={
+          isCreator
+            ? (profile) => {
+                // The creator can't kick themselves out of their own circle.
+                if (profile.id === user?.id) return;
+                setKickTarget(profile);
+              }
+            : undefined
+        }
+        userLongPressHint="Long-press to remove from the circle"
+      />
+
+      {/* Creator-only member kick confirm — renders on top of the Members
+          sheet, mirroring the profile screen's long-press unfollow flow. */}
+      <ConfirmSheet
+        visible={kickTarget !== null}
+        title={`Remove ${kickTarget?.display_name ?? 'this member'} from the circle?`}
+        message="They'll lose access to the circle chat. They can rejoin anytime."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={async () => {
+          if (!kickTarget || !circle) return;
+          const target = kickTarget;
+          await removeMember(circle.id, target.id);
+          setAllMembers((prev) => prev.filter((p) => p.id !== target.id));
+          setMembersPreview((prev) => prev.filter((p) => p.id !== target.id));
+          setKickTarget(null);
+          refetch(); // refresh members_count in the header + sheet subtitle
+        }}
+        onClose={() => setKickTarget(null)}
+      />
+
+      {/* Creator-only delete confirm. On success we replace to the circles
+          tab — the sheet unmounts with the route, matching event detail. */}
+      <ConfirmSheet
+        visible={deleteConfirmVisible}
+        title="Delete this circle?"
+        message="Members, follows, and its chat will be removed."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={async () => {
+          if (!circle) return;
+          await deleteCircle(circle.id);
+          router.replace('/(tabs)/circles');
+        }}
+        onClose={() => setDeleteConfirmVisible(false)}
       />
     </SafeAreaView>
   );
@@ -528,6 +646,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   navButton: { padding: spacing.sm },
+  navRight: { flexDirection: 'row', alignItems: 'center' },
 
   scroll: { paddingBottom: 110 },
 

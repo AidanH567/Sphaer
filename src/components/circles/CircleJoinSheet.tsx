@@ -96,13 +96,24 @@ export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetPr
   }
 
   // Dwell on the welcome card, then route. Closing the sheet (backdrop)
-  // mid-dwell cancels the navigation — the cleanup clears the timer.
+  // mid-dwell must cancel the navigation: that flips `circle` to null while
+  // `welcome` stays true, so the timer has to be keyed on `circle` too —
+  // the dep change runs the cleanup and clears the timer before it fires.
+  // (Previously it was keyed on `welcome` alone, so a dismissed sheet still
+  // navigated 2.6s later.)
   useEffect(() => {
-    if (!welcome || !shown) return;
-    const timer = setTimeout(() => goToCircle(shown.id), 2600);
+    if (!welcome || !circle) return;
+    const target = shown;
+    if (!target) return;
+    const timer = setTimeout(() => {
+      // Defensive guard inside the callback: never navigate without a
+      // target even if state was torn down while the timer was pending.
+      if (!target.id) return;
+      goToCircle(target.id);
+    }, 2600);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- timer keyed on welcome only
-  }, [welcome]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on welcome + open state + shown id; goToCircle is stable per render
+  }, [welcome, circle, shown?.id]);
 
   async function handleJoin() {
     if (!shown || busy) return;

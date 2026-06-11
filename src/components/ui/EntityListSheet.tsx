@@ -33,12 +33,16 @@ interface UserListProps extends BaseProps {
   type: 'user';
   items: Profile[];
   /**
-   * Optional long-press handler — surfaces an unfollow flow on the row.
-   * Caller is expected to confirm before actually unfollowing. Only meaningful
-   * for "Following" lists; "Followers" can't be unfollowed (they're the other
-   * direction of the relationship).
+   * Optional long-press handler — surfaces a row-level action: unfollow on
+   * the profile "Following" sheet, member removal on the circle Members
+   * sheet. Caller is expected to confirm before actually acting.
    */
   onLongPressUser?: (profile: Profile) => void;
+  /**
+   * Accessibility hint announced on rows when onLongPressUser is set.
+   * Defaults to the unfollow wording used by the Following sheet.
+   */
+  userLongPressHint?: string;
 }
 
 interface CircleListProps extends BaseProps {
@@ -180,6 +184,7 @@ export function EntityListSheet(props: EntityListSheetProps) {
           onLongPress={
             props.onLongPressUser ? () => props.onLongPressUser?.(u) : undefined
           }
+          longPressHint={props.userLongPressHint}
           showDivider={index < filteredItems.length - 1}
         />
       );
@@ -356,11 +361,13 @@ function UserRow({
   profile,
   onPress,
   onLongPress,
+  longPressHint,
   showDivider,
 }: {
   profile: Profile;
   onPress: () => void;
   onLongPress?: () => void;
+  longPressHint?: string;
   showDivider: boolean;
 }) {
   const initials = getInitials(profile.display_name, profile.username);
@@ -374,7 +381,7 @@ function UserRow({
       delayLongPress={400}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityHint={onLongPress ? 'Long-press to unfollow' : undefined}
+      accessibilityHint={onLongPress ? longPressHint ?? 'Long-press to unfollow' : undefined}
     >
       <View style={styles.row}>
         <Avatar uri={profile.avatar_url} initials={initials} />

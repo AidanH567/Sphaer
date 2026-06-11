@@ -106,10 +106,22 @@ export default function CreateCircleScreen() {
 
       // Cover uploads AFTER the insert and lands via updateCircle — keeps
       // the insert payload simple and mirrors how the detail page edits
-      // covers later. Any UploadValidationError bubbles to the catch below.
+      // covers later. The circle row already exists at this point, so a
+      // cover failure must NOT strand the user on the form: tell them and
+      // take them to their new circle, where the Edit screen can retry.
       if (coverUri) {
-        const coverUrl = await uploadCircleCover(user.id, circleId, coverUri);
-        await updateCircle(circleId, { cover_url: coverUrl });
+        try {
+          const coverUrl = await uploadCircleCover(user.id, circleId, coverUri);
+          await updateCircle(circleId, { cover_url: coverUrl });
+        } catch (coverError: unknown) {
+          console.error('[CreateCircle] cover upload failed:', coverError);
+          Alert.alert(
+            'Circle created — cover upload failed',
+            'Your circle is live without its cover image. You can add it again from the circle’s Edit screen.'
+          );
+          router.replace(`/circles/${circleId}`);
+          return;
+        }
       }
 
       // Trigger has already added the creator as admin. Navigate straight
