@@ -69,6 +69,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.navButton}
+          accessibilityRole="button"
           accessibilityLabel="Back"
         >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
@@ -78,6 +79,7 @@ export default function NotificationsScreen() {
           <TouchableOpacity
             onPress={markAllRead}
             style={styles.markAllButton}
+            accessibilityRole="button"
             accessibilityLabel="Mark all as read"
           >
             <Text style={styles.markAllText}>Mark all read</Text>
@@ -147,6 +149,7 @@ function NotificationRow({
       style={[styles.row, !item.is_read && styles.rowUnread]}
       onPress={onPress}
       activeOpacity={0.7}
+      accessibilityRole="button"
     >
       <View style={[styles.iconWrap, { backgroundColor: meta.tint }]}>
         <Ionicons name={meta.icon} size={18} color={meta.iconColor} />

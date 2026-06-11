@@ -54,7 +54,13 @@ function ConversationRowImpl({ conversation, onPress }: ConversationRowProps) {
   const isUnread = typeof unreadCount === 'number' && unreadCount > 0;
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.row}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Open conversation with ${name}`}
+    >
       {/* Avatar */}
       <View style={[styles.avatarWrap, hasStoryRing && styles.avatarRing]}>
         <Image source={{ uri: avatar }} style={styles.avatar} />

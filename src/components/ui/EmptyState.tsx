@@ -58,7 +58,12 @@ export function EmptyState({
         {body}
       </Text>
       {cta && (
-        <TouchableOpacity style={styles.cta} onPress={cta.onPress} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.cta}
+          onPress={cta.onPress}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
           <Text style={styles.ctaLabel}>{cta.label}</Text>
         </TouchableOpacity>
       )}

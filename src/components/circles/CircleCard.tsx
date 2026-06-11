@@ -31,7 +31,13 @@ const META = colors.neutral.neutral400; // neutral/neutral-400 — activity / me
  */
 function CircleCardImpl({ circle, onPress }: CircleCardProps) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${circle.name}`}
+    >
       {circle.avatar_url ? (
         <Image source={{ uri: circle.avatar_url }} style={styles.image} />
       ) : (

@@ -78,7 +78,12 @@ export default function WelcomeScreen() {
   }, []);
 
   return (
-    <Pressable style={styles.container} onPress={continueToOnboarding}>
+    <Pressable
+      style={styles.container}
+      onPress={continueToOnboarding}
+      accessibilityRole="button"
+      accessibilityHint="Continues to onboarding"
+    >
       <Animated.Text
         style={[styles.welcome, { opacity: fade }]}
         accessibilityRole="header"

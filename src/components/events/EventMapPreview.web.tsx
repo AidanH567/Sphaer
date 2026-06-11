@@ -44,6 +44,7 @@ export function EventMapPreview({ lat, lng, onOpenInMaps, height = 180 }: Props)
         style={styles.openPill}
         onPress={onOpenInMaps}
         activeOpacity={0.85}
+        accessibilityRole="button"
         accessibilityLabel="Open in Maps"
       >
         <Ionicons name="open-outline" size={14} color={colors.white} />

@@ -128,7 +128,11 @@ export function ConfirmSheet({
       statusBarTranslucent
       onRequestClose={handleDismiss}
     >
-      <TouchableWithoutFeedback onPress={handleDismiss}>
+      <TouchableWithoutFeedback
+        onPress={handleDismiss}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+      >
         <Animated.View
           style={[
             styles.backdrop,
@@ -165,6 +169,8 @@ export function ConfirmSheet({
             onPress={handleConfirmPress}
             activeOpacity={0.85}
             disabled={isConfirming}
+            accessibilityRole="button"
+            accessibilityLabel={confirmLabel}
           >
             {isConfirming ? (
               <ActivityIndicator color={colors.white} />
@@ -178,6 +184,7 @@ export function ConfirmSheet({
             onPress={handleDismiss}
             activeOpacity={0.7}
             disabled={isConfirming}
+            accessibilityRole="button"
           >
             <Text style={styles.cancelText}>{cancelLabel}</Text>
           </TouchableOpacity>

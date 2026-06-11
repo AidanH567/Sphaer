@@ -88,6 +88,7 @@ export default function IntroScreen() {
           <TouchableOpacity
             onPress={finish}
             style={styles.skipButton}
+            accessibilityRole="button"
             accessibilityLabel="Skip intro"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >

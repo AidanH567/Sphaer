@@ -168,6 +168,8 @@ export function AddressAutocompleteInput({
               }
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear address"
           >
             <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
           </TouchableOpacity>
@@ -182,6 +184,7 @@ export function AddressAutocompleteInput({
               style={styles.suggestion}
               onPress={() => handlePickSuggestion(s)}
               activeOpacity={0.7}
+              accessibilityRole="button"
             >
               <Ionicons name="location" size={16} color={colors.text.secondary} />
               <View style={styles.suggestionText}>

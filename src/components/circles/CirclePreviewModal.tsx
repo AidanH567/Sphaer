@@ -54,7 +54,12 @@ export function CirclePreviewModal({
     <Modal visible={visible} onClose={onClose}>
       <View style={styles.content}>
         {/* Large circular avatar */}
-        <TouchableOpacity onPress={handleViewCircle} activeOpacity={0.9}>
+        <TouchableOpacity
+          onPress={handleViewCircle}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${circle.name}`}
+        >
           {circle.avatar_url ? (
             <Image source={{ uri: circle.avatar_url }} style={styles.avatar} />
           ) : (
@@ -65,7 +70,7 @@ export function CirclePreviewModal({
         </TouchableOpacity>
 
         {/* Name */}
-        <TouchableOpacity onPress={handleViewCircle}>
+        <TouchableOpacity onPress={handleViewCircle} accessibilityRole="button">
           <Text style={styles.name}>{circle.name}</Text>
         </TouchableOpacity>
 
@@ -85,6 +90,9 @@ export function CirclePreviewModal({
           onPress={handleToggleMembership}
           disabled={isLoading}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={isMember ? 'Leave circle' : 'Join circle'}
+          accessibilityState={{ selected: isMember, busy: isLoading }}
         >
           <Text style={[styles.joinButtonText, isMember && styles.leaveButtonText]}>
             {isLoading ? '…' : isMember ? 'Leave circle' : 'Join circle'}

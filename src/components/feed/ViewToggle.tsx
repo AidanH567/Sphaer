@@ -31,6 +31,8 @@ export function ViewToggle({ activeView, onViewChange }: ViewToggleProps) {
             onPress={() => onViewChange(key)}
             style={[styles.pill, active && styles.pillActive]}
             activeOpacity={0.75}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
           >
             <Ionicons
               name={icon}

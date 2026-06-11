@@ -289,13 +289,11 @@ Three components that render inside FlatLists were re-rendering on every parent 
 - [ ] Profile screen subtree memoisation (`ProfileCompletionCard`, `SettingsSection`)
 - [ ] Circle cards memoize their handlers via `useCallback`
 
-### Accessibility audit (concrete numbers)
-Why: 325 TouchableOpacity/Pressable instances in the app vs only ~14 `accessibilityLabel` props. VoiceOver users can't navigate.
-Done when:
-- [ ] Per-screen sweep PR — add `accessibilityLabel` to every interactive element
-- [ ] Icon-only buttons get descriptive labels ("Refresh mural", "Share event", "Open ticket")
-- [ ] Image-as-button (poster tap, avatar tap) gets `accessibilityRole="button"` + label
-- [ ] Contrast spot-check on `text.secondary` (#767779) on white — verify WCAG AA pass
+### ~~Accessibility audit (concrete numbers)~~ — swept 2026-06-11
+52 files: +77 `accessibilityLabel`, +146 `accessibilityRole`, +14 `accessibilityState`, +5 hints, +1 value. Icon-only buttons labeled action-first ("Go back", "Save event", "Clear search"); stateful toggles (bookmark/follow/join/chips/tabs) announce state; entity cards announce their target ("Open {event}"); BottomNav tabs named (were silent); Modal overlay de-grouped via `accessible={false}`; spinner-buttons keep their names while busy. Props-only — no behavior/style changes; adversarially verified (one redundant label removed).
+
+### Contrast: `colors.neutral.meta` #767779 on white measures 4.48:1 — fails WCAG AA by 0.02
+Found by the a11y sweep's spot-check. It's a Figma token (Neutral/meta), so changing it deviates from the design source of truth. Decide with the designer: darken to ~#727274 (passes 4.5:1) or accept (passes AA-large at 3:1; most usages are ≥large or decorative metadata). Code untouched.
 
 ### ~~Document the eslint suppressions~~ — shipped 2026-06-09
 All 4 suppressions in MuralCanvas (×3) + update-password (×1) now carry a one- to three-line comment explaining the omitted dep (Reanimated shared values, wheel handler reading .value at fire time, run-once-on-mount avoidance of infinite loop).

@@ -263,6 +263,8 @@ export function ProfileForm({
             style={styles.galleryRemove}
             onPress={() => removeGalleryImage(img)}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Remove gallery image"
           >
             <Ionicons name="close" size={14} color={colors.white} />
           </TouchableOpacity>
@@ -298,7 +300,13 @@ export function ProfileForm({
   return (
     <View style={styles.root}>
       {/* ── Avatar ─────────────────────────────────────── */}
-      <TouchableOpacity style={styles.avatarPicker} onPress={pickAvatar} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.avatarPicker}
+        onPress={pickAvatar}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={values.avatar_url ? 'Change profile photo' : 'Add profile photo'}
+      >
         {values.avatar_url ? (
           <View>
             <Image source={{ uri: values.avatar_url }} style={styles.avatar} />
@@ -397,6 +405,8 @@ export function ProfileForm({
             <TouchableOpacity
               onPress={addExperience}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Add experience"
             >
               <Ionicons name="add-circle-outline" size={26} color={colors.black} />
             </TouchableOpacity>
@@ -440,6 +450,8 @@ export function ProfileForm({
                 style={[styles.galleryTile, styles.galleryAddTile]}
                 onPress={pickGalleryImages}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Add gallery images"
               >
                 <Ionicons name="add" size={28} color={colors.text.tertiary} />
               </TouchableOpacity>
@@ -478,6 +490,8 @@ function ExperienceEditor({ experience, onChange, onRemove }: ExperienceEditorPr
         <TouchableOpacity
           onPress={onRemove}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Remove experience"
         >
           <Ionicons name="trash-outline" size={18} color={colors.badge.red} />
         </TouchableOpacity>
@@ -522,6 +536,8 @@ function ExperienceEditor({ experience, onChange, onRemove }: ExperienceEditorPr
         style={styles.presentToggleRow}
         onPress={() => onChange({ end_date: isPresent ? '' : null })}
         activeOpacity={0.7}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isPresent }}
       >
         <Ionicons
           name={isPresent ? 'checkbox' : 'square-outline'}

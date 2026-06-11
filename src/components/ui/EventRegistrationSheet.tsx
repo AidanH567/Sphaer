@@ -173,7 +173,11 @@ export function EventRegistrationSheet({
     >
       <View style={styles.root}>
         {/* Dimmed backdrop — tap to dismiss */}
-        <TouchableWithoutFeedback onPress={onClose}>
+        <TouchableWithoutFeedback
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+        >
           <Animated.View
             style={[
               styles.backdrop,
@@ -198,6 +202,8 @@ export function EventRegistrationSheet({
               style={styles.closeButton}
               onPress={onClose}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
             >
               <Ionicons name="close" size={26} color={CHOCOLATE} />
             </TouchableOpacity>
@@ -217,6 +223,8 @@ export function EventRegistrationSheet({
                 onPress={() => setQuantity((q) => Math.max(1, q - 1))}
                 disabled={quantity <= 1}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease ticket quantity"
               >
                 <Ionicons name="remove" size={20} color={quantity <= 1 ? GREY : CHOCOLATE} />
               </TouchableOpacity>
@@ -227,6 +235,8 @@ export function EventRegistrationSheet({
                 style={styles.qtyButton}
                 onPress={() => setQuantity((q) => q + 1)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Increase ticket quantity"
               >
                 <Ionicons name="add" size={20} color={CHOCOLATE} />
               </TouchableOpacity>
@@ -282,6 +292,8 @@ export function EventRegistrationSheet({
               onPress={handleRegister}
               activeOpacity={0.85}
               disabled={isRegistering}
+              accessibilityRole="button"
+              accessibilityLabel="Register"
             >
               {isRegistering ? (
                 <ActivityIndicator color="#FFF" />

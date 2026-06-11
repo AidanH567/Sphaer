@@ -100,7 +100,12 @@ export default function CircleDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -115,7 +120,12 @@ export default function CircleDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -134,7 +144,12 @@ export default function CircleDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -157,12 +172,18 @@ export default function CircleDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.navButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => circle && shareCircle(circle).catch(() => {})}
+          accessibilityRole="button"
           accessibilityLabel="Share circle"
         >
           <Ionicons name="share-outline" size={22} color={colors.text.primary} />
@@ -201,6 +222,9 @@ export default function CircleDetailScreen() {
             onPress={handleMembership}
             activeOpacity={0.85}
             disabled={busy || memberStatus === 'unknown'}
+            accessibilityRole="button"
+            accessibilityLabel={isMemberFlag ? 'Leave circle' : 'Join circle'}
+            accessibilityState={{ selected: isMemberFlag }}
           >
             {busy ? (
               <ActivityIndicator color={isMemberFlag ? colors.black : colors.white} />
@@ -225,6 +249,7 @@ export default function CircleDetailScreen() {
               style={styles.conversationButton}
               activeOpacity={0.85}
               onPress={() => router.push(`/messages/circle/${id}`)}
+              accessibilityRole="button"
             >
               <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.white} />
               <Text style={styles.conversationText}>Join conversation</Text>
@@ -262,13 +287,18 @@ export default function CircleDetailScreen() {
           <View style={styles.divider} />
 
           {/* Members preview — heading + avatar row both open the full list */}
-          <TouchableOpacity onPress={openMembersSheet} activeOpacity={0.6}>
+          <TouchableOpacity onPress={openMembersSheet} activeOpacity={0.6} accessibilityRole="button">
             <Text style={styles.sectionHeading}>Members</Text>
           </TouchableOpacity>
           {membersPreview.length === 0 ? (
             <Text style={styles.emptyHint}>No members yet.</Text>
           ) : (
-            <TouchableOpacity onPress={openMembersSheet} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={openMembersSheet}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="View all members"
+            >
               <View style={styles.membersRow}>
                 {membersPreview.map((member, i) => (
                   <Image

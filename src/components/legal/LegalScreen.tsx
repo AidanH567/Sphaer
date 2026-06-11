@@ -39,6 +39,7 @@ export function LegalScreen({ title, lastUpdated, intro, sections }: LegalScreen
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.navButton}
+          accessibilityRole="button"
           accessibilityLabel="Back"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >

@@ -182,7 +182,12 @@ export default function UserProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.navButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         {displayProfile && (
@@ -194,6 +199,7 @@ export default function UserProfileScreen() {
               }).catch(() => {})
             }
             style={styles.navButton}
+            accessibilityRole="button"
             accessibilityLabel="Share profile"
           >
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />

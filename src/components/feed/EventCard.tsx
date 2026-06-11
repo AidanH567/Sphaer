@@ -54,6 +54,8 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
       style={styles.card}
       onPress={() => router.push(`/event/${event.id}`)}
       activeOpacity={0.92}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${event.title}`}
     >
       {/* Left — text area */}
       <View style={styles.content}>
@@ -85,6 +87,8 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
             onPress={onSave}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save event'}
           >
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}

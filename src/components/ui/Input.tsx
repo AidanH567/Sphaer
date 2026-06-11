@@ -16,6 +16,11 @@ interface InputProps extends TextInputProps {
   error?: string;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
+  /**
+   * Names the right-icon action for screen readers (the icon is otherwise
+   * unlabeled), e.g. "Show password" or "Clear text".
+   */
+  rightIconAccessibilityLabel?: string;
 }
 
 export function Input({
@@ -24,6 +29,7 @@ export function Input({
   error,
   rightIcon,
   onRightIconPress,
+  rightIconAccessibilityLabel,
   style,
   ...props
 }: InputProps) {
@@ -55,7 +61,12 @@ export function Input({
           {...props}
         />
         {rightIcon && (
-          <TouchableOpacity onPress={onRightIconPress} style={styles.rightIconButton}>
+          <TouchableOpacity
+            onPress={onRightIconPress}
+            style={styles.rightIconButton}
+            accessibilityRole="button"
+            accessibilityLabel={rightIconAccessibilityLabel}
+          >
             <Ionicons name={rightIcon} size={18} color={colors.text.tertiary} />
           </TouchableOpacity>
         )}

@@ -25,6 +25,15 @@ const NAV_ITEMS: NavItem[] = [
   { route: '/(tabs)/profile',  segment: 'profile'  },
 ];
 
+// Screen-reader names for the icon-only tab items.
+const TAB_LABELS: Record<string, string> = {
+  feed: 'Feed',
+  circles: 'Circles',
+  create: 'Create',
+  messages: 'Messages',
+  profile: 'Profile',
+};
+
 interface ProfileBits {
   avatarUrl?: string | null;
   displayName?: string | null;
@@ -161,6 +170,7 @@ export function BottomNav({ onCreatePress }: BottomNavProps) {
             }
             activeOpacity={0.7}
             accessibilityRole="button"
+            accessibilityLabel={TAB_LABELS[segment]}
             accessibilityState={{ selected: focused }}
           >
             {renderIcon(segment, focused, profileBits, totalUnread)}

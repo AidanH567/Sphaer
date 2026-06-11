@@ -112,6 +112,8 @@ export default function VerifyEmailScreen() {
           onPress={handleBackToLogin}
           style={styles.closeButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back to login"
         >
           <Ionicons name="close" size={24} color={CHOCOLATE} />
         </TouchableOpacity>
@@ -160,7 +162,11 @@ export default function VerifyEmailScreen() {
             <View style={styles.footer}>
               <Text style={styles.footerPrompt}>
                 Wrong email?{' '}
-                <Text style={styles.footerLink} onPress={handleBackToLogin}>
+                <Text
+                  style={styles.footerLink}
+                  onPress={handleBackToLogin}
+                  accessibilityRole="link"
+                >
                   Start over
                 </Text>
               </Text>

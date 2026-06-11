@@ -92,13 +92,20 @@ export default function ConversationScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         {partner && (
           <TouchableOpacity
             style={styles.partnerInfo}
             onPress={() => router.push(`/user/${partnerId}`)}
+            accessibilityRole="button"
+            accessibilityHint="Opens their profile"
           >
             <Avatar uri={partner.avatar_url} name={partner.display_name ?? ''} size={32} />
             <Text style={styles.partnerName}>{partner.display_name ?? partner.username}</Text>

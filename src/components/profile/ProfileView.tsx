@@ -128,6 +128,7 @@ export function ProfileView({
           style={styles.websiteRow}
           onPress={() => Linking.openURL(`https://${profile.website}`)}
           activeOpacity={0.7}
+          accessibilityRole="link"
         >
           <Ionicons name="link-outline" size={13} color={LINK} />
           <Text style={styles.website}>{profile.website}</Text>
@@ -153,6 +154,7 @@ export function ProfileView({
                     style={[styles.followButton, styles.savedButton, styles.ownActionItem]}
                     onPress={onSavedPress}
                     activeOpacity={0.85}
+                    accessibilityRole="button"
                     accessibilityLabel="View saved activities"
                   >
                     <Ionicons name="bookmark-outline" size={16} color={CHOCOLATE} />
@@ -164,6 +166,7 @@ export function ProfileView({
                     style={[styles.followButton, styles.savedButton, styles.ownActionItem]}
                     onPress={onTicketsPress}
                     activeOpacity={0.85}
+                    accessibilityRole="button"
                     accessibilityLabel="View tickets"
                   >
                     <Ionicons name="ticket-outline" size={16} color={CHOCOLATE} />
@@ -176,6 +179,7 @@ export function ProfileView({
               style={[styles.followButton, styles.editButton]}
               onPress={onEditPress}
               activeOpacity={0.85}
+              accessibilityRole="button"
             >
               <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
               <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
@@ -199,6 +203,8 @@ export function ProfileView({
               }}
               activeOpacity={0.85}
               disabled={followBusy}
+              accessibilityRole="button"
+              accessibilityState={{ selected: following }}
             >
               <Text style={[styles.followText, following && styles.followTextActive]}>
                 {following ? 'Following' : 'Follow'}
@@ -209,6 +215,7 @@ export function ProfileView({
                 style={[styles.followButton, styles.actionButton, styles.messageButton]}
                 onPress={onMessagePress}
                 activeOpacity={0.85}
+                accessibilityRole="button"
               >
                 <Ionicons name="chatbubble-outline" size={16} color={CHOCOLATE} />
                 <Text style={[styles.followText, styles.editText]}>Message</Text>
@@ -227,7 +234,12 @@ export function ProfileView({
               {profile.about}
             </Text>
             {profile.about.length > 200 && (
-              <TouchableOpacity onPress={() => setAboutExpanded((v) => !v)} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => setAboutExpanded((v) => !v)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={aboutExpanded ? 'Read less' : 'Read more'}
+              >
                 <Text style={styles.readMore}>
                   {aboutExpanded ? 'Read less' : 'Read more >'}
                 </Text>
@@ -400,7 +412,7 @@ function Stat({
   );
   if (!onPress) return body;
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button">
       {body}
     </TouchableOpacity>
   );

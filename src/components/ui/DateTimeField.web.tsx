@@ -70,6 +70,8 @@ export function DateTimeField({
             style={styles.clearButton}
             onPress={() => onChange(null)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear date"
           >
             <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>

@@ -203,6 +203,8 @@ export function SearchFilterBar({
                 <TouchableOpacity
                   onPress={() => onSearchChange('')}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
                 >
                   <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
                 </TouchableOpacity>
@@ -213,6 +215,7 @@ export function SearchFilterBar({
               style={styles.searchBar}
               onPress={activateSearch}
               activeOpacity={0.7}
+              accessibilityRole="button"
             >
               <Ionicons name="search-outline" size={22} color={colors.text.primary} />
               <Text style={styles.searchPlaceholder}>{searchPlaceholder}</Text>
@@ -224,6 +227,7 @@ export function SearchFilterBar({
               onPress={cancelSearch}
               style={styles.cancelButton}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
             >
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>

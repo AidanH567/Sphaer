@@ -37,6 +37,8 @@ export function MessageInput({ onSend, placeholder = 'Message…' }: MessageInpu
           style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
           onPress={handleSend}
           disabled={!text.trim()}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
         >
           <Ionicons name="arrow-up" size={18} color={colors.white} />
         </TouchableOpacity>

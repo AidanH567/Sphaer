@@ -96,7 +96,12 @@ export default function TicketDetailScreen() {
     return (
       <SafeAreaView style={styles.backdrop} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -122,7 +127,12 @@ export default function TicketDetailScreen() {
     return (
       <SafeAreaView style={styles.backdrop} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -142,7 +152,12 @@ export default function TicketDetailScreen() {
   return (
     <SafeAreaView style={styles.backdrop} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.navButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>Ticket</Text>
@@ -195,6 +210,7 @@ export default function TicketDetailScreen() {
             style={[styles.actionButton, styles.actionPrimary]}
             onPress={handleInviteFriends}
             activeOpacity={0.85}
+            accessibilityRole="button"
           >
             <Text style={styles.actionPrimaryText}>Invite Friends</Text>
           </TouchableOpacity>
@@ -203,6 +219,7 @@ export default function TicketDetailScreen() {
             style={[styles.actionButton, styles.actionOutline]}
             onPress={() => router.back()}
             activeOpacity={0.85}
+            accessibilityRole="button"
           >
             <Text style={styles.actionOutlineText}>Done</Text>
           </TouchableOpacity>

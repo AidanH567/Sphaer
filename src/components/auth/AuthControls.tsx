@@ -58,6 +58,8 @@ export function AuthField({ label, error, secureTextEntry, style, ...props }: Au
           <TouchableOpacity
             onPress={() => setRevealed((v) => !v)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
           >
             <Ionicons
               name={revealed ? 'eye-off-outline' : 'eye-outline'}
@@ -133,6 +135,8 @@ export function AuthPrimaryButton({
       onPress={onPress}
       disabled={disabled || isLoading}
       activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
       {isLoading ? (
         <ActivityIndicator color={colors.white} />
@@ -171,7 +175,12 @@ interface GoogleButtonProps {
 /** White rounded "Continue with Google" button with the brand G mark. */
 export function GoogleButton({ onPress }: GoogleButtonProps) {
   return (
-    <TouchableOpacity style={googleStyles.button} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={googleStyles.button}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+    >
       <Text style={googleStyles.label}>Continue with Google</Text>
       <Ionicons name="logo-google" size={24} color={GOOGLE_BLUE} />
     </TouchableOpacity>

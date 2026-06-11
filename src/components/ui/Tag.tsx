@@ -16,6 +16,8 @@ export function Tag({ label, selected = false, onPress, style }: TagProps) {
         onPress={onPress}
         activeOpacity={0.7}
         style={[styles.tag, selected && styles.tagSelected, style]}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
       >
         <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
       </TouchableOpacity>

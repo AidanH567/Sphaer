@@ -60,6 +60,8 @@ function ChatBubbleImpl({
           activeOpacity={isFailed ? 0.6 : 1}
           disabled={!isFailed}
           onPress={onRetry}
+          accessibilityRole={isFailed ? 'button' : undefined}
+          accessibilityHint={isFailed ? 'Tap to retry sending' : undefined}
         >
           <View
             style={[

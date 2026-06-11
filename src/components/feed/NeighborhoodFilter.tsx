@@ -73,6 +73,8 @@ export function NeighborhoodFilter({ value, onChange }: NeighborhoodFilterProps)
               setQuery('');
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Clear ${value} filter`}
           >
             <Ionicons name="close-circle" size={16} color={colors.white} />
           </TouchableOpacity>
@@ -106,6 +108,8 @@ export function NeighborhoodFilter({ value, onChange }: NeighborhoodFilterProps)
           <TouchableOpacity
             onPress={() => setQuery('')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
           >
             <Ionicons name="close-circle" size={16} color={colors.text.tertiary} />
           </TouchableOpacity>
@@ -129,6 +133,7 @@ export function NeighborhoodFilter({ value, onChange }: NeighborhoodFilterProps)
                 setFocused(false);
               }}
               activeOpacity={0.7}
+              accessibilityRole="button"
             >
               <Text style={styles.suggestionText}>{n}</Text>
             </TouchableOpacity>

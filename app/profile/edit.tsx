@@ -92,6 +92,8 @@ export default function EditProfileScreen() {
           onPress={() => router.back()}
           style={styles.navButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
         >
           <Ionicons name="close" size={24} color={INK} />
         </TouchableOpacity>

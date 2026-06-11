@@ -84,7 +84,12 @@ export default function EventDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -98,7 +103,12 @@ export default function EventDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -118,7 +128,12 @@ export default function EventDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -170,7 +185,12 @@ export default function EventDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header — back / share / bookmark */}
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.navButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.navButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.navRight}>
@@ -178,6 +198,7 @@ export default function EventDetailScreen() {
             <TouchableOpacity
               onPress={() => router.push(`/ticket/${id}`)}
               style={styles.navButton}
+              accessibilityRole="button"
               accessibilityLabel="View ticket"
             >
               <Ionicons name="ticket-outline" size={22} color={colors.text.primary} />
@@ -187,6 +208,7 @@ export default function EventDetailScreen() {
             <TouchableOpacity
               onPress={() => router.push(`/messages/event/${id}`)}
               style={styles.navButton}
+              accessibilityRole="button"
               accessibilityLabel="Open event chat"
             >
               <Ionicons name="chatbubble-outline" size={22} color={colors.text.primary} />
@@ -195,6 +217,7 @@ export default function EventDetailScreen() {
           <TouchableOpacity
             onPress={handleAddToCalendar}
             style={styles.navButton}
+            accessibilityRole="button"
             accessibilityLabel="Add to calendar"
           >
             <Ionicons name="calendar-outline" size={22} color={colors.text.primary} />
@@ -202,11 +225,17 @@ export default function EventDetailScreen() {
           <TouchableOpacity
             onPress={handleShare}
             style={styles.navButton}
+            accessibilityRole="button"
             accessibilityLabel="Share event"
           >
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleToggleSave} style={styles.navButton}>
+          <TouchableOpacity
+            onPress={handleToggleSave}
+            style={styles.navButton}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove from saved' : 'Save event'}
+          >
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={22}
@@ -245,6 +274,8 @@ export default function EventDetailScreen() {
               style={styles.artistTappable}
               onPress={() => router.push(`/user/${event.creator_id}`)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${event.creator?.display_name ?? 'host'}'s profile`}
             >
               <View style={styles.avatarWrap}>
                 <Avatar
@@ -269,6 +300,8 @@ export default function EventDetailScreen() {
               style={[styles.followButton, isFollowing && styles.followButtonActive]}
               onPress={() => setIsFollowing((v) => !v)}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isFollowing }}
             >
               <Text
                 style={[styles.followText, isFollowing && styles.followTextActive]}
@@ -293,7 +326,12 @@ export default function EventDetailScreen() {
               </Text>
             ))}
           </View>
-          <TouchableOpacity onPress={() => setAboutExpanded((v) => !v)} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => setAboutExpanded((v) => !v)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: aboutExpanded }}
+          >
             <Text style={styles.readMore}>
               {aboutExpanded ? 'Read less' : 'Read more >'}
             </Text>
@@ -350,6 +388,7 @@ export default function EventDetailScreen() {
           style={styles.bookButton}
           onPress={() => setRegistrationOpen(true)}
           activeOpacity={0.85}
+          accessibilityRole="button"
         >
           <Text style={styles.bookButtonText}>Get Booked</Text>
         </TouchableOpacity>

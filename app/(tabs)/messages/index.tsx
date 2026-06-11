@@ -202,6 +202,8 @@ export default function MessagesScreen() {
           style={styles.ctaCircular}
           onPress={() => console.log('[Messages] options')}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Open options"
         >
           <Ionicons name="ellipsis-horizontal" size={18} color={INK} />
         </TouchableOpacity>
@@ -210,6 +212,8 @@ export default function MessagesScreen() {
           style={[styles.ctaCircular, styles.ctaCircularDark]}
           onPress={() => console.log('[Messages] new conversation')}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Start new conversation"
         >
           <Ionicons name="add" size={18} color={CREAM} />
         </TouchableOpacity>
@@ -224,6 +228,8 @@ export default function MessagesScreen() {
               style={[styles.chip, activeFilter === f.key && styles.chipActive]}
               onPress={() => setActiveFilter(f.key)}
               activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeFilter === f.key }}
             >
               <Text
                 style={[
@@ -239,6 +245,8 @@ export default function MessagesScreen() {
             style={[styles.chip, styles.chipAdd]}
             onPress={() => console.log('[Messages] add filter')}
             activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Add filter"
           >
             <Ionicons name="add" size={18} color={META} />
           </TouchableOpacity>

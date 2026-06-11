@@ -107,6 +107,8 @@ export default function SignUpScreen() {
           onPress={() => router.back()}
           style={styles.closeButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
         >
           <Ionicons name="close" size={24} color={CHOCOLATE} />
         </TouchableOpacity>
@@ -165,7 +167,11 @@ export default function SignUpScreen() {
               <GoogleButton onPress={handleGoogle} />
               <Text style={styles.signinPrompt}>
                 Already have an account?{' '}
-                <Text style={styles.signinLink} onPress={() => router.replace('/(auth)/login')}>
+                <Text
+                  style={styles.signinLink}
+                  onPress={() => router.replace('/(auth)/login')}
+                  accessibilityRole="link"
+                >
                   Sign in
                 </Text>
               </Text>
@@ -179,6 +185,7 @@ export default function SignUpScreen() {
               <Text
                 style={styles.legalLink}
                 onPress={() => router.push('/legal/terms' as never)}
+                accessibilityRole="link"
               >
                 Terms of Service
               </Text>{' '}
@@ -186,6 +193,7 @@ export default function SignUpScreen() {
               <Text
                 style={styles.legalLink}
                 onPress={() => router.push('/legal/privacy' as never)}
+                accessibilityRole="link"
               >
                 Privacy Policy
               </Text>

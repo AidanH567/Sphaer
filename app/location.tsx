@@ -186,7 +186,12 @@ export default function LocationOnboardingScreen() {
       {/* Back arrow visible on prompt + reveal only (matches Figma) */}
       {(phase === 'prompt' || phase === 'reveal') && (
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
         </View>
@@ -244,6 +249,7 @@ function PromptView({
           onPress={onShare}
           activeOpacity={0.85}
           disabled={disabled}
+          accessibilityRole="button"
         >
           <Text style={styles.primaryButtonText}>Share Location</Text>
         </TouchableOpacity>
@@ -252,6 +258,7 @@ function PromptView({
           onPress={onSkip}
           activeOpacity={0.85}
           disabled={disabled}
+          accessibilityRole="button"
         >
           <Text style={styles.secondaryButtonText}>Continue</Text>
         </TouchableOpacity>
@@ -285,7 +292,12 @@ function RevealView({
       <View style={styles.revealSpacerTop} />
       <Text style={styles.revealTitle}>What&apos;s happening in {neighbourhood}?</Text>
       <View style={styles.revealSpacerMid} />
-      <TouchableOpacity style={styles.revealCircleButton} onPress={onContinue} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.revealCircleButton}
+        onPress={onContinue}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+      >
         <Text style={styles.revealCircleText}>Continue</Text>
       </TouchableOpacity>
       <View style={styles.revealSpacerBottom} />

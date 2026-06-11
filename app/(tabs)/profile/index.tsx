@@ -477,6 +477,7 @@ function TopBar({
         <TouchableOpacity
           onPress={onNotificationsPress}
           style={styles.navButton}
+          accessibilityRole="button"
           accessibilityLabel="Notifications"
         >
           <Ionicons
@@ -495,6 +496,7 @@ function TopBar({
         <TouchableOpacity
           onPress={onSignOut}
           style={styles.navButton}
+          accessibilityRole="button"
           accessibilityLabel="Sign out"
         >
           <Ionicons name="log-out-outline" size={24} color={colors.text.secondary} />
@@ -522,6 +524,7 @@ function SettingsSection({ onDeletePress }: { onDeletePress: () => void }) {
         style={styles.settingsRow}
         onPress={onDeletePress}
         activeOpacity={0.7}
+        accessibilityRole="button"
       >
         <Ionicons name="trash-outline" size={20} color={colors.badge.red} />
         <Text style={styles.settingsRowTextDestructive}>Delete account</Text>

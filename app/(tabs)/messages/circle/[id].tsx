@@ -90,13 +90,20 @@ export default function CircleChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         {circle && (
           <TouchableOpacity
             style={styles.circleInfo}
             onPress={() => router.push(`/circles/${circleId}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${circle.name}`}
           >
             {circle.avatar_url ? (
               <Image source={{ uri: circle.avatar_url }} style={styles.circleThumb} />

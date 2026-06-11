@@ -73,6 +73,8 @@ export default function LoginScreen() {
           onPress={() => router.back()}
           style={styles.closeButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
         >
           <Ionicons name="close" size={24} color={CHOCOLATE} />
         </TouchableOpacity>
@@ -115,6 +117,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={styles.forgotWrap}
                 onPress={() => router.push('/(auth)/reset-password' as never)}
+                accessibilityRole="link"
               >
                 <Text style={styles.forgotText}>Forgot password?</Text>
               </TouchableOpacity>
@@ -127,7 +130,11 @@ export default function LoginScreen() {
               <GoogleButton onPress={handleGoogle} />
               <Text style={styles.signupPrompt}>
                 Don’t have an account?{' '}
-                <Text style={styles.signupLink} onPress={() => router.replace('/(auth)/signup')}>
+                <Text
+                  style={styles.signupLink}
+                  onPress={() => router.replace('/(auth)/signup')}
+                  accessibilityRole="link"
+                >
                   Sign up
                 </Text>
               </Text>

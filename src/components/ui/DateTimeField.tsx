@@ -104,7 +104,14 @@ export function DateTimeField({
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
-        <TouchableOpacity style={styles.box} onPress={openPicker} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.box}
+          onPress={openPicker}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityValue={{ text: value ? formatDateTime(value) : placeholder }}
+        >
           <Ionicons name="calendar-outline" size={18} color={colors.text.tertiary} />
           <Text style={[styles.valueText, !value && styles.placeholderText]}>
             {value ? formatDateTime(value) : placeholder}
@@ -115,6 +122,8 @@ export function DateTimeField({
             style={styles.clearButton}
             onPress={clear}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear date"
           >
             <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
@@ -132,11 +141,11 @@ export function DateTimeField({
           <View style={styles.modalBackdrop}>
             <View style={styles.modalSheet}>
               <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={() => setIosOpen(false)}>
+                <TouchableOpacity onPress={() => setIosOpen(false)} accessibilityRole="button">
                   <Text style={styles.modalCancel}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>{label}</Text>
-                <TouchableOpacity onPress={commitIos}>
+                <TouchableOpacity onPress={commitIos} accessibilityRole="button">
                   <Text style={styles.modalDone}>Done</Text>
                 </TouchableOpacity>
               </View>

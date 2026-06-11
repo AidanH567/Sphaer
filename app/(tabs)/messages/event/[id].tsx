@@ -95,13 +95,20 @@ export default function EventChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         {event && (
           <TouchableOpacity
             style={styles.eventInfo}
             onPress={() => router.push(`/event/${eventId}`)}
+            accessibilityRole="button"
+            accessibilityHint="Opens the event details"
           >
             {event.poster_url ? (
               <Image source={{ uri: event.poster_url }} style={styles.posterThumb} />

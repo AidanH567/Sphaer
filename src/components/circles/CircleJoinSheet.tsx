@@ -125,7 +125,11 @@ export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetPr
       onRequestClose={onClose}
     >
       {/* Backdrop */}
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+      >
         <Animated.View
           style={[
             styles.backdrop,
@@ -148,7 +152,13 @@ export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetPr
       >
         <View style={styles.handle} />
 
-        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={onClose}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
           <Ionicons name="close" size={22} color={colors.text.primary} />
         </TouchableOpacity>
 
@@ -175,6 +185,8 @@ export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetPr
           onPress={handleJoin}
           activeOpacity={0.85}
           disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel={alreadyMember ? 'View circle' : 'Join circle'}
         >
           {busy ? (
             <ActivityIndicator color={colors.white} />

@@ -218,7 +218,11 @@ export function EntityListSheet(props: EntityListSheetProps) {
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+      >
         <Animated.View
           style={[
             styles.backdrop,
@@ -250,6 +254,8 @@ export function EntityListSheet(props: EntityListSheetProps) {
             onPress={onClose}
             style={styles.closeButton}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
           >
             <Ionicons name="close" size={22} color={colors.text.primary} />
           </TouchableOpacity>
@@ -273,6 +279,8 @@ export function EntityListSheet(props: EntityListSheetProps) {
               <TouchableOpacity
                 onPress={() => setSearchText('')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
               >
                 <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
               </TouchableOpacity>
@@ -365,6 +373,7 @@ function UserRow({
       onLongPress={onLongPress}
       delayLongPress={400}
       activeOpacity={0.7}
+      accessibilityRole="button"
       accessibilityHint={onLongPress ? 'Long-press to unfollow' : undefined}
     >
       <View style={styles.row}>
@@ -400,7 +409,7 @@ function CircleRow({
   const activityLabel = circle.activities_count === 1 ? '1 activity' : `${circle.activities_count} activities`;
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button">
       <View style={styles.row}>
         <Avatar uri={circle.avatar_url} initials={initials} />
         <View style={styles.rowText}>
@@ -440,7 +449,7 @@ function ActivityRow({
   const initials = getInitials(event.title, null);
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} accessibilityRole="button">
       <View style={styles.row}>
         {event.poster_url ? (
           <Image source={{ uri: event.poster_url }} style={styles.posterThumb} />
@@ -483,6 +492,8 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
       onPress={onPress}
       activeOpacity={0.7}
       style={[styles.tabButton, active && styles.tabButtonActive]}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
     >
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
     </TouchableOpacity>

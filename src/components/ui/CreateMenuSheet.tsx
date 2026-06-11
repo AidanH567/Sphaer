@@ -115,7 +115,11 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
       onRequestClose={onClose}
     >
       {/* Backdrop */}
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+      >
         <Animated.View
           style={[
             styles.backdrop,
@@ -142,6 +146,7 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
                 style={styles.row}
                 onPress={option.onPress}
                 activeOpacity={0.7}
+                accessibilityRole="button"
               >
                 <View style={styles.rowText}>
                   <Text style={styles.rowTitle}>{option.title}</Text>
@@ -151,6 +156,8 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
                   style={styles.addButton}
                   onPress={option.onPress}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Create ${option.title.toLowerCase()}`}
                 >
                   <Ionicons name="add-circle-outline" size={20} color={colors.white} />
                 </TouchableOpacity>
@@ -161,7 +168,12 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
         </View>
 
         {/* Cancel */}
-        <TouchableOpacity style={styles.cancelButton} onPress={onClose} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={onClose}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+        >
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </Animated.View>

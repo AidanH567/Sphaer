@@ -125,7 +125,12 @@ function DefaultFallback({
           {error.message}
         </Text>
       )}
-      <TouchableOpacity style={styles.cta} onPress={reset} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.cta}
+        onPress={reset}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+      >
         <Text style={styles.ctaLabel}>Try again</Text>
       </TouchableOpacity>
     </View>

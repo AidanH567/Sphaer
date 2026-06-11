@@ -28,6 +28,8 @@ export function Button({
       onPress={onPress}
       disabled={disabled || isLoading}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={[
         styles.base,
         styles[size],

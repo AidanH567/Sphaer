@@ -95,7 +95,11 @@ export default function CreateCircleScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>Create a Circle</Text>
@@ -104,7 +108,12 @@ export default function CreateCircleScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Avatar picker */}
-        <TouchableOpacity style={styles.avatarPicker} onPress={pickAvatar}>
+        <TouchableOpacity
+          style={styles.avatarPicker}
+          onPress={pickAvatar}
+          accessibilityRole="button"
+          accessibilityLabel={avatarUri ? 'Change circle photo' : 'Add circle photo'}
+        >
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
           ) : (

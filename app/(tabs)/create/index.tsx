@@ -186,11 +186,15 @@ export default function CreateScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>Create Activity</Text>
-        <TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="More information">
           <Ionicons name="information-circle-outline" size={24} color={colors.text.secondary} />
         </TouchableOpacity>
       </View>
@@ -282,6 +286,8 @@ export default function CreateScreen() {
             <TouchableOpacity
               style={[styles.priceToggle, isFree && styles.priceToggleActive]}
               onPress={() => setIsFree(true)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isFree }}
             >
               <Text style={[styles.priceToggleText, isFree && styles.priceToggleTextActive]}>
                 Free
@@ -290,6 +296,8 @@ export default function CreateScreen() {
             <TouchableOpacity
               style={[styles.priceToggle, !isFree && styles.priceToggleActive]}
               onPress={() => setIsFree(false)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !isFree }}
             >
               <Text style={[styles.priceToggleText, !isFree && styles.priceToggleTextActive]}>
                 Paid
@@ -317,6 +325,8 @@ export default function CreateScreen() {
                   style={[styles.circlePill, !selectedCircleId && styles.circlePillActive]}
                   onPress={() => setSelectedCircleId(null)}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: !selectedCircleId }}
                 >
                   <Ionicons
                     name="person-outline"
@@ -341,6 +351,8 @@ export default function CreateScreen() {
                     ]}
                     onPress={() => setSelectedCircleId(c.id)}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: selectedCircleId === c.id }}
                   >
                     <Ionicons
                       name="people-outline"
@@ -362,7 +374,12 @@ export default function CreateScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.posterPicker} onPress={pickPoster}>
+        <TouchableOpacity
+          style={styles.posterPicker}
+          onPress={pickPoster}
+          accessibilityRole="button"
+          accessibilityLabel={posterUri ? 'Change poster image' : 'Add poster image'}
+        >
           {posterUri ? (
             <Image source={{ uri: posterUri }} style={styles.posterPreview} contentFit="cover" />
           ) : (

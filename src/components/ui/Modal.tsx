@@ -25,15 +25,28 @@ export function Modal({ visible, onClose, children, showClose = true }: ModalPro
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity style={styles.overlay} onPress={onClose} activeOpacity={1}>
+      {/* accessible={false} so the overlay/tap-blocker wrappers don't group the
+          modal content into a single screen-reader node; dismissal stays
+          available via the labeled close button and onRequestClose. */}
+      <TouchableOpacity
+        style={styles.overlay}
+        onPress={onClose}
+        activeOpacity={1}
+        accessible={false}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
-          <TouchableOpacity activeOpacity={1}>
+          <TouchableOpacity activeOpacity={1} accessible={false}>
             <View style={styles.card}>
               {showClose && (
-                <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
                   <Ionicons name="close" size={22} color={colors.text.secondary} />
                 </TouchableOpacity>
               )}

@@ -115,6 +115,9 @@ export function MuralMinimap({
       <Pressable
         onPress={handlePress}
         style={styles.tapTarget}
+        accessibilityRole="button"
+        accessibilityLabel="Mural minimap"
+        accessibilityHint="Jumps to the tapped spot on the mural"
         // Web only: opt out of focus ring so the mini-map looks clean
         // when tabbed-into via keyboard.
         {...(Platform.OS === 'web' ? { tabIndex: -1 } : {})}
