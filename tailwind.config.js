@@ -22,6 +22,7 @@ module.exports = {
         ink: '#1B1B18',
         'apple-mail': '#F1F3F6',
         'hidden-lines': '#E0E4EB',
+        'neutral-500': '#949494',
         'neutral-600': '#5A5A5A',
         'neutral-700': '#3A3A3A',
       },

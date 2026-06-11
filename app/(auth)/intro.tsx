@@ -139,8 +139,8 @@ export default function IntroScreen() {
   );
 }
 
-const CHOCOLATE = '#2B2A27';
-const META = '#5A5A5A';
+const CHOCOLATE = colors.neutral.chocolate;
+const META = colors.neutral.neutral600;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },

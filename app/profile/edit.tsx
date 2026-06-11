@@ -20,7 +20,7 @@ import type { ProfileImage } from '@/types/user.types';
 import { colors, typography, spacing } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
-const INK = '#1B1B18';
+const INK = colors.neutral.ink;
 
 /**
  * Full-screen Edit Profile route. Outside the tabs group so the bottom nav

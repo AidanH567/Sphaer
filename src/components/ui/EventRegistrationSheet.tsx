@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   bottomBar: {
     backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: '#E0E4EB',
+    borderTopColor: colors.neutral.hiddenLines,
     paddingHorizontal: spacing.base,
     paddingTop: spacing.base,
     marginTop: spacing.base,

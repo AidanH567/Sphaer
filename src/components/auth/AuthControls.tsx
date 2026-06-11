@@ -15,12 +15,12 @@ import { colors, typography } from '@/constants/theme';
 // Figma tokens (Sign Up Flow Screen 1.1 — node 5013:10790)
 const CHOCOLATE = colors.neutral.chocolate;
 const INK = colors.neutral.ink;
-const META = '#5A5A5A';
-// Figma 2012:1711: placeholder is neutral-500 #949494; textfield border is
-// the `--hidden-lines` token #E0E4EB (a light blue-grey, not the darker
+const META = colors.neutral.neutral600;
+// Figma 2012:1711: placeholder is neutral-500; textfield border is
+// the `--hidden-lines` token (a light blue-grey, not the darker
 // #C1C1C1 we shipped first pass).
-const PLACEHOLDER = '#949494';
-const INPUT_BORDER = '#E0E4EB';
+const PLACEHOLDER = colors.neutral.neutral500;
+const INPUT_BORDER = colors.neutral.hiddenLines;
 const ERROR_RED = '#E53935';
 const GOOGLE_BORDER = '#E6E8E7';
 const GOOGLE_BLUE = '#4285F4';

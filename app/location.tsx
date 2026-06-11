@@ -307,7 +307,7 @@ function RevealView({
 
 // ── Styles — Figma 2012:1787 / 5108:8379 / 2012:1797 / 2012:1808 ─────────────
 
-const INK = '#1B1B18';
+const INK = colors.neutral.ink;
 const META = '#6F6E6A';
 
 const styles = StyleSheet.create({

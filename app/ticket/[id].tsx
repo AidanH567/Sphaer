@@ -25,7 +25,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 // side notches (classic ticket silhouette), QR centered, event title +
 // date below, boilerplate paragraph, four-button action stack.
 
-const BACKDROP = '#1B1B18';
+const BACKDROP = colors.neutral.ink;
 const CARD_BG = colors.white;
 const NOTCH_SIZE = 24; // diameter of the semicircle cutouts on each side
 const QR_SIZE = 200;

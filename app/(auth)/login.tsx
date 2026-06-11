@@ -25,8 +25,8 @@ import { signInWithGoogle } from '@/services/auth.service';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma tokens (Sign Up Flow Screen 1.1 — login is restyled to match)
-const CHOCOLATE = '#2B2A27';
-const META = '#5A5A5A';
+const CHOCOLATE = colors.neutral.chocolate;
+const META = colors.neutral.neutral600;
 const LINK_BLUE = '#367AFF';
 
 export default function LoginScreen() {

@@ -21,8 +21,8 @@ const CHOCOLATE = colors.neutral.chocolate; // card title (ABC Arizona Light 20)
 // neutral-700), which are a touch lighter than the shared cardMeta/body
 // tokens the profile activity card still uses. Scoped here so the feed
 // card matches its frame without disturbing unaudited profile cards.
-const CARD_META = '#5A5A5A'; // date / time / location — neutral-600
-const PRICE = '#3A3A3A'; // price — neutral-700
+const CARD_META = colors.neutral.neutral600; // date / time / location
+const PRICE = colors.neutral.neutral700; // price
 
 const CARD_HEIGHT = 231;
 const POSTER_WIDTH = 163;

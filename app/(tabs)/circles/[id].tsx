@@ -689,7 +689,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.ui,
     fontSize: 13,
     fontWeight: typography.fontWeight.medium,
-    color: '#949494', // Figma neutral-500
+    color: colors.neutral.neutral500,
     textAlign: 'center',
   },
   statValue: {
