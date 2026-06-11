@@ -37,144 +37,36 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ## ▶ UP NEXT
 
-### 1. Figma structural follow-ups — feed header, Welcome screen, UX pass (HANDOFF 2026-06-11)
+### 1. Feed filter affordance — product decision needed (Figma 4045:8204)
 
-**State.** The 14-frame styling audit itself is **COMPLETE** — frame-by-frame
-outcomes, commit hashes, and tokens are in the ✓ Shipped entry dated
-2026-06-10, and the audit record table is kept below. Three structural
-items were filed out of the audit, and the user then asked (via the
-ui-ux-pro-max skill) to apply them:
+~~Figma structural follow-ups (greeting header, Welcome screen, UX pass)~~
+— **SHIPPED 2026-06-11** (`5097fa3`, `632e064`), see ✓ Shipped. The one
+loose end from the Figma audit filing needs a call only the user can make:
 
-1. Feed header restructure — greeting + circular search button (`4045:8204`)
-2. "Welcome {name}" post-signup transition screen (`5013:10915`)
-3. Review both against UX best practices (ui-ux-pro-max)
+**Why.** The Figma feed places a sliders/filter icon button (45px,
+rounded, rotated 90°) at the right end of the Feed/Map/Mural toggle row,
+presumably opening a filter sheet. We ship the Near me / Tonight /
+This weekend / Free chip row beneath the header instead.
 
-The implementing session hit the context limit mid-item-1. This entry is
-the cold-start handoff — everything needed to resume is here.
-
-(A fourth filed item — the filter icon in the Feed/Map/Mural toggle row,
-also from `4045:8204` — needs a product decision from the user first.
-Leave it in `P0 — Investor demo polish`; do NOT build it unprompted.)
-
-**Figma access (works — use these exact coordinates).**
-- fileKey `HIVq6Vaymj01dZ37AvwCUF` (`Sphaer_Prototype_RA`, the original
-  Pro-owned file the user was invited to). Do NOT use the personal-drafts
-  copy `iuCO8ENAhfYIJly1JGAeU1` — it is Starter-plan-capped and
-  `get_design_context` returns the upgrade paywall.
-- `get_design_context` / `get_screenshot` work with an explicit `nodeId`.
-  Node IDs are preserved across the file duplicate, so old references map
-  1:1. Never query the giant board node `6239:6597` (20385×4239px) — it
-  times out; go straight to individual frame nodeIds.
-
-**⚠️ Step zero — verify the design before building.** The header spec
-below was written from audit-session screenshot notes and was NOT
-re-verified with `get_design_context(nodeId: '4045:8204')` in the
-implementing session. Fetch it first and correct the spec (exact copy,
-sizes, colors) against what the frame actually says.
-
-**Item 1 — Feed header greeting variant (IN PROGRESS, scaffold in tree).**
-Expected design: resting header = greeting line "📍 Berlin what's on
-Today?!" (location pin + display-serif text, "Berlin" underlined) with a
-small circular white search button on the right — replacing our always-on
-input pill. Tapping the button expands into the standard search input +
-Cancel; Cancel collapses back to the greeting.
-
-An **uncommitted scaffold** already sits in
-`src/components/feed/SearchFilterBar.tsx` (typecheck-clean, safe to build
-on or redo):
-- imports gained `useEffect`, `AccessibilityInfo`, `Animated`, `Easing`
-  (unused until the implementation lands);
-- `SearchFilterBarProps` gained `greeting?: { city: string; rest: string }`
-  with a doc comment locking the contract: greeting set → resting state is
-  the greeting line + circular search button; tap expands to input +
-  Cancel; Cancel collapses back; Circles (omits the prop) keeps the pill.
-
-Remaining implementation, as designed:
-- Branch the resting render: when `greeting` is set and
-  `!searchActive && !hasSearchText`, render the greeting row instead of
-  the placeholder pill — Ionicons pin + `typography.fontFamily.display`
-  text with `{city}` in a nested `<Text>` carrying
-  `textDecorationLine: 'underline'`, then a circular white button (50×50,
-  borderRadius 25, same shadow as `styles.searchBar`, `search-outline`
-  icon) whose onPress is the existing `activateSearch()`. The state
-  machine needs NO changes — `showTextInput = searchActive ||
-  hasSearchText` already gates the swap and `cancelSearch()` already
-  returns to resting.
-- Animate expand/collapse at 150–300ms (`Animated.timing` + `Easing`);
-  skip/shorten when `AccessibilityInfo.isReduceMotionEnabled()` resolves
-  true (that is why the scaffold imports exist).
-- Wire-up: `src/components/feed/FeedHeader.tsx` passes
-  `greeting={{ city: 'Berlin', rest: "what's on Today?!" }}` — confirm
-  exact copy against the frame (our current placeholder copy is
-  "Berlin, what's on today?!"). Feed/Map/Mural all render FeedHeader so
-  all three inherit it; Circles calls SearchFilterBar directly without
-  the prop → keeps its audited input pill (`fbc4d9a`).
-- `middleSlot` (ViewToggle), category chips, and the neighbourhood row
-  stay untouched.
-- Verify in web preview at 390×844: resting greeting → expand → type →
-  Cancel-collapse, and chips still clickable (mind the blur-before-click
-  history documented at the top of SearchFilterBar.tsx).
-- Commit: `style(feed): match Figma 4045:8204 — greeting header with
-  collapsible search`.
-
-**Item 2 — "Welcome {name}" transition (NOT started).**
-Fetch `get_design_context(nodeId: '5013:10915')` first. Filed spec:
-transient full-screen interstitial — centered display-serif
-"Welcome {firstName}", white bg — shown right after sign-up for ~1.5s,
-then routes on to onboarding. Match the serif treatment of the tagline /
-location-reveal screens; respect reduced motion. Signup routing lives in
-`app/(auth)/signup.tsx` (it already branches on `data.session` for the
-verify-email interstitial — same pattern). Commit:
-`feat(auth): Welcome {name} post-signup transition — Figma 5013:10915`.
-
-**Item 3 — UX pass (NOT started).** After items 1+2, run the
-ui-ux-pro-max design-system search over both interactions
-(micro-interaction timing 150–300ms, prefers-reduced-motion, ≥44px touch
-target on the circular button) and fix or file what it surfaces.
+**Decide (user input needed):** adopt the filter-sheet pattern, keep the
+chips, or both. Then implement accordingly.
 
 **Done when.**
-- [ ] `4045:8204` design context fetched; greeting header verified/corrected, built, preview-checked at 390×844
-- [ ] `5013:10915` fetched; Welcome screen built + routed + preview-checked
-- [ ] UX pass done; findings fixed or filed
-- [ ] One commit per item; branch merged to main + pushed; this entry moved to ✓ Shipped
+- [ ] Product decision recorded here
+- [ ] If adopting: filter icon in the toggle row + a filter sheet wired
+      to the existing EventFilters state
 
-**Standing blockers (unchanged — need explicit user authorization, do not
-work around):** deploy `supabase/functions/delete-account`, apply the two
-pending migrations (`20260609000000_saved_events_reminder.sql`,
-`20260609010000_denormalized_follow_counts.sql`), then regenerate
-`src/types/supabase.ts` and simplify `getProfile()`.
+**Figma access that works:** fileKey `HIVq6Vaymj01dZ37AvwCUF`
+(`Sphaer_Prototype_RA`, Pro-owned), explicit nodeIds only — never the
+Starter-capped copy `iuCO8ENAhfYIJly1JGAeU1` or the giant board node
+`6239:6597`.
 
-**Frame-by-frame audit record (historical — do NOT re-audit):**
-- ✅ `2012:1757` — Splash Screen (1×1 placeholder PNG → Figma-matched
-  splash.png via new scripts/generate-splash.ts). Commit `bf3cd71`.
-- ✅ `2012:1683` — Tagline screen ("Your City. Your Sphaer."). Size
-  24→26, "Your Sphaer." weight bold→medium on app/(auth)/index.tsx.
-  Commit `bc36700`.
-
-**Final queue status (all 12 resolved 2026-06-10):**
-
-| # | Node ID | Actual screen | Outcome |
-|---|---|---|---|
-| 1 | `2012:1711` | Sign Up form | ✅ fixed — AuthControls field tokens (`fc924f3`) |
-| 2 | `5013:10790` | Sign Up (filled state) | ✅ covered by #1 |
-| 3 | `5013:10915` | "Welcome {name}" transition | 📋 missing screen — filed |
-| 4 | `2012:1787` | Location prompt | ✅ already-compliant |
-| 5 | `5108:8379` | Location searching | ✅ already-compliant (reuses prompt) |
-| 6 | `2012:1797` | Location reveal | ✅ fixed — vertical distribution (`b11e8be`) |
-| 7 | `4045:8204` | Feed list | ✅ card fixed (`82642af`); header restructure filed |
-| 8 | `2665:12253` | Circles browse | ✅ fixed — placeholder + subtitle (`fbc4d9a`) |
-| 9 | `3491:2499` | Event detail | ✅ already-compliant |
-| 10 | `4025:5033` | Event registration sheet | ✅ already-compliant |
-| 11 | `4484:10814` | Event detail (price-range variant) | ✅ already-compliant (= #9) |
-| 12 | `4025:5294` | Ticket card | ✅ compliant (deferred PDF/email buttons noted) |
-
-**Reusable audit conventions (apply to the follow-up items above):** Figma
-display text is `Test_Martina_Plantijn` → match via
-`typography.fontFamily.display` (the `.otf` isn't bundled yet — system
-serif fallback, tracked separately). Cream bg `#FFFFFF` ↔ `colors.white`;
-chocolate ink `#2B2A27` ↔ `colors.neutral.chocolate`. Any new token added
-to `theme.ts` must be mirrored in `tailwind.config.js`. Commit format
-`style(<screen>): match Figma <nodeId>` with the deltas in the body.
+**Otherwise next:** the standing user-authorization blockers — deploy
+`supabase/functions/delete-account` + apply the two pending migrations
+(`20260609000000_saved_events_reminder.sql`,
+`20260609010000_denormalized_follow_counts.sql`) then regenerate
+`src/types/supabase.ts` — and Apple Sign In (#2 below) once the Apple
+dev account exists.
 
 ---
 
@@ -240,24 +132,14 @@ Why (historical): `app.json` only set `photosPermission` for image-picker. The N
 Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
 spec when scheduled.
 
-### Feed header — greeting + circular search button (Figma 4045:8204)
-Why: Figma feed header is a greeting line "📍 Berlin what's on Today?!" (location pin + display-serif text, "Berlin" underlined) with a small circular white **search button** on the right that presumably expands to a search field. We ship an always-on full-width search input pill instead. Structural restructure of `FeedHeader`, not a token swap.
-Done when:
-- [ ] Header shows the greeting line + circular search button per the frame
-- [ ] Tapping the search button expands/reveals the search input
-- [ ] Same treatment mirrored on Map + Mural headers for consistency
+### ~~Feed header — greeting + circular search button (Figma 4045:8204)~~ — shipped 2026-06-11
+Commit `5097fa3`. SearchFilterBar `greeting` prop: pin + serif greeting (city underlined) + 45px circular search button, expands to input + Cancel. Feed/Map/Mural inherit via FeedHeader; Circles keeps the pill. See ✓ Shipped.
 
-### Feed filter icon in the Feed/Map/Mural row (Figma 4045:8204)
-Why: Figma places a sliders/filter icon button (45px, rounded, rotated) at the right end of the Feed/Map/Mural toggle row — presumably opening a filter sheet. We use the Near me / Tonight / This weekend / Free chip row beneath the header instead. Decide: adopt the filter-sheet pattern, keep chips, or both.
-Done when:
-- [ ] Product decision on filter affordance (icon→sheet vs chips)
-- [ ] If adopting: filter icon in the toggle row + a filter sheet
+### Feed filter icon in the Feed/Map/Mural row (Figma 4045:8204) — promoted to ▶ UP NEXT #1
+Tracked there; needs the user's call on filter-sheet vs chips vs both.
 
-### "Welcome {name}" post-signup transition (Figma 5013:10915)
-Why: Figma has a brief full-screen "Welcome {firstName}" interstitial (centered display-serif, white bg) shown right after sign-up, before onboarding. We don't build it — signup goes straight to onboarding. A small cinematic touch matching the "We Found You" / tagline serif treatment.
-Done when:
-- [ ] New transient screen shows "Welcome {name}" for ~1.5s post-signup, then routes to onboarding
-- [ ] Matches the serif treatment of the tagline / location-reveal screens
+### ~~"Welcome {name}" post-signup transition (Figma 5013:10915)~~ — shipped 2026-06-11
+Commit `632e064`. `app/(auth)/welcome.tsx` interstitial — ~1.6s dwell, tap-to-skip, fade with reduce-motion respected; wired from signup + verify-email; (auth) layout fall-through added. See ✓ Shipped.
 
 ---
 
@@ -481,6 +363,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-11 — Figma structural follow-ups: greeting header + Welcome interstitial + UX pass (UP NEXT #1 closed).** All three items from the audit's structural filing shipped, one commit each. **(1) `style(feed) 5097fa3` — greeting header (`4045:8204`):** SearchFilterBar gained an optional `greeting={{city, rest}}` prop — resting state renders location pin + serif "Berlin what's on Today?!" (20px/148%, `colors.neutral.ink`, city in Medium + underline) with a 45px circular white search button; tapping expands to the standard input + Cancel, Cancel collapses back. Crossfade at `motion.duration.standard` (240ms ease-out, opacity-only, row minHeight-pinned so rows below never shift), skipped under OS reduce-motion. Header inset 16px per frame. FeedHeader passes the prop so Feed/Map/Mural inherit; Circles keeps the audited pill. Design context fetched fresh per the handoff's step zero — corrected three assumptions (button 45px not 50, text ink `#1B1B18` not chocolate, copy "Berlin what's on Today?!" capital-T no comma). **(2) `feat(auth) 632e064` — Welcome interstitial (`5013:10915`):** new `app/(auth)/welcome.tsx` — centered serif "Welcome {firstName}" (26px ink, name Medium) on white, 320ms fade-in (reduce-motion skips), ~1.6s dwell then routes to onboarding, tap anywhere skips, routes exactly once. Name precedence: route param → user_metadata.display_name → profile row. signup.tsx session branch + verify-email.tsx SIGNED_IN listener both route here; (auth) layout got a `welcome` fall-through and a fade stack animation. **(3) UX pass (ui-ux-pro-max):** both interactions audited — timings inside the 150–300ms band, one animated element per view, ease-out entering, 45px ≥ 44pt touch target with press feedback + accessibilityLabel on the icon-only button, h1 heading role on the interstitial, ~15:1 text contrast, graceful one-line truncation at narrow widths / large type. No violations to fix. **Verification note:** the preview tab is headless (visibility:hidden, zero rAF ticks) so JS-driver fades can't play live there — verified via computed styles + behaviour (auto-route landed on /onboarding twice); the fade mechanism is identical to the feed crossfade, which screenshots show completing. **Remaining from the filing:** the filter-icon-in-toggle-row product decision — promoted to UP NEXT #1.
 - **2026-06-10 — Figma styling audit COMPLETE — all 14 frames (UP NEXT #1 closed).** Unblocked by switching the MCP fileKey from the Starter-capped personal-drafts copy (`iuCO8ENAhfYIJly1JGAeU1`) to the **original Pro-owned file** (`HIVq6Vaymj01dZ37AvwCUF`) the user was invited to — Figma preserves node IDs across a duplicate, so the queue mapped 1:1. Walked all 12 remaining frames (after the 2 prior splash/tagline). **Fixed inline (4 commits, one per screen):** (1) `style(auth) fc924f3` — Sign Up `2012:1711`: shared `AuthControls` textfield border `#C1C1C1`→`#E0E4EB` (the `--hidden-lines` token), placeholder `#9A9A9A`→`#949494`, Google icon 20→24px (propagates to all 6 auth screens). (2) `style(location) b11e8be` — reveal `2012:1797`: title/circular-button vertical distribution via flex spacers (1.4/1.9/1.0) to match the Figma's upper-third/lower-third spread vs our centred group. (3) `style(feed) 82642af` — event card `4045:8204`: price weight bold→Heavy (added `typography.fontWeight.heavy = '800'` for SF Pro Heavy 860) + colour `#363530`→`#3A3A3A`; meta weight medium→regular + colour `#505049`→`#5A5A5A` (scoped to EventCard so unaudited ProfileActivityCard tokens stay put). (4) `style(circles) fbc4d9a` — `2665:12253`: search placeholder → "Find your scene, find your thing!", section subtitle → "Join {N} {category} circles across Berlin". **Verified already-compliant (purpose-built against their nodes in prior sessions, confirmed via preview screenshots at 390×844):** Sign Up filled (`5013:10790`), Location prompt + searching (`2012:1787`/`5108:8379`), Event detail + price-range variant (`3491:2499`/`4484:10814` — hero/title/location/artist-row/sticky price+date+button bar all align), Registration sheet (`4025:5033` — title/organiser/stepper/calendar+pin+ticket rows/FEW-TICKETS badge/total/Register), Ticket card (`4025:5294`). **Filed as new P0 — Investor demo polish items (structural, out of scope for an inline token pass):** Feed header restructure (greeting + circular search button vs our search input), Feed filter-icon-in-toggle-row, and the `5013:10915` "Welcome {name}" post-signup transition screen we never built. Known limitation across all serif text: Test Martina Plantijn `.otf` still isn't bundled (Georgia/system-serif fallback) — separate backlog item, unchanged by this audit.
 - **2026-06-10 — Feed chip-row clipping fix + test suite bootstrap (61 unit tests).** (1) The Near me / Tonight / This weekend / Free chips rendered clipped (user screenshot showed pills cut to half height). Root cause via DOM inspection: react-native-web's ScrollView ships `{ flexGrow: 1, flexShrink: 1 }` base style — the FlatList below shrank the chip row to 4px. Fix: `style={{ flexGrow: 0, flexShrink: 0 }}` + paddingVertical on the content container. Verified at 390×844: pills full height, horizontal scroll intact, Tonight toggle filters correctly. Commit `e1d48a9`. (2) First test coverage in the repo: jest + jest-expo@~55, `npm test`, six suites / 61 tests over the pure utils (validators, event-filters with pinned clock, ics RFC-5545 compliance, upload-validation allowlist + size boundary, profile-completion, geo haversine against real Berlin landmark distances). tsconfig gains `"jest"` types. All green, tsc clean. Commit `64fd5f4`.
 - **2026-06-09 — Denormalised follower / following counts migration (data integrity).** `supabase/migrations/20260609010000_denormalized_follow_counts.sql` adds `profiles.followers_count INT NOT NULL DEFAULT 0` + `profiles.following_count INT NOT NULL DEFAULT 0`, backfills both from the existing `follows` rows (per-side aggregation joined back into `profiles`), and installs trigger function `follows_update_counts()` (SECURITY DEFINER + locked search_path) wired to `AFTER INSERT` and `AFTER DELETE` on `follows`. Atomic `count = count + 1` and `GREATEST(0, count - 1)` keep the columns consistent under concurrent inserts. Service-layer follow-up: once `supabase db push` runs and types regenerate, `getProfile()` can drop its two parallel COUNT queries against `follows` and read the columns directly — tracked in BACKLOG. Forward-compat scaffolding for now (columns exist but service still uses COUNT until the regenerate). **Apply with:** `npx supabase db push`. Commit `6b236d6`.
