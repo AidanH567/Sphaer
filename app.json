@@ -3,10 +3,12 @@
     "name": "Sphaer",
     "slug": "sphaer",
     "version": "1.0.0",
+    "description": "The digital cultural layer of Berlin's underground creative scene — chronological events, circles, and artist profiles. No algorithms, no pay-to-play.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sphaer",
     "userInterfaceStyle": "light",
+    "primaryColor": "#2B2A27",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
