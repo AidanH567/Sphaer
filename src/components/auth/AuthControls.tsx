@@ -16,8 +16,11 @@ import { colors, typography } from '@/constants/theme';
 const CHOCOLATE = colors.neutral.chocolate;
 const INK = colors.neutral.ink;
 const META = '#5A5A5A';
-const PLACEHOLDER = '#9A9A9A';
-const INPUT_BORDER = '#C1C1C1';
+// Figma 2012:1711: placeholder is neutral-500 #949494; textfield border is
+// the `--hidden-lines` token #E0E4EB (a light blue-grey, not the darker
+// #C1C1C1 we shipped first pass).
+const PLACEHOLDER = '#949494';
+const INPUT_BORDER = '#E0E4EB';
 const ERROR_RED = '#E53935';
 const GOOGLE_BORDER = '#E6E8E7';
 const GOOGLE_BLUE = '#4285F4';
@@ -170,7 +173,7 @@ export function GoogleButton({ onPress }: GoogleButtonProps) {
   return (
     <TouchableOpacity style={googleStyles.button} onPress={onPress} activeOpacity={0.85}>
       <Text style={googleStyles.label}>Continue with Google</Text>
-      <Ionicons name="logo-google" size={20} color={GOOGLE_BLUE} />
+      <Ionicons name="logo-google" size={24} color={GOOGLE_BLUE} />
     </TouchableOpacity>
   );
 }

@@ -105,7 +105,7 @@ export default function CirclesScreen() {
       <SearchFilterBar
         searchText={searchText}
         onSearchChange={setSearchText}
-        searchPlaceholder="Find your community"
+        searchPlaceholder="Find your scene, find your thing!"
         selectedCategories={selectedCategories}
         onToggleCategory={toggleCategory}
         style={styles.headerOverride}
@@ -171,7 +171,10 @@ export default function CirclesScreen() {
                 <View style={styles.sectionHeaderText}>
                   <Text style={styles.sectionTitle}>{tag}</Text>
                   <Text style={styles.sectionSubtitle}>
-                    {tagCircles.length} {tagCircles.length === 1 ? 'circle' : 'circles'} across Berlin
+                    {/* Figma 2665:12253 subtitle format: "Join 24 Film circles
+                        across Berlin" — includes the category name. */}
+                    Join {tagCircles.length} {tag}{' '}
+                    {tagCircles.length === 1 ? 'circle' : 'circles'} across Berlin
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color={colors.text.secondary} />

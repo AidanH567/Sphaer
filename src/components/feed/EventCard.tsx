@@ -15,10 +15,14 @@ interface EventCardProps {
   isSaved?: boolean;
 }
 
-// Exact tokens from Figma node 3419:7753 (feed event card).
-const CHOCOLATE = colors.neutral.chocolate; // card title
-const CARD_META = colors.neutral.cardMeta; // date / time / location
-const PRICE = colors.neutral.body; // price
+// Exact tokens from Figma feed card (4045:8204 instance 3419:7475).
+const CHOCOLATE = colors.neutral.chocolate; // card title (ABC Arizona Light 20)
+// Meta + price use the Figma feed card's exact neutrals (neutral-600 /
+// neutral-700), which are a touch lighter than the shared cardMeta/body
+// tokens the profile activity card still uses. Scoped here so the feed
+// card matches its frame without disturbing unaudited profile cards.
+const CARD_META = '#5A5A5A'; // date / time / location — neutral-600
+const PRICE = '#3A3A3A'; // price — neutral-700
 
 const CARD_HEIGHT = 231;
 const POSTER_WIDTH = 163;
@@ -133,13 +137,15 @@ const styles = StyleSheet.create({
   metaLine: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 14,
-    fontWeight: typography.fontWeight.medium,
+    // Figma feed card: meta is SF Pro Regular (400), not Medium.
+    fontWeight: typography.fontWeight.regular,
     color: CARD_META,
   },
   price: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 14,
-    fontWeight: typography.fontWeight.bold,
+    // Figma feed card: price is SF Pro Heavy (860 → our heavy/800).
+    fontWeight: typography.fontWeight.heavy,
     color: PRICE,
     marginTop: 2,
   },

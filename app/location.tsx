@@ -275,12 +275,20 @@ function RevealView({
   neighbourhood: string;
   onContinue: () => void;
 }) {
+  // Figma 2012:1797 spreads the title (upper third, ~33%) and the circular
+  // Continue button (lower third, ~78%) apart rather than centring them as a
+  // group. Flex spacers reproduce that distribution resolution-independently
+  // (RN percentage vertical padding is parent-WIDTH-relative, so unusable
+  // here). Ratios ~1.4 / 1.9 / 1.0 put the title at ~⅓ and the button at ~¾.
   return (
     <View style={styles.revealInner}>
+      <View style={styles.revealSpacerTop} />
       <Text style={styles.revealTitle}>What&apos;s happening in {neighbourhood}?</Text>
+      <View style={styles.revealSpacerMid} />
       <TouchableOpacity style={styles.revealCircleButton} onPress={onContinue} activeOpacity={0.85}>
         <Text style={styles.revealCircleText}>Continue</Text>
       </TouchableOpacity>
+      <View style={styles.revealSpacerBottom} />
     </View>
   );
 }
@@ -385,15 +393,16 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.regular,
   },
 
-  // Reveal view — title centered, big circular Continue button below.
+  // Reveal view — title in the upper third, big circular Continue button in
+  // the lower third (Figma 2012:1797 distribution), via flex spacers below.
   revealInner: {
     flex: 1,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing['3xl'],
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing['4xl'],
   },
+  revealSpacerTop: { flex: 1.4 },
+  revealSpacerMid: { flex: 1.9 },
+  revealSpacerBottom: { flex: 1 },
   revealTitle: {
     fontFamily: Platform.select({
       ios: 'Georgia',

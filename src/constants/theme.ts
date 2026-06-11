@@ -83,6 +83,8 @@ export const typography = {
     medium: '500' as const,
     semibold: '600' as const,
     bold: '700' as const,
+    // Maps SF Pro "Heavy" (Figma weight 860) — used for card prices.
+    heavy: '800' as const,
   },
   fontSize: {
     xs: 11,
