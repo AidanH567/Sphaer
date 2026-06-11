@@ -241,7 +241,7 @@ Done when:
 - [ ] Match the dirty-state guard pattern from ProfileForm (Save disabled until form is dirty + valid)
 - [ ] Visually verified parity with signup.tsx
 
-### "Not found" + network-error recovery UX — partial ship 2026-06-09
+### ~~"Not found" + network-error recovery UX~~ — fully shipped 2026-06-11 (`f53344c`)
 Shipped:
 - `<ErrorState />` lives at `src/components/ui/ErrorState.tsx` (icon + headline + body + Retry primary button + Back outline button)
 - `/event/[id]` "Event not found" path uses ErrorState with a Back-to-feed CTA
@@ -289,7 +289,10 @@ Hand-rolled runtime shape guards (no new deps) at the `getConversations` cast bo
 ### ~~Other-users-profile (`/user/[id]`) still falls back to `mockProfiles`~~ — shipped 2026-06-09
 Removed the `getMockProfileByExactId` import and call from `app/user/[id].tsx`. Live Supabase `fetchRealProfile(id)` is now the only source — if the DB doesn't have the id, the screen renders the ErrorState "Profile not found" path that shipped earlier today. The `MockProfile` type alias is still imported for the display shape (used by `adaptProfileToDisplay`) — separate from the data fallback.
 
-### Stale `MockConversation` type import — KEPT (audit was wrong)
+### ~~Stale `MockConversation` type import~~ — proper rename shipped 2026-06-11 (`3c46692`)
+`ConversationRowDisplay` now lives in message.types.ts; mockMessages.ts is an unused dev fixture — delete when convenient.
+
+#### (historical note)
 On closer reading, `app/(tabs)/messages/index.tsx` uses `MockConversation` as a deliberate display-shape adapter — real Conversation rows are mapped into the legacy shape so the Figma-styled `ConversationRow` component keeps working. Not stale. The real follow-up is to update `ConversationRow` to accept the native `Conversation` type and rename `MockConversation` → `ConversationRowDisplay` in a proper types file. Bigger refactor; not a hygiene-batch item.
 
 ### ~~`as any` route casts in BottomNav + EntityListSheet~~ — shipped 2026-06-09
@@ -360,7 +363,7 @@ Done when:
 
 ## P2 — Developer experience (audit 2026-06-09)
 
-### Zero test coverage — first slice shipped 2026-06-10 (61 unit tests on pure utils)
+### ~~Zero test coverage~~ — 75 tests / 10 suites (pure-util units 2026-06-10 + component smoke 2026-06-11)
 `jest` + `jest-expo@~55` (SDK-matched) installed; `npm test` script + `jest` preset config in package.json (`@/` alias mapped, `__tests__/**/*.test.*` matcher). Six suites under `src/utils/__tests__/`: validators (email/password/username/url), event-filters (isTonight / isThisWeekend / currentWeekendWindow with pinned `now` dates + applyChipFilters AND-semantics), ics (CRLF, UTC times, TEXT escaping, multi-VEVENT bulk, null-starts_at drop), upload-validation (MIME allowlist, case-insensitivity, size cap boundary), profile-completion (null→100%, whitespace-only, empty arrays), geo (haversine vs. known Berlin landmark distances). `tsconfig.json` adds `"jest"` to `types`. All 61 green; tsc clean.
 CI shipped 2026-06-10: `.github/workflows/ci.yml` runs `tsc --noEmit` + `jest --ci` on push/PR to main (Node 20, npm cache, 15-min timeout; `npm ci` dry-run verified the lockfile is in sync).
 Remaining slice shipped 2026-06-11: @testing-library/react-native@13.3.3 + react-test-renderer pinned to react 19.2.0. Four component suites (14 tests): signup validation (errors/clear/trim/welcome-route), create-event validation (inline errors + clear-on-edit, full screen render with real Input/Button/Tag/DateTimeField), EventCard save toggle (stateful a11y labels, press isolation, route push), Tag press canary. Queries lean on the a11y sweep's labels/roles, doubling as accessibility regression tests. Note for future suites: React 19 async act() hangs under jest-expo — flush effects with waitFor on an observable side effect instead.
@@ -394,6 +397,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-11 — Unblocked-backlog batch (4 commits).** `feat(events) c4406a4` creator edit & delete (ConfirmSheet delete with cascade-accurate copy; new prefilled edit screen with create-parity validation; RLS verified). `style(messages) 3c46692` DM + event chat headers to Figma 6298:6104 (48px thumbs, ink titles, shadow bar, @username subtitle) + MockConversation→ConversationRowDisplay rename. `chore(theme) 605d2eb` hex→token sweep, 22 replacements/13 files + neutral500 token. `feat(circles) 44e53c6` circle cover upload on creation. Earlier same day: Create-Activity style pass (`4c51ce6`), circle chat header (`84f03be`), circle-detail Organizer section (`ce45511`). 75/75 tests green throughout.
 - **2026-06-11 — Figma structural follow-ups: greeting header + Welcome interstitial + UX pass (UP NEXT #1 closed).** All three items from the audit's structural filing shipped, one commit each. **(1) `style(feed) 5097fa3` — greeting header (`4045:8204`):** SearchFilterBar gained an optional `greeting={{city, rest}}` prop — resting state renders location pin + serif "Berlin what's on Today?!" (20px/148%, `colors.neutral.ink`, city in Medium + underline) with a 45px circular white search button; tapping expands to the standard input + Cancel, Cancel collapses back. Crossfade at `motion.duration.standard` (240ms ease-out, opacity-only, row minHeight-pinned so rows below never shift), skipped under OS reduce-motion. Header inset 16px per frame. FeedHeader passes the prop so Feed/Map/Mural inherit; Circles keeps the audited pill. Design context fetched fresh per the handoff's step zero — corrected three assumptions (button 45px not 50, text ink `#1B1B18` not chocolate, copy "Berlin what's on Today?!" capital-T no comma). **(2) `feat(auth) 632e064` — Welcome interstitial (`5013:10915`):** new `app/(auth)/welcome.tsx` — centered serif "Welcome {firstName}" (26px ink, name Medium) on white, 320ms fade-in (reduce-motion skips), ~1.6s dwell then routes to onboarding, tap anywhere skips, routes exactly once. Name precedence: route param → user_metadata.display_name → profile row. signup.tsx session branch + verify-email.tsx SIGNED_IN listener both route here; (auth) layout got a `welcome` fall-through and a fade stack animation. **(3) UX pass (ui-ux-pro-max):** both interactions audited — timings inside the 150–300ms band, one animated element per view, ease-out entering, 45px ≥ 44pt touch target with press feedback + accessibilityLabel on the icon-only button, h1 heading role on the interstitial, ~15:1 text contrast, graceful one-line truncation at narrow widths / large type. No violations to fix. **Verification note:** the preview tab is headless (visibility:hidden, zero rAF ticks) so JS-driver fades can't play live there — verified via computed styles + behaviour (auto-route landed on /onboarding twice); the fade mechanism is identical to the feed crossfade, which screenshots show completing. **Remaining from the filing:** the filter-icon-in-toggle-row product decision — promoted to UP NEXT #1.
 - **2026-06-10 — Figma styling audit COMPLETE — all 14 frames (UP NEXT #1 closed).** Unblocked by switching the MCP fileKey from the Starter-capped personal-drafts copy (`iuCO8ENAhfYIJly1JGAeU1`) to the **original Pro-owned file** (`HIVq6Vaymj01dZ37AvwCUF`) the user was invited to — Figma preserves node IDs across a duplicate, so the queue mapped 1:1. Walked all 12 remaining frames (after the 2 prior splash/tagline). **Fixed inline (4 commits, one per screen):** (1) `style(auth) fc924f3` — Sign Up `2012:1711`: shared `AuthControls` textfield border `#C1C1C1`→`#E0E4EB` (the `--hidden-lines` token), placeholder `#9A9A9A`→`#949494`, Google icon 20→24px (propagates to all 6 auth screens). (2) `style(location) b11e8be` — reveal `2012:1797`: title/circular-button vertical distribution via flex spacers (1.4/1.9/1.0) to match the Figma's upper-third/lower-third spread vs our centred group. (3) `style(feed) 82642af` — event card `4045:8204`: price weight bold→Heavy (added `typography.fontWeight.heavy = '800'` for SF Pro Heavy 860) + colour `#363530`→`#3A3A3A`; meta weight medium→regular + colour `#505049`→`#5A5A5A` (scoped to EventCard so unaudited ProfileActivityCard tokens stay put). (4) `style(circles) fbc4d9a` — `2665:12253`: search placeholder → "Find your scene, find your thing!", section subtitle → "Join {N} {category} circles across Berlin". **Verified already-compliant (purpose-built against their nodes in prior sessions, confirmed via preview screenshots at 390×844):** Sign Up filled (`5013:10790`), Location prompt + searching (`2012:1787`/`5108:8379`), Event detail + price-range variant (`3491:2499`/`4484:10814` — hero/title/location/artist-row/sticky price+date+button bar all align), Registration sheet (`4025:5033` — title/organiser/stepper/calendar+pin+ticket rows/FEW-TICKETS badge/total/Register), Ticket card (`4025:5294`). **Filed as new P0 — Investor demo polish items (structural, out of scope for an inline token pass):** Feed header restructure (greeting + circular search button vs our search input), Feed filter-icon-in-toggle-row, and the `5013:10915` "Welcome {name}" post-signup transition screen we never built. Known limitation across all serif text: Test Martina Plantijn `.otf` still isn't bundled (Georgia/system-serif fallback) — separate backlog item, unchanged by this audit.
 - **2026-06-10 — Feed chip-row clipping fix + test suite bootstrap (61 unit tests).** (1) The Near me / Tonight / This weekend / Free chips rendered clipped (user screenshot showed pills cut to half height). Root cause via DOM inspection: react-native-web's ScrollView ships `{ flexGrow: 1, flexShrink: 1 }` base style — the FlatList below shrank the chip row to 4px. Fix: `style={{ flexGrow: 0, flexShrink: 0 }}` + paddingVertical on the content container. Verified at 390×844: pills full height, horizontal scroll intact, Tonight toggle filters correctly. Commit `e1d48a9`. (2) First test coverage in the repo: jest + jest-expo@~55, `npm test`, six suites / 61 tests over the pure utils (validators, event-filters with pinned clock, ics RFC-5545 compliance, upload-validation allowlist + size boundary, profile-completion, geo haversine against real Berlin landmark distances). tsconfig gains `"jest"` types. All green, tsc clean. Commit `64fd5f4`.
@@ -447,6 +451,8 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 # Appendix — Detailed specs (preserved from earlier sessions)
 
 ## Messaging v1 (decisions locked, ready to build when promoted)
+
+> **STALE — messaging shipped across 2026-06-08/09** (DMs, circle + event chats, Realtime, read receipts, unread badges, skeletons, error states, Figma-matched headers). This section is the original build plan, kept for the schema/decision record only.
 
 Architectural calls already made (don't re-grill these next session, just build):
 
@@ -561,7 +567,7 @@ explicitly cut from v1 scope to keep that ship-able.
 - **When we come back:** add `testimonials (id, profile_id, author_id, content,
   is_approved, created_at)` table with owner-approval workflow before display.
 
-### 7. Migrate other users' public profiles (`/user/[id]`) to Supabase
+### ~~7. Migrate other users' public profiles (`/user/[id]`) to Supabase~~ — done 2026-06-09 (`17ee82b`): mock fallback retired, live Supabase only
 
 - Personal profile (`/(tabs)/profile`) is real-data backed.
 - Other users' profiles still read from `mockProfiles.ts` via
@@ -623,7 +629,7 @@ shippable for the investor demo.
 - **When we come back:** expose a toggle in Create Circle. RLS for private
   circles needs a "members only" SELECT policy that's not yet written.
 
-### 14. Activity edit & delete UI
+### ~~14. Activity edit & delete UI~~ — shipped 2026-06-11 (`c4406a4`): creator-only Edit/Delete on event detail + prefilled edit screen; poster editing still open
 
 - `events.service.ts` has `updateEvent()` and `deleteEvent()` but no UI surfaces them.
 - **When we come back:** Edit button on the activity detail page (visible only to creator).
@@ -633,7 +639,7 @@ shippable for the investor demo.
 - Tapping "Activities · 12" on the profile page does nothing.
 - **When we come back:** route to a list view (created + registered events for that user).
 
-### 16. Circle cover image upload
+### ~~16. Circle cover image upload~~ — shipped 2026-06-11 (`44e53c6`): 16:9 picker on create-circle, uploadCircleCover beside the avatar path
 
 - Create Circle form only collects an avatar. `circles.cover_url` stays null
   except for seeded mocks.
