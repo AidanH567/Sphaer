@@ -41,14 +41,4 @@ module.exports = defineConfig([
       reportUnusedDisableDirectives: 'off',
     },
   },
-  {
-    // Pre-existing conditional useState (~line 130) in a file owned by
-    // another workstream. Downgraded to warn HERE ONLY so introducing lint
-    // doesn't block CI — rules-of-hooks stays an error everywhere else.
-    // Remove this override once the sheet is refactored.
-    files: ['src/components/ui/EventRegistrationSheet.tsx'],
-    rules: {
-      'react-hooks/rules-of-hooks': 'warn',
-    },
-  },
 ]);

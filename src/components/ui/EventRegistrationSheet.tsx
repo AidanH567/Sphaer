@@ -77,41 +77,53 @@ export function EventRegistrationSheet({
   // Modal stays mounted through the close animation.
   const [modalMounted, setModalMounted] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  // Declared with the other hooks, above the `!event` early return
+  // (rules-of-hooks). Reset in the open effect so a reopened sheet never
+  // shows a stale in-flight "registering" state.
+  const [isRegistering, setIsRegistering] = useState(false);
 
+  // Open: reset per-open state, mount the modal, slide up. translateY and
+  // backdropOpacity are stable useRef values — listed to satisfy
+  // exhaustive-deps; they never change identity.
   useEffect(() => {
-    if (visible) {
-      setQuantity(1);
-      setModalMounted(true);
-      translateY.setValue(SCREEN_HEIGHT);
-      backdropOpacity.setValue(0);
-      Animated.parallel([
-        Animated.spring(translateY, {
-          toValue: 0,
-          ...motion.spring.sheet,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: ANIMATION_DURATION,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else if (modalMounted) {
-      // Animate out fully, then unmount.
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: SCREEN_HEIGHT,
-          duration: ANIMATION_DURATION,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 0,
-          duration: ANIMATION_DURATION,
-          useNativeDriver: true,
-        }),
-      ]).start(() => setModalMounted(false));
-    }
-  }, [visible]);
+    if (!visible) return;
+    setQuantity(1);
+    setIsRegistering(false);
+    setModalMounted(true);
+    translateY.setValue(SCREEN_HEIGHT);
+    backdropOpacity.setValue(0);
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        ...motion.spring.sheet,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: ANIMATION_DURATION,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [visible, translateY, backdropOpacity]);
+
+  // Close: animate out fully, then unmount. Guarded on modalMounted so the
+  // initial `visible={false}` render doesn't animate, and so the
+  // setModalMounted(false) on completion doesn't re-trigger this effect.
+  useEffect(() => {
+    if (visible || !modalMounted) return;
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: ANIMATION_DURATION,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: ANIMATION_DURATION,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setModalMounted(false));
+  }, [visible, modalMounted, translateY, backdropOpacity]);
 
   if (!event) return null;
 
@@ -126,8 +138,6 @@ export function EventRegistrationSheet({
   const addressParts = (event.address ?? '').split(',');
   const streetLine = addressParts[0]?.trim() || event.location_name || 'Berlin';
   const cityLine = addressParts.slice(1).join(',').trim();
-
-  const [isRegistering, setIsRegistering] = useState(false);
 
   async function handleRegister() {
     if (!event || isRegistering) return;
