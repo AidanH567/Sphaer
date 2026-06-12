@@ -7,41 +7,52 @@ import {
   TouchableWithoutFeedback,
   Animated,
   StyleSheet,
-  Alert,
-  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, radius, motion } from '@/constants/theme';
 
-interface CreateMenuSheetProps {
+export interface OverflowAction {
+  /** Row label, action-first ("Report event", "Block user"). Doubles as the
+   *  accessibility label. */
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  /** Renders the row in red for actions like Block. */
+  destructive?: boolean;
+  onPress: () => void;
+}
+
+interface OverflowMenuSheetProps {
   visible: boolean;
+  actions: OverflowAction[];
   onClose: () => void;
 }
 
-interface MenuOption {
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-  comingSoon?: boolean;
-}
-
-const SHEET_HEIGHT = 340;
+const SHEET_OFFSET = 400; // off-screen translate distance
 const ANIMATION_DURATION = motion.duration.standard;
 
-export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
-  const router = useRouter();
+// Selecting a row closes this sheet and usually opens another Modal
+// (ReportSheet / ConfirmSheet). iOS drops a Modal presented while a sibling
+// is still animating out, so the action fires after the close animation —
+// same 300ms the CircleJoinSheet uses before navigating.
+const ACTION_DELAY_MS = 300;
+
+/**
+ * Ellipsis-overflow action sheet shared by the moderation entry points
+ * (profile / event / circle / DM headers). Same visual chrome and
+ * animate-out-before-unmount Modal pattern as ConfirmSheet.
+ */
+export function OverflowMenuSheet({ visible, actions, onClose }: OverflowMenuSheetProps) {
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(SHEET_OFFSET)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  // Controls whether the Modal is actually mounted — stays true until close animation finishes
+  // Keeps the Modal mounted while the close animation finishes.
   const [modalMounted, setModalMounted] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setModalMounted(true);
-      translateY.setValue(SHEET_HEIGHT);
+      translateY.setValue(SHEET_OFFSET);
       backdropOpacity.setValue(0);
       Animated.parallel([
         Animated.spring(translateY, {
@@ -55,11 +66,15 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      // Animate out first, then unmount
+    } else if (modalMounted) {
+      // `else if (modalMounted)` + the `finished` guard both matter: the
+      // open branch's setValue() STOPS any in-flight close animation and
+      // fires its end callback with finished:false — without the guards a
+      // reopen-during-close (or the initial mount's no-op close) unmounts
+      // the Modal right after it mounts.
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: SHEET_HEIGHT,
+          toValue: SHEET_OFFSET,
           duration: ANIMATION_DURATION,
           useNativeDriver: true,
         }),
@@ -69,46 +84,16 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
-        // finished:false = a reopen interrupted this close (setValue stops
-        // the animation and fires the callback) — keep the Modal mounted.
         if (finished) setModalMounted(false);
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- animate on visibility flips only; Animated refs are stable, modalMounted read for the close guard
   }, [visible]);
 
-  function handleActivityPress() {
+  function handleSelect(action: OverflowAction) {
     onClose();
-    // Small delay so the sheet closes before navigating
-    setTimeout(() => router.push('/(tabs)/create'), 300);
+    setTimeout(action.onPress, ACTION_DELAY_MS);
   }
-
-  function handleCirclePress() {
-    onClose();
-    setTimeout(() => router.push('/(tabs)/create/circle' as any), 300);
-  }
-
-  function handlePosterPress() {
-    Alert.alert('Coming Soon', 'Poster creation is on its way.');
-  }
-
-  const OPTIONS: MenuOption[] = [
-    {
-      title: 'An activity',
-      subtitle: 'Workshop, event or soft invitation',
-      onPress: handleActivityPress,
-    },
-    {
-      title: 'A circle',
-      subtitle: 'Bring your people together.',
-      onPress: handleCirclePress,
-    },
-    {
-      title: 'A poster',
-      subtitle: "Create a cover for what you're sharing",
-      onPress: handlePosterPress,
-      comingSoon: true,
-    },
-  ];
 
   return (
     <Modal
@@ -118,7 +103,6 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      {/* Backdrop */}
       <TouchableWithoutFeedback
         onPress={onClose}
         accessibilityRole="button"
@@ -127,56 +111,56 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
         <Animated.View
           style={[
             styles.backdrop,
-            { opacity: backdropOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] }) },
+            {
+              opacity: backdropOpacity.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.45],
+              }),
+            },
           ]}
         />
       </TouchableWithoutFeedback>
 
-      {/* Sheet */}
       <Animated.View
         style={[
           styles.sheet,
           { paddingBottom: insets.bottom || spacing.lg, transform: [{ translateY }] },
         ]}
       >
-        {/* Handle */}
         <View style={styles.handle} />
 
-        {/* Options */}
-        <View style={styles.options}>
-          {OPTIONS.map((option, index) => (
-            <React.Fragment key={option.title}>
+        <View>
+          {actions.map((action, index) => (
+            <React.Fragment key={action.label}>
               <TouchableOpacity
                 style={styles.row}
-                onPress={option.onPress}
+                onPress={() => handleSelect(action)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
+                accessibilityLabel={action.label}
               >
-                <View style={styles.rowText}>
-                  <Text style={styles.rowTitle}>{option.title}</Text>
-                  <Text style={styles.rowSubtitle}>{option.subtitle}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={option.onPress}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Create ${option.title.toLowerCase()}`}
-                >
-                  <Ionicons name="add-circle-outline" size={20} color={colors.white} />
-                </TouchableOpacity>
+                {action.icon && (
+                  <Ionicons
+                    name={action.icon}
+                    size={20}
+                    color={action.destructive ? colors.badge.red : colors.text.primary}
+                  />
+                )}
+                <Text style={[styles.rowLabel, action.destructive && styles.rowLabelDestructive]}>
+                  {action.label}
+                </Text>
               </TouchableOpacity>
-              {index < OPTIONS.length - 1 && <View style={styles.divider} />}
+              {index < actions.length - 1 && <View style={styles.divider} />}
             </React.Fragment>
           ))}
         </View>
 
-        {/* Cancel */}
         <TouchableOpacity
           style={styles.cancelButton}
           onPress={onClose}
           activeOpacity={0.7}
           accessibilityRole="button"
+          accessibilityLabel="Cancel"
         >
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
@@ -196,11 +180,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.xl,
-    // shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
@@ -213,47 +196,29 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.border,
-    marginBottom: spacing.lg,
-  },
-  options: {
-    borderRadius: radius.lg,
-    overflow: 'hidden',
+    marginBottom: spacing.sm,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.lg,
-    gap: spacing.base,
+    gap: spacing.md,
+    paddingVertical: spacing.base,
   },
-  rowText: {
-    flex: 1,
-    gap: 4,
-  },
-  rowTitle: {
+  rowLabel: {
+    fontFamily: typography.fontFamily.ui,
     fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
   },
-  rowSubtitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    lineHeight: 18,
-  },
-  addButton: {
-    width: 86,
-    height: 48,
-    borderRadius: 30,
-    backgroundColor: colors.neutral.chocolate,
-    alignItems: 'center',
-    justifyContent: 'center',
+  rowLabelDestructive: {
+    color: colors.badge.red,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
   },
   cancelButton: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     height: 52,
     borderRadius: radius.full,
     borderWidth: 1.5,
@@ -262,6 +227,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelText: {
+    fontFamily: typography.fontFamily.ui,
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,

@@ -122,7 +122,11 @@ export function EventRegistrationSheet({
         duration: ANIMATION_DURATION,
         useNativeDriver: true,
       }),
-    ]).start(() => setModalMounted(false));
+    ]).start(({ finished }) => {
+        // finished:false = a reopen interrupted this close (setValue stops
+        // the animation and fires the callback) — keep the Modal mounted.
+        if (finished) setModalMounted(false);
+      });
   }, [visible, modalMounted, translateY, backdropOpacity]);
 
   if (!event) return null;
