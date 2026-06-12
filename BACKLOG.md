@@ -62,8 +62,8 @@ Starter-capped copy `iuCO8ENAhfYIJly1JGAeU1` or the giant board node
 `6239:6597`.
 
 **Otherwise next:** the standing user-authorization blockers — deploy
-`supabase/functions/delete-account` + apply the **8 pending migrations**
-(full list under "APPLY THE 8 PENDING MIGRATIONS" in the P0 section)
+`supabase/functions/delete-account` + apply the **9 pending migrations**
+(full list under "APPLY THE 9 PENDING MIGRATIONS" in the P0 section)
 then regenerate `src/types/supabase.ts` — and Apple Sign In (#2 below)
 once the Apple dev account exists.
 
@@ -142,7 +142,7 @@ Scope: M. (User call on vendor.)
 
 ---
 
-### APPLY THE 8 PENDING MIGRATIONS (one `npx supabase db push`, user-authorized)
+### APPLY THE 9 PENDING MIGRATIONS (one `npx supabase db push`, user-authorized)
 The gated list as of 2026-06-12 EOD — all authored + committed, none applied:
 1. `20260609000000_saved_events_reminder.sql`
 2. `20260609010000_denormalized_follow_counts.sql`
@@ -152,20 +152,20 @@ The gated list as of 2026-06-12 EOD — all authored + committed, none applied:
 6. `20260612030000_rate_limiting.sql` (messages 30/min, follows 60/hr, reports 10/hr)
 7. `20260612040000_notification_producers.sql` (message/follow/circle-event fan-out + adds notifications to the Realtime publication — live badge updates don't fire without it)
 8. `20260612050000_storage_image_mime_limits.sql` (bucket MIME allowlist + 10MB cap; if hosted push rejects storage.buckets writes, set the same fields in Dashboard → Storage)
+9. `20260612060000_profiles_verified.sql` (verified badge renders FALSE until applied; grant via dashboard)
 After push: regenerate `src/types/supabase.ts`, drop the documented casts in moderation.service.ts / events.service.ts, and drop getProfile()'s two COUNT queries. The delete-account edge function deploy is still separately pending.
 
 ### ~~web favicon.png is still a 1×1 stub~~ — shipped 2026-06-12 (`68dc4d1`): real 48px render, app.json already pointed at it
 
 ### ~~conditional useState in EventRegistrationSheet~~ — shipped 2026-06-12 (`3130587`): hook hoisted, stale-registering reset, eslint override removed (rules-of-hooks = error everywhere)
 
-### NEW (2026-06-12): eslint warning burn-down (now 46) + expo-doctor failures
-Lint passes with 46 warnings (was 52; override removal + sheet-effect disables accounted for the drop); expo-doctor reports 2 failed checks + 4 outdated packages (logged, non-blocking in CI). Burn both down. Scope: S–M.
+### ~~eslint warning burn-down + expo-doctor failures~~ — shipped 2026-06-12 (`24eb300`): 0 errors / 0 warnings, doctor 19/19
+Real exhaustive-deps fixes where safe, justified disables where re-running would loop; expo-modules-core direct dep removed, react-test-renderer pinned 19.2.0, expo/expo-font/expo-router patch bumps. npm audit's 14 pre-existing advisories deliberately untouched (unvetted upgrades).
 
 ### NEW (2026-06-12): Alert.alert is a silent no-op on react-native-web
 Found via the signup bug (422 user_already_exists was alerted → web users saw a dead button). Auth credential screens fixed 2026-06-12 (`d88e277`, inline FormErrorText pattern). ~28 other files still use Alert.alert for failure feedback that web users never see (onboarding, verify-email, create flows' upload errors, profile mutations…). Sweep them to inline errors / FormErrorText / ConfirmSheet. Native users are unaffected (Alert works there), so this is P2 unless web becomes a launch target. Scope: M.
 
-### NEW (2026-06-12): no-op Tabs.Screen declarations in (tabs)/_layout.tsx
-`<Tabs.Screen name="messages" />` / `name="profile"` don't match the flat child routes (`messages/index` etc.) → console warns "No route named 'messages' exists" on every mount and the declarations do nothing. Rename to real route names or delete the lines. Scope: S.
+### ~~no-op Tabs.Screen declarations in (tabs)/_layout.tsx~~ — shipped 2026-06-12 (`6091c93`): removed (feed kept to pin the initial tab); warnings verified gone
 
 ## P1 — App audit 2026-06-11 (broken or missing expected features)
 
@@ -196,9 +196,8 @@ expo-router already handled signed-in scheme links; the gap was the signed-out p
 Why: a zero-follow user sees explanatory text but no action. Add "Browse circles" CTA to the feed empty state.
 Scope: S.
 
-### User search
-Why: events + circles are searchable; artists aren't. Decide placement (feed search scope toggle vs circles-style browse) then implement.
-Scope: M.
+### ~~User search~~ — shipped 2026-06-12 (`a8e0c2c`)
+Placement decided (autopilot): an Artists section above event results in the feed list view when the search query is ≥2 chars — no scope toggle, map/mural stay events-only. searchProfiles ilike on display_name/username with the shared PostgREST sanitization, 250ms debounce + request-id cancellation, blockedIds filtering, rows → /user/{id}. Verified live.
 
 ---
 
@@ -530,7 +529,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
-- **2026-06-12 (later) — Signup bug + moderation + deep links + migrations batch (10 commits).** `fix(auth) d88e277` — **user-reported bug**: signup 422 (`user_already_exists`) and every login failure were routed to Alert.alert, a silent no-op on react-native-web — web users saw a dead button. Inline FormErrorText + per-field errors now; verified live both ways (curl proved password policy/email provider fine; the 422 only fires for duplicate emails). `fix(events) 3130587` EventRegistrationSheet conditional-useState hoisted, eslint rules-of-hooks back to error. `chore(web) 68dc4d1` real favicon. `feat(db) b32f2e6/4b68aea/f9d2f21/51abfd7` — FOUR authored-not-applied migrations: rate limiting, notification producers (+ Realtime publication fix for the live badge), storage MIME caps, reports+blocked_users (gated list now 8). `fix(ui) 3a2e5cb` — all six bottom sheets' close animations had an unguarded unmount callback; a reopen-during-close (finished:false) killed the Modal — found because it made OverflowMenuSheet unopenable in the headless preview, regression-tested. `feat(moderation) 121fc81` — report & block everywhere (App Store 1.2), graceful degradation until db push, feed/inbox/chat filtering, 4 component tests. `feat(nav) 4c1cc3a` — cold-start deep links survive the auth gate (pending-link stash + replay, 27 unit tests; Universal Links still gated on Apple account). 108/108 tests green. Note: 3 throwaway diag accounts (`sphaer-diag-*@example.com`) were created while reproducing the 422 — delete in Supabase dashboard (MCP connector was down).
+- **2026-06-12 (later) — Signup bug + moderation + deep links + migrations batch (10 commits).** `fix(auth) d88e277` — **user-reported bug**: signup 422 (`user_already_exists`) and every login failure were routed to Alert.alert, a silent no-op on react-native-web — web users saw a dead button. Inline FormErrorText + per-field errors now; verified live both ways (curl proved password policy/email provider fine; the 422 only fires for duplicate emails). `fix(events) 3130587` EventRegistrationSheet conditional-useState hoisted, eslint rules-of-hooks back to error. `chore(web) 68dc4d1` real favicon. `feat(db) b32f2e6/4b68aea/f9d2f21/51abfd7` — FOUR authored-not-applied migrations: rate limiting, notification producers (+ Realtime publication fix for the live badge), storage MIME caps, reports+blocked_users (gated list now 8). `fix(ui) 3a2e5cb` — all six bottom sheets' close animations had an unguarded unmount callback; a reopen-during-close (finished:false) killed the Modal — found because it made OverflowMenuSheet unopenable in the headless preview, regression-tested. `feat(moderation) 121fc81` — report & block everywhere (App Store 1.2), graceful degradation until db push, feed/inbox/chat filtering, 4 component tests. `feat(nav) 4c1cc3a` — cold-start deep links survive the auth gate (pending-link stash + replay, 27 unit tests; Universal Links still gated on Apple account). Then wave 2 + hygiene: `feat(db) 355f8ee` profiles.verified (+ anti-self-grant trigger, gated list now 9), `feat(profile) 1ac2e49` Activities drill-down sheet, `feat(profile) 828315c` verified badge from real data, `feat(feed) a8e0c2c` artist results in feed search (verified live), `fix(nav) 6091c93` no-op Tabs.Screen removal, `chore(lint) 24eb300` eslint 46→0 + expo-doctor 19/19. 129/129 tests green. Note: 3 throwaway diag accounts (`sphaer-diag-*@example.com`) were created while reproducing the 422 — delete in Supabase dashboard (MCP connector was down).
 - **2026-06-12 — Audit unblocked batch (5 commits + earlier inbox fix).** `feat(db) e1881fd` circles-delete + creator-kick RLS (authored, NOT applied). `chore(ops) 33bdd56` real app icons (were 1×1 stubs) + eas.json + env validation + store metadata. `feat(events) 8546173` real Follow (was cosmetic), cancel registration, creator attendee list, scarcity-badge removal, save/follow double-tap guards. `feat(circles) 5a7ad34` circle edit screen + delete, member kick, welcome-timer dismiss bug fixed, organizer hardening, partial-upload recovery. `chore(infra) c68ba48` 15s fetch timeout, AppState foreground resume + DST recompute, console gating, eslint+expo-doctor CI (0 errors), feed Browse-circles CTA. Earlier: `fix(messages) b277eee` inbox chip row scrolls (Circles was unreachable on phones) + dead Add-filter chip removed. 75/75 tests green throughout.
 - **2026-06-11 — Unblocked-backlog batch (4 commits).** `feat(events) c4406a4` creator edit & delete (ConfirmSheet delete with cascade-accurate copy; new prefilled edit screen with create-parity validation; RLS verified). `style(messages) 3c46692` DM + event chat headers to Figma 6298:6104 (48px thumbs, ink titles, shadow bar, @username subtitle) + MockConversation→ConversationRowDisplay rename. `chore(theme) 605d2eb` hex→token sweep, 22 replacements/13 files + neutral500 token. `feat(circles) 44e53c6` circle cover upload on creation. Earlier same day: Create-Activity style pass (`4c51ce6`), circle chat header (`84f03be`), circle-detail Organizer section (`ce45511`). 75/75 tests green throughout.
 - **2026-06-11 — Figma structural follow-ups: greeting header + Welcome interstitial + UX pass (UP NEXT #1 closed).** All three items from the audit's structural filing shipped, one commit each. **(1) `style(feed) 5097fa3` — greeting header (`4045:8204`):** SearchFilterBar gained an optional `greeting={{city, rest}}` prop — resting state renders location pin + serif "Berlin what's on Today?!" (20px/148%, `colors.neutral.ink`, city in Medium + underline) with a 45px circular white search button; tapping expands to the standard input + Cancel, Cancel collapses back. Crossfade at `motion.duration.standard` (240ms ease-out, opacity-only, row minHeight-pinned so rows below never shift), skipped under OS reduce-motion. Header inset 16px per frame. FeedHeader passes the prop so Feed/Map/Mural inherit; Circles keeps the audited pill. Design context fetched fresh per the handoff's step zero — corrected three assumptions (button 45px not 50, text ink `#1B1B18` not chocolate, copy "Berlin what's on Today?!" capital-T no comma). **(2) `feat(auth) 632e064` — Welcome interstitial (`5013:10915`):** new `app/(auth)/welcome.tsx` — centered serif "Welcome {firstName}" (26px ink, name Medium) on white, 320ms fade-in (reduce-motion skips), ~1.6s dwell then routes to onboarding, tap anywhere skips, routes exactly once. Name precedence: route param → user_metadata.display_name → profile row. signup.tsx session branch + verify-email.tsx SIGNED_IN listener both route here; (auth) layout got a `welcome` fall-through and a fade stack animation. **(3) UX pass (ui-ux-pro-max):** both interactions audited — timings inside the 150–300ms band, one animated element per view, ease-out entering, 45px ≥ 44pt touch target with press feedback + accessibilityLabel on the icon-only button, h1 heading role on the interstitial, ~15:1 text contrast, graceful one-line truncation at narrow widths / large type. No violations to fix. **Verification note:** the preview tab is headless (visibility:hidden, zero rAF ticks) so JS-driver fades can't play live there — verified via computed styles + behaviour (auto-route landed on /onboarding twice); the fade mechanism is identical to the feed crossfade, which screenshots show completing. **Remaining from the filing:** the filter-icon-in-toggle-row product decision — promoted to UP NEXT #1.
@@ -646,14 +645,8 @@ CREATE POLICY "messages_read_recipient_update" ON public.messages
 These were considered during the profile/auth real-data build (May 2026) and
 explicitly cut from v1 scope to keep that ship-able.
 
-### 1. Verified badge
-
-- Green checkmark next to display name on the profile hero.
-- Visible in Figma, scaffolded in mock data (`MockProfile.verified`).
-- **Cut reason:** no decision yet on who grants verification (admin-only? auto?).
-- **When we come back:** add `verified BOOLEAN DEFAULT FALSE` to `profiles`, render
-  the badge in `ProfileView` when true, set it manually via the Supabase
-  dashboard for trusted creators.
+### ~~1. Verified badge~~ — shipped 2026-06-12 (`355f8ee` migration + `828315c` render); INERT until migration applied
+`profiles.verified` column + anti-self-grant trigger (NINTH in the gated apply list); ProfileView renders the Figma check-decagram from real data via isVerified() (false on pre-migration DBs). Grant via dashboard column flip.
 
 ### 2. "Available for work" toggle
 
@@ -769,10 +762,8 @@ shippable for the investor demo.
 - `events.service.ts` has `updateEvent()` and `deleteEvent()` but no UI surfaces them.
 - **When we come back:** Edit button on the activity detail page (visible only to creator).
 
-### 15. Profile count drill-down
-
-- Tapping "Activities · 12" on the profile page does nothing.
-- **When we come back:** route to a list view (created + registered events for that user).
+### ~~15. Profile count drill-down~~ — shipped 2026-06-12 (`1ac2e49`)
+Activities count on own profile + /user/[id] opens UserEventsSheet (created ∪ registered, world-readable per event_registrations_read_all RLS, created-only degradation).
 
 ### ~~16. Circle cover image upload~~ — shipped 2026-06-11 (`44e53c6`): 16:9 picker on create-circle, uploadCircleCover beside the avatar path
 
