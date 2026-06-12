@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCard';
+import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEventsSheet';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
 import { computeProfileCompletion } from '@/utils/profile-completion';
@@ -133,7 +134,8 @@ export default function ProfileScreen() {
         ? getSavedEvents(user.id).then((data) => active && setMySaved(data))
         : openSheet === 'tickets'
         ? getMyRegisteredEvents(user.id).then((data) => active && setMyTickets(data))
-        : getMyRegisteredEvents(user.id).then((data) => active && setMyActivities(data));
+        : // activities — created ∪ registered, deduped (Activities v2 #15)
+          loadUserActivities(user.id).then((data) => active && setMyActivities(data));
 
     fetcher
       .catch(() => {
@@ -348,15 +350,15 @@ export default function ProfileScreen() {
         emptyMessage="You haven't joined any circles yet — browse the Circles tab to find your community."
         onClose={() => setOpenSheet(null)}
       />
-      <EntityListSheet
+      {/* Activities drill-down (Activities v2 #15) — compact event rows,
+          created ∪ registered. Zero-count taps still open it and land on
+          the empty state. */}
+      <UserEventsSheet
         visible={openSheet === 'activities'}
-        title="Activities"
         subtitle={`${counts.activities.toLocaleString('en-US')} total — created or registered`}
-        type="activity"
-        items={myActivities}
-        withTimeTabs
+        events={myActivities}
         isLoading={sheetLoading && openSheet === 'activities'}
-        emptyMessage="No activities yet — create one or register from the feed."
+        emptyMessage="No activities yet"
         onClose={() => setOpenSheet(null)}
       />
       <EntityListSheet

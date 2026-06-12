@@ -71,6 +71,29 @@ export async function getEventById(id: string): Promise<EventWithRelations | nul
   return data as EventWithRelations;
 }
 
+/**
+ * All events a user has created, newest start first. Powers the "created"
+ * half of the profile Activities drill-down (Activities v2 #15) — the
+ * caller merges in registered events on top (see loadUserActivities in
+ * src/components/profile/UserEventsSheet.tsx).
+ *
+ * Works for ANY profile, not just the authed user: `events_read_all` is
+ * `FOR SELECT USING (TRUE)` (20240101000000_initial_schema.sql).
+ */
+export async function getEventsByCreator(userId: string): Promise<EventWithRelations[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(`
+      *,
+      creator:profiles!events_creator_id_fkey(*),
+      circle:circles(*)
+    `)
+    .eq('creator_id', userId)
+    .order('starts_at', { ascending: false });
+  if (error) throw error;
+  return (data as EventWithRelations[]) ?? [];
+}
+
 // ---------------------------------------------------------------------------
 // Create Activity v3 fields (migration 20260612010000_events_subtitle_spots_
 // visibility.sql). The generated EventInsert type doesn't know these columns

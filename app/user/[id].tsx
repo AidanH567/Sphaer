@@ -35,8 +35,9 @@ import {
   unfollowUser,
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
-import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
+import { getRegistrationCount } from '@/services/registrations.service';
 import { shareProfile } from '@/services/share.service';
+import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEventsSheet';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { type MockProfile } from '@/data/mockProfiles';
 import { colors, typography, spacing } from '@/constants/theme';
@@ -211,7 +212,10 @@ export default function UserProfileScreen() {
         ? getFollowing(id).then((data) => active && setFollowing(data))
         : openSheet === 'circles'
         ? getMyCircles(id).then((data) => active && setUserCircles(data))
-        : getMyRegisteredEvents(id).then((data) => active && setUserActivities(data));
+        : // activities — created ∪ registered, deduped (Activities v2 #15).
+          // Registrations are readable for OTHER users too:
+          // event_registrations_read_all is SELECT USING (TRUE).
+          loadUserActivities(id).then((data) => active && setUserActivities(data));
 
     fetcher
       .catch(() => {
@@ -361,15 +365,15 @@ export default function UserProfileScreen() {
             emptyMessage="Not in any circles yet."
             onClose={() => setOpenSheet(null)}
           />
-          <EntityListSheet
+          {/* Activities drill-down (Activities v2 #15) — compact event rows,
+              created ∪ registered. Zero-count taps still open it and land on
+              the empty state. */}
+          <UserEventsSheet
             visible={openSheet === 'activities'}
-            title="Activities"
             subtitle={`${displayProfile.activitiesCount.toLocaleString('en-US')} total — created or registered`}
-            type="activity"
-            items={userActivities}
-            withTimeTabs
+            events={userActivities}
             isLoading={sheetLoading && openSheet === 'activities'}
-            emptyMessage="No activities yet."
+            emptyMessage="No activities yet"
             onClose={() => setOpenSheet(null)}
           />
         </>
