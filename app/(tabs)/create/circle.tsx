@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -137,55 +145,42 @@ export default function CreateCircleScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Sticky nav — mirrors Create Activity (Figma Tabbar 6277:10003):
+          ✕ close left, SF Bold 18 ink title centered, white bar with a soft
+          drop shadow instead of a border. */}
       <View style={styles.navBar}>
         <TouchableOpacity
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel="Close"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+          <Ionicons name="close" size={24} color={colors.neutral.ink} />
         </TouchableOpacity>
-        <Text style={styles.navTitle}>Create a Circle</Text>
-        <View style={{ width: 24 }} />
+        <Text style={styles.navTitle}>Create Circle</Text>
+        <View style={styles.navSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Avatar picker */}
-        <TouchableOpacity
-          style={styles.avatarPicker}
-          onPress={pickAvatar}
-          accessibilityRole="button"
-          accessibilityLabel={avatarUri ? 'Change circle photo' : 'Add circle photo'}
-        >
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="image-outline" size={28} color={colors.text.tertiary} />
-              <Text style={styles.pickerHint}>Add photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {/* Topics — choice chips, same source as before (event categories) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Choose topics?</Text>
+          <View style={styles.tags}>
+            {EVENT_CATEGORIES.map((cat) => (
+              <Tag
+                key={cat}
+                label={cat}
+                variant="choice"
+                selected={tags.includes(cat)}
+                onPress={() => toggleTag(cat)}
+              />
+            ))}
+          </View>
+        </View>
 
-        {/* Cover image picker */}
-        <TouchableOpacity
-          onPress={pickCover}
-          accessibilityRole="button"
-          accessibilityLabel={coverUri ? 'Change cover image' : 'Add cover image'}
-        >
-          {coverUri ? (
-            <Image source={{ uri: coverUri }} style={styles.coverImage} contentFit="cover" />
-          ) : (
-            <View style={styles.coverPlaceholder}>
-              <Ionicons name="image-outline" size={28} color={colors.text.tertiary} />
-              <Text style={styles.pickerHint}>Add cover</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.form}>
+        {/* Name */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Name</Text>
           <Input
-            label="Circle name"
             placeholder=""
             value={name}
             onChangeText={(t) => {
@@ -193,33 +188,64 @@ export default function CreateCircleScreen() {
               if (nameError) setNameError(undefined);
             }}
             error={nameError}
+            accessibilityLabel="Name"
           />
-          <Input
-            label="Description"
-            placeholder=""
+        </View>
+
+        {/* Describe */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Describe</Text>
+          <TextInput
+            style={styles.textarea}
             value={description}
             onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            placeholder=""
+            placeholderTextColor={colors.text.placeholder}
+            accessibilityLabel="Describe"
           />
         </View>
 
-        <Text style={styles.sectionLabel}>Tags</Text>
-        <View style={styles.tags}>
-          {EVENT_CATEGORIES.map((cat) => (
-            <Tag
-              key={cat}
-              label={cat}
-              selected={tags.includes(cat)}
-              onPress={() => toggleTag(cat)}
-            />
-          ))}
+        {/* Avatar — dashed 60px square picker; circular preview once chosen */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Avatar</Text>
+          <TouchableOpacity
+            style={styles.pickerTouchable}
+            onPress={pickAvatar}
+            accessibilityRole="button"
+            accessibilityLabel={avatarUri ? 'Change avatar' : 'Add avatar'}
+          >
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarPreview} />
+            ) : (
+              <View style={styles.pickerSquare}>
+                <Ionicons name="add" size={24} color="#9FA7B3" />
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
-        <Button
-          label="Create circle"
-          onPress={handleCreate}
-          isLoading={isLoading}
-          style={styles.cta}
-        />
+        {/* Cover image — same dashed square; wide 16:9 preview once chosen */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Cover image</Text>
+          <TouchableOpacity
+            style={coverUri ? null : styles.pickerTouchable}
+            onPress={pickCover}
+            accessibilityRole="button"
+            accessibilityLabel={coverUri ? 'Change cover image' : 'Add cover image'}
+          >
+            {coverUri ? (
+              <Image source={{ uri: coverUri }} style={styles.coverPreview} contentFit="cover" />
+            ) : (
+              <View style={styles.pickerSquare}>
+                <Ionicons name="add" size={24} color="#9FA7B3" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <Button label="Create Circle" onPress={handleCreate} isLoading={isLoading} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -227,77 +253,64 @@ export default function CreateCircleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
+  // Figma 6277:10003 nav language: no border, shadow {0,2}/0.08/6.
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    zIndex: 1,
   },
+  // Figma Tabbar 6277:10003: SF Bold 18 ink.
   navTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral.ink,
   },
-  scroll: {
-    padding: spacing.base,
-    gap: spacing.xl,
-    paddingBottom: spacing['4xl'],
-  },
-  avatarPicker: {
-    alignSelf: 'center',
-  },
-  avatarImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-  },
-  avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  pickerHint: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-  },
-  coverImage: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: radius.md,
-  },
-  coverPlaceholder: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  form: { gap: spacing.base },
+  // Balances the 24px close icon so the title stays optically centered.
+  navSpacer: { width: 24 },
+  scroll: { padding: spacing.base, gap: spacing.xl, paddingBottom: spacing['4xl'] },
+  // Label→field gap (Figma spec: 6–8).
+  section: { gap: spacing.sm },
+  // Figma form labels: SF Semibold 17 chocolate (Primary/Category Header).
   sectionLabel: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
+  },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  textarea: {
+    borderWidth: 1,
+    borderColor: colors.neutral.hiddenLines,
+    borderRadius: radius.sm,
+    padding: spacing.md,
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
+    minHeight: 144,
+    textAlignVertical: 'top',
   },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: -spacing.sm,
+  // Keeps the tap target bounded to the 60px square (not the full row).
+  pickerTouchable: { alignSelf: 'flex-start' },
+  // Figma 6277:10054 picker language: 60px dashed square, 2px #9FA7B3, r9.
+  pickerSquare: {
+    width: 60,
+    height: 60,
+    borderWidth: 2,
+    borderColor: '#9FA7B3',
+    borderStyle: 'dashed',
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cta: {},
+  avatarPreview: { width: 60, height: 60, borderRadius: radius.full },
+  coverPreview: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.sm },
 });
 
 export const ErrorBoundary = makeRouteErrorBoundary('create-circle');
