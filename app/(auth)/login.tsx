@@ -7,7 +7,6 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,9 +15,11 @@ import { SphaerIcon } from '@/components/SphaerLogo';
 import {
   AuthField,
   AuthPrimaryButton,
+  FormErrorText,
   GoogleButton,
   OrDivider,
 } from '@/components/auth/AuthControls';
+import { isInvalidCredentialsError } from '@/utils/auth-errors';
 import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { signInWithGoogle } from '@/services/auth.service';
@@ -35,16 +36,29 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  // Non-field submit failures, rendered inline — Alert.alert is a no-op on
+  // react-native-web, so alerting here left web users with a silently dead
+  // Log in button on bad credentials.
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function handleLogin() {
-    if (!email || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
-      return;
-    }
+    setFormError(null);
+    const next: typeof errors = {};
+    if (!email) next.email = 'Enter your email';
+    if (!password) next.password = 'Enter your password';
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
     try {
       await signIn(email, password);
     } catch (e: unknown) {
-      Alert.alert('Login failed', e instanceof Error ? e.message : 'Please try again.');
+      if (isInvalidCredentialsError(e)) {
+        setFormError('Email or password is incorrect.');
+      } else {
+        setFormError(
+          e instanceof Error ? e.message : 'Something went wrong — please try again.'
+        );
+      }
     }
   }
 
@@ -60,7 +74,7 @@ export default function LoginScreen() {
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Google sign-in failed.';
       if (!message.toLowerCase().includes('cancelled')) {
-        Alert.alert('Google sign-in failed', message);
+        setFormError(message);
       }
     }
   }
@@ -104,6 +118,7 @@ export default function LoginScreen() {
                 placeholder="your@email.com"
                 keyboardType="email-address"
                 autoComplete="email"
+                error={errors.email}
               />
               <AuthField
                 label="Password"
@@ -112,6 +127,7 @@ export default function LoginScreen() {
                 placeholder="Your password"
                 secureTextEntry
                 autoComplete="password"
+                error={errors.password}
               />
 
               <TouchableOpacity
@@ -122,6 +138,7 @@ export default function LoginScreen() {
                 <Text style={styles.forgotText}>Forgot password?</Text>
               </TouchableOpacity>
 
+              <FormErrorText message={formError} />
               <AuthPrimaryButton label="Log in" onPress={handleLogin} isLoading={isLoading} />
             </View>
 

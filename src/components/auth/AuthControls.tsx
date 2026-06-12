@@ -107,6 +107,36 @@ const fieldStyles = StyleSheet.create({
   },
 });
 
+/* ── FormErrorText ──────────────────────────────────────── */
+
+/**
+ * Form-level (non-field) auth error. Replaces `Alert.alert` for submit
+ * failures — RN-web doesn't implement Alert, so alerts are silently
+ * dropped in the browser and the user sees nothing happen.
+ */
+export function FormErrorText({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <Text
+      style={formErrorStyles.text}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+    >
+      {message}
+    </Text>
+  );
+}
+
+const formErrorStyles = StyleSheet.create({
+  text: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    lineHeight: 17,
+    color: ERROR_RED,
+    textAlign: 'center',
+  },
+});
+
 /* ── AuthPrimaryButton ──────────────────────────────────── */
 
 interface AuthPrimaryButtonProps {

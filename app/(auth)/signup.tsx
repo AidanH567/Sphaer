@@ -7,7 +7,6 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +15,7 @@ import { SphaerIcon } from '@/components/SphaerLogo';
 import {
   AuthField,
   AuthPrimaryButton,
+  FormErrorText,
   GoogleButton,
   OrDivider,
 } from '@/components/auth/AuthControls';
@@ -23,6 +23,7 @@ import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { signInWithGoogle } from '@/services/auth.service';
 import { isValidEmail, isValidPassword } from '@/utils/validators';
+import { isAlreadyRegisteredError } from '@/utils/auth-errors';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma tokens — Sign Up Flow Screen 1.1 (node 5013:10790)
@@ -38,6 +39,10 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ displayName?: string; email?: string; password?: string }>({});
+  // Non-field submit failures (network, unexpected server errors). Rendered
+  // inline — Alert.alert is a no-op on react-native-web, so alerting here
+  // left web users with a silently dead Sign up button.
+  const [formError, setFormError] = useState<string | null>(null);
 
   function validate(): boolean {
     const next: typeof errors = {};
@@ -52,6 +57,7 @@ export default function SignUpScreen() {
   }
 
   async function handleSignUp() {
+    setFormError(null);
     if (!validate()) return;
     try {
       const result = await signUp(email, password, displayName.trim());
@@ -72,7 +78,16 @@ export default function SignUpScreen() {
         );
       }
     } catch (e: unknown) {
-      Alert.alert('Sign up failed', e instanceof Error ? e.message : 'Please try again.');
+      if (isAlreadyRegisteredError(e)) {
+        setErrors((prev) => ({
+          ...prev,
+          email: 'This email is already registered — log in instead.',
+        }));
+      } else {
+        setFormError(
+          e instanceof Error ? e.message : 'Something went wrong — please try again.'
+        );
+      }
     }
   }
 
@@ -92,9 +107,9 @@ export default function SignUpScreen() {
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Google sign-in failed.';
-      // Don't show an alert for user-cancelled sign-in — that's not an error.
+      // Don't surface user-cancelled sign-in — that's not an error.
       if (!message.toLowerCase().includes('cancelled')) {
-        Alert.alert('Google sign-in failed', message);
+        setFormError(message);
       }
     }
   }
@@ -159,6 +174,7 @@ export default function SignUpScreen() {
                 autoComplete="password-new"
                 error={errors.password}
               />
+              <FormErrorText message={formError} />
               <AuthPrimaryButton label="Sign up" onPress={handleSignUp} isLoading={isLoading} />
             </View>
 
