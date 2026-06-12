@@ -41,11 +41,16 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' } }}
       >
+        {/* Only `feed` is declared: it's the lone child with its own
+            _layout, so it's the only flat route name in this navigator —
+            and declaring it first pins it as the initial tab. The other
+            groups (circles/create/messages/profile) have no _layout, so
+            their children register as flat routes (`circles/index`,
+            `messages/[id]`, …) automatically; declaring the bare directory
+            names here just logs "No route named X exists" and does nothing.
+            The visible tab bar is the custom BottomNav below, so screen
+            order beyond the initial route is irrelevant. */}
         <Tabs.Screen name="feed" />
-        <Tabs.Screen name="circles" />
-        <Tabs.Screen name="create" />
-        <Tabs.Screen name="messages" />
-        <Tabs.Screen name="profile" />
       </Tabs>
 
       <BottomNav onCreatePress={() => setCreateMenuVisible(true)} />
