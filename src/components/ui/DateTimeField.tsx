@@ -76,7 +76,9 @@ export function DateTimeField({
   }
 
   function openAndroidPicker() {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // Lazy-require: the imperative DateTimePickerAndroid API only exists on
+    // Android — requiring at call time keeps it off the iOS/web paths.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
     const current = value ?? new Date();
 

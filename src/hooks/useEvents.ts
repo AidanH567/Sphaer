@@ -9,6 +9,11 @@ export function useEvents(filters?: EventFilters) {
   const [error, setError] = useState<string | null>(null);
   const { blockedIds } = useAppContext();
 
+  // Callers pass fresh `filters` object literals on every render — keying
+  // the callback on the serialized value keeps fetchEvents stable unless
+  // the actual filter values change (object identity would refetch on
+  // every render).
+  const filtersKey = JSON.stringify(filters);
   const fetchEvents = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -20,7 +25,10 @@ export function useEvents(filters?: EventFilters) {
     } finally {
       setIsLoading(false);
     }
-  }, [JSON.stringify(filters)]);
+    // `filters` is covered by filtersKey above — depending on the object
+    // itself would defeat the serialization and refetch every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   useEffect(() => {
     fetchEvents();

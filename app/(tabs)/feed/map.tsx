@@ -18,7 +18,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 // react-native-maps is iOS/Android only — lazy-require so the web bundle
 // doesn't choke. (The web build is provided by map.web.tsx alongside this.)
 const isNative = Platform.OS !== 'web';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Maps = isNative ? require('react-native-maps') : null;
 const MapView = Maps?.default ?? View;
 const Marker = Maps?.Marker ?? View;

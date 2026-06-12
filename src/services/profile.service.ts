@@ -242,13 +242,13 @@ export async function uploadGalleryImages(
   profileId: string,
   uris: string[],
   startingSortOrder: number
-): Promise<{ images: ProfileImage[]; errors: Array<{ uri: string; error: unknown }> }> {
+): Promise<{ images: ProfileImage[]; errors: { uri: string; error: unknown }[] }> {
   const results = await Promise.allSettled(
     uris.map((uri, i) => uploadGalleryImage(profileId, uri, startingSortOrder + i))
   );
 
   const images: ProfileImage[] = [];
-  const errors: Array<{ uri: string; error: unknown }> = [];
+  const errors: { uri: string; error: unknown }[] = [];
 
   results.forEach((res, i) => {
     if (res.status === 'fulfilled') images.push(res.value);

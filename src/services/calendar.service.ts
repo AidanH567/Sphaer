@@ -55,18 +55,16 @@ export async function addEventToCalendar(
  * for the user, not N.
  */
 export async function addEventsToCalendar(
-  events: Array<
-    Pick<
-      EventWithRelations,
-      | 'id'
-      | 'title'
-      | 'description'
-      | 'starts_at'
-      | 'ends_at'
-      | 'location_name'
-      | 'address'
-    >
-  >,
+  events: Pick<
+    EventWithRelations,
+    | 'id'
+    | 'title'
+    | 'description'
+    | 'starts_at'
+    | 'ends_at'
+    | 'location_name'
+    | 'address'
+  >[],
 ): Promise<void> {
   const ics = buildEventsIcs(events);
   const filename = `sphaer-saved-${Date.now()}.ics`;
@@ -106,7 +104,6 @@ function encodeBase64(s: string): string {
     return btoa(utf8);
   }
   // RN's polyfill via global Buffer — covered by supabase-js's deps.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const buf = (globalThis as any).Buffer;
   if (buf?.from) {
     return buf.from(s, 'utf8').toString('base64');

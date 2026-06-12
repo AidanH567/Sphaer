@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '@/components/ui/Modal';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { joinCircle, leaveCircle } from '@/services/circles.service';

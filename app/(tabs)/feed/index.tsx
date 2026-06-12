@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Alert, ScrollView } from 'react-native';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '@/context/AppContext';
 import { useAuthContext } from '@/context/AuthContext';
@@ -314,7 +313,8 @@ export default function FeedScreen() {
     // Optimistic flip — revert on failure so the UI matches DB state.
     setSavedIds((prev) => {
       const next = new Set(prev);
-      wasSaved ? next.delete(eventId) : next.add(eventId);
+      if (wasSaved) next.delete(eventId);
+      else next.add(eventId);
       return next;
     });
     try {
@@ -327,7 +327,8 @@ export default function FeedScreen() {
       console.error('[Feed] toggleSave failed:', err);
       setSavedIds((prev) => {
         const next = new Set(prev);
-        wasSaved ? next.add(eventId) : next.delete(eventId);
+        if (wasSaved) next.add(eventId);
+        else next.delete(eventId);
         return next;
       });
     }

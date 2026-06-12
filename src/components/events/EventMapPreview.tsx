@@ -6,7 +6,7 @@ import { colors, radius, spacing, typography } from '@/constants/theme';
 // react-native-maps is iOS/Android-only. Lazy-require so this file is safe
 // to import on web too (the .web.tsx sibling is picked up there instead).
 const isNative = Platform.OS !== 'web';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Maps = isNative ? require('react-native-maps') : null;
 const MapView = Maps?.default ?? View;
 const Marker = Maps?.Marker ?? View;

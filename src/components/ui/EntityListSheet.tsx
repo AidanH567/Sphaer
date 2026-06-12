@@ -129,7 +129,9 @@ export function EntityListSheet(props: EntityListSheetProps) {
         }),
       ]).start(() => setModalMounted(false));
     }
-  }, [visible]);
+    // translateY/backdropOpacity are stable useRef instances — listed only
+    // to satisfy exhaustive-deps; the effect still fires on `visible` alone.
+  }, [visible, translateY, backdropOpacity]);
 
   // Time-tab filter (activity only)
   const timeFilteredItems = useMemo(() => {

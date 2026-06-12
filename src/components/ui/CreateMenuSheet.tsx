@@ -8,7 +8,6 @@ import {
   Animated,
   StyleSheet,
   Alert,
-  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,7 +73,9 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
         if (finished) setModalMounted(false);
       });
     }
-  }, [visible]);
+    // translateY/backdropOpacity are stable useRef instances — listed only
+    // to satisfy exhaustive-deps; the effect still fires on `visible` alone.
+  }, [visible, translateY, backdropOpacity]);
 
   function handleActivityPress() {
     onClose();

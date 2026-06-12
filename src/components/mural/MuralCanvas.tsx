@@ -162,11 +162,11 @@ export function MuralCanvas({
       });
     }
     prevCanvasRef.current = { w: canvasWidth, h: canvasHeight };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // Reanimated shared values (translateX/Y, scale, canvasOpacity) are
     // intentionally NOT in the dep list — they don't trigger React renders
     // and including them would force-recreate the effect on every gesture
     // tick, breaking the smooth relayout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasWidth, canvasHeight, viewportWidth, viewportHeight]);
 
   // Web-only wheel handler.
@@ -238,10 +238,10 @@ export function MuralCanvas({
 
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // translateX/Y and scale are Reanimated shared values — excluded
     // deliberately. The wheel handler reads .value at fire time, so it
     // always sees the latest gesture state without re-subscribing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewportWidth, viewportHeight, canvasWidth, canvasHeight, minScale]);
 
   const handleTap = (screenX: number, screenY: number) => {
@@ -315,7 +315,9 @@ export function MuralCanvas({
         .runOnJS(RUN_GESTURE_ON_JS),
     // Re-create when canvas geometry changes so onUpdate closes over fresh
     // bounds. minScale changes only when canvas/viewport change, so the
-    // dependency list is exhaustive.
+    // dependency list is exhaustive. Shared values are excluded — worklets
+    // read .value at event time, so closure identity needn't track them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [canvasWidth, canvasHeight, viewportWidth, viewportHeight]
   );
 
@@ -370,6 +372,10 @@ export function MuralCanvas({
           isInteracting.value = false;
         })
         .runOnJS(RUN_GESTURE_ON_JS),
+    // Same as panGesture: shared values are deliberately excluded — the
+    // worklets read .value at event time, so the closure only needs to
+    // track canvas/viewport geometry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [canvasWidth, canvasHeight, viewportWidth, viewportHeight, minScale]
   );
 

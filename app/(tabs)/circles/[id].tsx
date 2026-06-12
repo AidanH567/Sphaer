@@ -28,10 +28,9 @@ import {
   unfollowUser,
   isFollowing as isFollowingUser,
 } from '@/services/profile.service';
-import type { ProfileWithCounts } from '@/types/user.types';
+import type { Profile, ProfileWithCounts } from '@/types/user.types';
 import { supabase } from '@/lib/supabase';
 import type { EventWithRelations } from '@/types/event.types';
-import type { Profile } from '@/types/user.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const MEMBERS_PREVIEW_LIMIT = 6;

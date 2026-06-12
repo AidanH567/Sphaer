@@ -10,7 +10,11 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('expo-image', () => {
+  // jest.mock factories are hoisted above imports, so require() is the only
+  // way to reach modules from inside one.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactLib = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { View } = require('react-native');
   return {
     Image: (props: Record<string, unknown>) => ReactLib.createElement(View, props),

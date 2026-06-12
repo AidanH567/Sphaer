@@ -92,6 +92,11 @@ export function CircleJoinSheet({ circle, onClose, onJoined }: CircleJoinSheetPr
         if (finished) setModalMounted(false);
       });
     }
+    // translateY/backdropOpacity are stable useRef Animated.Values, and
+    // modalMounted is deliberately excluded: the open branch sets it, so
+    // re-running on its flip would restart the in-flight animation and
+    // re-fire the membership fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circle, user]);
 
   function goToCircle(id: string) {

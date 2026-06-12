@@ -458,16 +458,21 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    // The ref Maps are created once and only ever mutated (never
+    // reassigned), so capturing them here hands cleanup the same instances
+    // without reading `.current` after the effect has been torn down.
+    const eventChannels = eventChannelsRef.current;
+    const circleChannels = circleChannelsRef.current;
     return () => {
       channel.unsubscribe();
-      for (const ch of eventChannelsRef.current.values()) {
+      for (const ch of eventChannels.values()) {
         ch.unsubscribe();
       }
-      eventChannelsRef.current.clear();
-      for (const ch of circleChannelsRef.current.values()) {
+      eventChannels.clear();
+      for (const ch of circleChannels.values()) {
         ch.unsubscribe();
       }
-      circleChannelsRef.current.clear();
+      circleChannels.clear();
     };
   }, [userId, refresh, handleIncomingDM]);
 

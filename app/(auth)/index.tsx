@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,8 +8,6 @@ import { Button } from '@/components/ui/Button';
 import { colors, typography, spacing } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { INTRO_SEEN_KEY } from './intro';
-
-const { height } = Dimensions.get('window');
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -46,6 +44,10 @@ export default function LandingScreen() {
         Animated.timing(buttonsY, { toValue: 0, duration: 400, useNativeDriver: true }),
       ]),
     ]).start();
+    // Run-once mount sequence: the Animated.Values are stable useRef
+    // instances and `router` is only used imperatively — re-running on
+    // identity changes would replay the entrance animation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

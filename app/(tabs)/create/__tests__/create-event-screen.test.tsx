@@ -1,6 +1,11 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
+// Imports of the mocked services so assertions can reach the jest.fn()s.
+import { createEvent, uploadEventPoster } from '@/services/events.service';
+import { getAdminCircles } from '@/services/circles.service';
+import CreateScreen from '../index';
+
 // ---------------------------------------------------------------------------
 // Mocks — everything the Create screen reaches for outside pure RN rendering.
 // All inline per testing policy (no shared setup files).
@@ -113,11 +118,6 @@ jest.mock('react-native-safe-area-context', () => {
     initialWindowMetrics: { insets, frame },
   };
 });
-
-// Imports of the mocked services so assertions can reach the jest.fn()s.
-import { createEvent, uploadEventPoster } from '@/services/events.service';
-import { getAdminCircles } from '@/services/circles.service';
-import CreateScreen from '../index';
 
 const TITLE_ERROR = 'Please add a title for your activity.';
 const STARTS_AT_ERROR = 'Please pick a start date and time.';

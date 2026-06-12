@@ -20,7 +20,7 @@ import { colors, spacing, typography } from '@/constants/theme';
 export interface LegalSection {
   heading: string;
   /** Paragraph string or array of paragraphs / bullet lists. */
-  body: string | Array<string | { bullets: string[] }>;
+  body: string | (string | { bullets: string[] })[];
 }
 
 interface LegalScreenProps {

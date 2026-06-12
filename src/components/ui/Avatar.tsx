@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { colors, typography, radius } from '@/constants/theme';
+import { colors, typography } from '@/constants/theme';
 import { getInitials } from '@/utils/format';
 
 interface AvatarProps {

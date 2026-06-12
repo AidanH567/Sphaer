@@ -100,7 +100,9 @@ export function ConfirmSheet({
         if (finished) setModalMounted(false);
       });
     }
-  }, [visible]);
+    // translateY/backdropOpacity are stable useRef instances — listed only
+    // to satisfy exhaustive-deps; the effect still fires on `visible` alone.
+  }, [visible, translateY, backdropOpacity]);
 
   async function handleConfirmPress() {
     if (isConfirming) return;
