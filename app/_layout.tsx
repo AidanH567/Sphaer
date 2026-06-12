@@ -1,15 +1,74 @@
 import '../global.css';
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { Stack, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider, useAuthContext } from '@/context/AuthContext';
 import { AppProvider } from '@/context/AppContext';
 import { MessagesProvider } from '@/context/MessagesContext';
+import { consumePendingDeepLink, isDeepLinkablePath } from '@/lib/linking';
 import { motion } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * Replays a deep link that was stashed while the user was signed out.
+ *
+ * expo-router itself turns cold-start / warm URLs into routes; the one
+ * thing it can't survive is the (tabs) auth gate redirecting to (auth)
+ * before a session exists. (tabs)/_layout stashes the target, and this
+ * gate consumes it the moment the user lands anywhere inside (tabs).
+ * "Inside (tabs)" is deliberately the trigger: every sign-in path ends
+ * with a replace into the group — the (auth) layout's redirect to
+ * /(tabs)/feed, login.tsx's explicit replace, /location's post-onboarding
+ * replace — so consuming here runs strictly after those navigations and
+ * can't be stomped by them or double-navigate.
+ *
+ * The converse also holds: when expo-router already routed a deep link
+ * natively (signed-in cold start to /circles/x), the gate consumes any
+ * stale stash but does NOT navigate, so the fresh link is never stomped.
+ */
+function PendingDeepLinkGate() {
+  const { session } = useAuthContext();
+  const segments = useSegments();
+  const pathname = usePathname();
+  const router = useRouter();
+  const hasSession = Boolean(session);
+  const inTabs = segments[0] === '(tabs)';
+
+  // Latest pathname, readable from the consume effect without being one of
+  // its triggers — consuming should fire on tabs-entry / sign-in
+  // transitions, not re-hit storage on every in-tabs navigation. Synced in
+  // its own effect (declared first, so it runs before the consumer below
+  // whenever both fire in one commit).
+  const pathnameRef = useRef(pathname);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!inTabs || !hasSession) return;
+    let alive = true;
+    consumePendingDeepLink().then((path) => {
+      if (!alive || !path) return;
+      // If the user is already sitting ON a deep-linkable path, expo-router
+      // delivered a fresh link natively (signed-in cold start) — the stash
+      // is stale by definition. consumePendingDeepLink() above already
+      // cleared it; replaying would stomp the fresh target or pointlessly
+      // remount the same screen. Never double-navigate.
+      if (isDeepLinkablePath(pathnameRef.current)) return;
+      // Cast: the stash is allowlist-validated in linking.ts; typed routes
+      // can't type a runtime string.
+      router.replace(path as Href);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [inTabs, hasSession, router]);
+
+  return null;
+}
 
 export default function RootLayout() {
   // ─── Custom fonts ────────────────────────────────────────────────────────────
@@ -41,6 +100,7 @@ export default function RootLayout() {
         <AppProvider>
           <MessagesProvider>
             <StatusBar style="dark" />
+            <PendingDeepLinkGate />
             {/*
               Stack-level screenOptions = the swift defaults for every push:
               slide_from_right matches iOS/Android conventions, and
