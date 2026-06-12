@@ -263,8 +263,8 @@ Why (historical): `app.json` only set `photosPermission` for image-picker. The N
 Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
 spec when scheduled.
 
-### ~~Create Activity screen — Figma audit (`6277:10002`)~~ — style pass shipped 2026-06-11 (`4c51ce6`)
-Chips → Tag variant=choice; shared input master (1px hidden-lines/r8/h50) applied to Input/DateTimeField/AddressAutocomplete; labels/nav/CTAs per frame. STILL MISSING (need schema/product, not style): Sub Title + Media + Spots fields, Anyone/Invite-only visibility radios, Preview button.
+### ~~Create Activity screen — Figma audit (`6277:10002`)~~ — FULL structural replication shipped 2026-06-12
+Token pass `4c51ce6`, full rebuild + circle-creation mirror in the 2026-06-12 commits: Sub Title/Media/Spots/visibility radios/functional Preview all built; fields persist once migration `20260612010000` is applied (graceful degradation until then — THIRD pending migration in the authorization-gated list).
 
 ### ~~Circle detail — Organizer section (Figma 6274:7785)~~ — shipped 2026-06-11
 Avatar/name/role → /user/{id}, stat row (getProfile + 2 head counts), Follow toggle + Contact→DM; hidden for self. SealCheck badge deferred (verified flag is mock-only).
