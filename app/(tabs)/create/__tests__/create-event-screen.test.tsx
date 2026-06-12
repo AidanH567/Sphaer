@@ -29,8 +29,13 @@ jest.mock('@/context/AuthContext', () => ({
 }));
 
 jest.mock('@/services/events.service', () => ({
-  createEvent: jest.fn(() => Promise.resolve()),
-  uploadEventPoster: jest.fn(() => Promise.resolve(null)),
+  // createEvent resolves the v3 shape: { data, degraded } — degraded:true is
+  // the missing-column retry path, which these tests never exercise.
+  createEvent: jest.fn(() =>
+    Promise.resolve({ data: { id: 'evt-1' }, degraded: false })
+  ),
+  uploadEventPoster: jest.fn(() => Promise.resolve('https://cdn/poster.jpg')),
+  uploadEventMedia: jest.fn(() => Promise.resolve([])),
 }));
 
 jest.mock('@/services/circles.service', () => ({
@@ -136,29 +141,45 @@ async function renderCreateScreen() {
 
 jest.setTimeout(20000);
 
-describe('CreateScreen — create-event form validation', () => {
+describe('CreateScreen — Create Activity (Figma 6277:10002)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('renders the form with the Publish activity CTA and nav a11y affordances', async () => {
+  it('renders the nav chrome, pickers and CTAs with their a11y affordances', async () => {
     const view = await renderCreateScreen();
 
-    // Submit CTA is exposed as an accessible button.
+    // Submit CTAs are exposed as accessible buttons (stacked Preview + Publish).
     expect(view.getByRole('button', { name: 'Publish' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Preview' })).toBeTruthy();
 
-    // Screen chrome + a11y sweep regressions.
+    // Nav bar: ✕ close (not "Go back" — the screen presents as a sheet now).
     expect(view.getByText('Create Activity')).toBeTruthy();
-    expect(view.getByRole('button', { name: 'Go back' })).toBeTruthy();
-    expect(view.getByRole('button', { name: 'Add poster image' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Close' })).toBeTruthy();
 
-    // Free/Paid toggle exposes selection state; Free is the default.
+    // Image pickers: dashed cover tile + media tile.
+    expect(view.getByRole('button', { name: 'Add cover image' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Add media images' })).toBeTruthy();
+  });
+
+  it('exposes the visibility radios with Anyone checked by default and toggles on press', async () => {
+    const view = await renderCreateScreen();
+
+    const anyone = view.getByRole('radio', { name: 'Anyone' });
+    const inviteOnly = view.getByRole('radio', { name: 'Invite only' });
+
+    // "Who can see this?" defaults to Anyone (DB default — the payload only
+    // carries `visibility` when the user picks invite_only).
+    expect(anyone.props.accessibilityState).toEqual({ checked: true });
+    expect(inviteOnly.props.accessibilityState).toEqual({ checked: false });
+
+    fireEvent.press(inviteOnly);
+    expect(view.getByRole('radio', { name: 'Anyone' }).props.accessibilityState).toEqual({
+      checked: false,
+    });
     expect(
-      view.getByRole('button', { name: 'Free' }).props.accessibilityState
-    ).toEqual({ selected: true });
-    expect(
-      view.getByRole('button', { name: 'Paid' }).props.accessibilityState
-    ).toEqual({ selected: false });
+      view.getByRole('radio', { name: 'Invite only' }).props.accessibilityState
+    ).toEqual({ checked: true });
   });
 
   it('shows inline required-field errors on empty submit and calls no create service', async () => {
@@ -182,12 +203,9 @@ describe('CreateScreen — create-event form validation', () => {
     fireEvent.press(view.getByRole('button', { name: 'Publish' }));
     expect(await view.findByText(TITLE_ERROR)).toBeTruthy();
 
-    // The Title input has no unique placeholder or accessibility label
-    // (limitation of the current markup) — it is the first empty text input
-    // in render order. The assertion below self-validates the targeting:
-    // only typing in the *title* field clears the title error.
-    const titleInput = view.getAllByDisplayValue('')[0];
-    fireEvent.changeText(titleInput, 'Warehouse jam session');
+    // The Title input carries accessibilityLabel="Title" (a11y sweep), so we
+    // can target it directly instead of positional display-value matching.
+    fireEvent.changeText(view.getByLabelText('Title'), 'Warehouse jam session');
 
     // Text landed in the field we targeted…
     expect(view.getByDisplayValue('Warehouse jam session')).toBeTruthy();
@@ -198,5 +216,26 @@ describe('CreateScreen — create-event form validation', () => {
 
     // Still no service call — clearing an error must not submit.
     expect(jest.mocked(createEvent)).not.toHaveBeenCalled();
+  });
+
+  it('opens a functional, closeable Preview modal rendering the live EventCard', async () => {
+    const view = await renderCreateScreen();
+
+    // Closed by default — the placeholder card title is nowhere in the tree.
+    expect(view.queryByText('Untitled activity')).toBeNull();
+
+    fireEvent.press(view.getByRole('button', { name: 'Preview' }));
+
+    // The real feed EventCard renders from current form values (empty title
+    // falls back to the placeholder).
+    expect(await view.findByText('Untitled activity')).toBeTruthy();
+
+    // Two "Close" buttons exist while the modal is up (nav ✕ + modal ✕) —
+    // the modal's renders last in tree order.
+    const closeButtons = view.getAllByRole('button', { name: 'Close' });
+    expect(closeButtons.length).toBe(2);
+    fireEvent.press(closeButtons[closeButtons.length - 1]);
+
+    await waitFor(() => expect(view.queryByText('Untitled activity')).toBeNull());
   });
 });

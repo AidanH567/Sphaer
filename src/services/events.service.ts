@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { validateImageUpload } from '@/utils/upload-validation';
-import type { EventInsert, EventUpdate, EventWithRelations, EventFilters } from '@/types/event.types';
+import type { Event, EventInsert, EventUpdate, EventWithRelations, EventFilters } from '@/types/event.types';
 
 export async function getEvents(filters?: EventFilters): Promise<EventWithRelations[]> {
   // Newest-first: the feed shows freshly published activities at the top.
@@ -71,14 +71,72 @@ export async function getEventById(id: string): Promise<EventWithRelations | nul
   return data as EventWithRelations;
 }
 
-export async function createEvent(event: EventInsert) {
+// ---------------------------------------------------------------------------
+// Create Activity v3 fields (migration 20260612010000_events_subtitle_spots_
+// visibility.sql). The generated EventInsert type doesn't know these columns
+// until that migration is applied and types are regenerated — so we widen the
+// insert type locally and degrade gracefully at runtime (see createEvent).
+// ---------------------------------------------------------------------------
+
+const V3_EVENT_KEYS = ['subtitle', 'spots', 'visibility', 'media_urls'] as const;
+
+export type EventInsertV3 = EventInsert & {
+  subtitle?: string | null;
+  spots?: number | null;
+  visibility?: 'anyone' | 'invite_only';
+  media_urls?: string[] | null;
+};
+
+export interface CreateEventResult {
+  data: Event;
+  /** True when the insert had to retry without the v3 columns because the
+   *  database hasn't run migration 20260612010000 yet. The caller surfaces
+   *  a non-blocking "will activate after the next database update" notice. */
+  degraded: boolean;
+}
+
+/** The single documented cast at the insert boundary: columns land with
+ *  migration 20260612010000; types regenerate after db push. Until then the
+ *  generated Insert type rejects the v3 keys as excess properties, so we
+ *  widen through `unknown` here — and ONLY here — instead of sprinkling
+ *  casts over every call site. */
+function asGeneratedInsert(event: EventInsertV3): EventInsert {
+  return event as unknown as EventInsert;
+}
+
+/** Does this insert error look like "one of the v3 columns doesn't exist"?
+ *  PostgREST reports a stale schema as PGRST204 ("Could not find the
+ *  'subtitle' column of 'events' in the schema cache") and raw Postgres as
+ *  42703 ("column \"subtitle\" of relation \"events\" does not exist") —
+ *  both messages name the column, so a message match covers either path. */
+function isMissingV3ColumnError(error: { message?: string; code?: string }): boolean {
+  const msg = (error.message ?? '').toLowerCase();
+  if (!msg.includes('column')) return false;
+  return V3_EVENT_KEYS.some((key) => msg.includes(`'${key}'`) || msg.includes(`"${key}"`) || msg.includes(` ${key} `));
+}
+
+export async function createEvent(event: EventInsertV3): Promise<CreateEventResult> {
   const { data, error } = await supabase
     .from('events')
-    .insert(event)
+    .insert(asGeneratedInsert(event))
     .select()
     .single();
-  if (error) throw error;
-  return data;
+  if (!error) return { data, degraded: false };
+
+  // Graceful degradation: the client can ship ahead of the v3 migration.
+  // If the failure is specifically a missing v3 column, strip the new keys
+  // and retry once — the activity still publishes, it just loses the
+  // not-yet-supported fields. Any other error (RLS, validation, network)
+  // rethrows untouched.
+  const sentV3Keys = V3_EVENT_KEYS.filter((key) => key in event);
+  if (sentV3Keys.length > 0 && isMissingV3ColumnError(error)) {
+    const fallback: EventInsertV3 = { ...event };
+    for (const key of sentV3Keys) delete fallback[key];
+    const retry = await supabase.from('events').insert(asGeneratedInsert(fallback)).select().single();
+    if (retry.error) throw retry.error;
+    return { data: retry.data, degraded: true };
+  }
+  throw error;
 }
 
 export async function updateEvent(id: string, updates: EventUpdate) {
@@ -164,10 +222,39 @@ export async function uploadEventPoster(
   eventId: string,
   uri: string
 ): Promise<string> {
+  return uploadEventImage(userId, eventId, uri);
+}
+
+/**
+ * Upload the extra "Media" images (Create Activity v3) — same bucket, same
+ * owner-folder RLS scheme as the poster, with `-media-<n>` indexed filenames
+ * so they never collide with the cover poster. Sequential on purpose: these
+ * are user-picked photos on a mobile uplink; parallel uploads gain little
+ * and make partial-failure cleanup messier.
+ */
+export async function uploadEventMedia(
+  userId: string,
+  eventId: string,
+  uris: string[]
+): Promise<string[]> {
+  const urls: string[] = [];
+  for (let i = 0; i < uris.length; i++) {
+    urls.push(await uploadEventImage(userId, eventId, uris[i], `-media-${i + 1}`));
+  }
+  return urls;
+}
+
+/** Shared core for poster + media uploads: `<userId>/<eventId><suffix>.<ext>`. */
+async function uploadEventImage(
+  userId: string,
+  eventId: string,
+  uri: string,
+  suffix = ''
+): Promise<string> {
   const extMatch = uri.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
   const rawExt = extMatch?.[1]?.toLowerCase();
   const ext = !rawExt || rawExt.length > 5 ? 'jpg' : rawExt === 'jpeg' ? 'jpg' : rawExt;
-  const path = `${userId}/${eventId}.${ext}`;
+  const path = `${userId}/${eventId}${suffix}.${ext}`;
   const response = await fetch(uri);
   const blob = await response.blob();
   validateImageUpload(blob);

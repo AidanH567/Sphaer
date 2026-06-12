@@ -11,6 +11,8 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 
+type DateTimeFieldMode = 'date' | 'time' | 'datetime';
+
 interface DateTimeFieldProps {
   label: string;
   value: Date | null;
@@ -19,7 +21,25 @@ interface DateTimeFieldProps {
   clearable?: boolean;
   placeholder?: string;
   minimumDate?: Date;
+  /**
+   * What the picker edits. 'date' / 'time' open a single-purpose picker and
+   * merge the picked part onto the current value (so two fields — one per
+   * mode — can co-own the same Date, per Figma 6277:10002's Date + Time row).
+   * Default 'datetime' keeps the original date-then-time behaviour.
+   */
+  mode?: DateTimeFieldMode;
+  /** Ionicons glyph rendered inside the box (Figma: calendar / clock). */
+  leadingIcon?: keyof typeof Ionicons.glyphMap;
+  /** Hide the built-in label text (screen renders its own section label).
+   *  The `label` prop still feeds the accessibility label. */
+  hideLabel?: boolean;
 }
+
+const DEFAULT_PLACEHOLDER: Record<DateTimeFieldMode, string> = {
+  date: 'Choose a date',
+  time: 'Choose a time',
+  datetime: 'Choose a date & time',
+};
 
 /**
  * Tap-to-pick date/time field that matches the Sphaer input chrome.
@@ -34,11 +54,16 @@ export function DateTimeField({
   value,
   onChange,
   clearable = false,
-  placeholder = 'Choose a date & time',
+  placeholder,
   minimumDate,
+  mode = 'datetime',
+  leadingIcon = 'calendar-outline',
+  hideLabel = false,
 }: DateTimeFieldProps) {
   const [iosOpen, setIosOpen] = useState(false);
   const [iosDraft, setIosDraft] = useState<Date>(value ?? new Date());
+
+  const placeholderText = placeholder ?? DEFAULT_PLACEHOLDER[mode];
 
   function openPicker() {
     if (Platform.OS === 'ios') {
@@ -47,52 +72,59 @@ export function DateTimeField({
       return;
     }
     // Android: imperative picker
-    openAndroidDate();
+    openAndroidPicker();
   }
 
-  // Android shows date picker first, then time picker, then commits.
-  function openAndroidDate() {
-    const current = value ?? new Date();
-    const onPick = (event: DateTimePickerEvent, picked?: Date) => {
-      if (event.type !== 'set' || !picked) return;
-      const datePart = picked;
-      // Chain into time picker
-      const timeEvent = (timeEvt: DateTimePickerEvent, timePicked?: Date) => {
-        if (timeEvt.type !== 'set' || !timePicked) return;
-        const combined = new Date(datePart);
-        combined.setHours(timePicked.getHours(), timePicked.getMinutes(), 0, 0);
-        onChange(combined);
-      };
-      // Use imperative `DateTimePickerAndroid` if available — falls back to
-      // showing a second inline picker. For simplicity we set state and
-      // toggle a second native render via the iOS modal path on Android too.
-      onChange(datePart);
-      // Time picker shown after a microtask so the date one closes first
-      setTimeout(() => {
-        // Use the imperative API
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
-        DateTimePickerAndroid.open({
-          value: datePart,
-          mode: 'time',
-          is24Hour: true,
-          onChange: timeEvent,
-        });
-      }, 50);
-    };
-
+  function openAndroidPicker() {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
+    const current = value ?? new Date();
+
+    // Single-purpose modes: one picker, merge the picked part onto the
+    // existing value so the other half (date or time) is preserved.
+    if (mode === 'date' || mode === 'time') {
+      DateTimePickerAndroid.open({
+        value: current,
+        mode,
+        is24Hour: true,
+        minimumDate: mode === 'date' ? minimumDate : undefined,
+        onChange: (event: DateTimePickerEvent, picked?: Date) => {
+          if (event.type !== 'set' || !picked) return;
+          onChange(mergeForMode(mode, current, picked));
+        },
+      });
+      return;
+    }
+
+    // datetime: date picker first, then time picker, then commit.
     DateTimePickerAndroid.open({
       value: current,
       mode: 'date',
       minimumDate,
-      onChange: onPick,
+      onChange: (event: DateTimePickerEvent, picked?: Date) => {
+        if (event.type !== 'set' || !picked) return;
+        const datePart = picked;
+        onChange(datePart);
+        // Time picker shown after a microtask so the date one closes first
+        setTimeout(() => {
+          DateTimePickerAndroid.open({
+            value: datePart,
+            mode: 'time',
+            is24Hour: true,
+            onChange: (timeEvt: DateTimePickerEvent, timePicked?: Date) => {
+              if (timeEvt.type !== 'set' || !timePicked) return;
+              const combined = new Date(datePart);
+              combined.setHours(timePicked.getHours(), timePicked.getMinutes(), 0, 0);
+              onChange(combined);
+            },
+          });
+        }, 50);
+      },
     });
   }
 
   function commitIos() {
-    onChange(iosDraft);
+    onChange(mergeForMode(mode, value ?? new Date(), iosDraft));
     setIosOpen(false);
   }
 
@@ -102,7 +134,7 @@ export function DateTimeField({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      {!hideLabel && <Text style={styles.label}>{label}</Text>}
       <View style={styles.row}>
         <TouchableOpacity
           style={styles.box}
@@ -110,11 +142,11 @@ export function DateTimeField({
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={label}
-          accessibilityValue={{ text: value ? formatDateTime(value) : placeholder }}
+          accessibilityValue={{ text: value ? formatValue(value, mode) : placeholderText }}
         >
-          <Ionicons name="calendar-outline" size={18} color={colors.text.tertiary} />
-          <Text style={[styles.valueText, !value && styles.placeholderText]}>
-            {value ? formatDateTime(value) : placeholder}
+          <Ionicons name={leadingIcon} size={18} color={colors.text.tertiary} />
+          <Text style={[styles.valueText, !value && styles.placeholderText]} numberOfLines={1}>
+            {value ? formatValue(value, mode) : placeholderText}
           </Text>
         </TouchableOpacity>
         {clearable && value && (
@@ -151,9 +183,9 @@ export function DateTimeField({
               </View>
               <DateTimePicker
                 value={iosDraft}
-                mode="datetime"
+                mode={mode}
                 display="spinner"
-                minimumDate={minimumDate}
+                minimumDate={mode === 'time' ? undefined : minimumDate}
                 onChange={(_evt: DateTimePickerEvent, picked?: Date) =>
                   picked && setIosDraft(picked)
                 }
@@ -167,18 +199,38 @@ export function DateTimeField({
   );
 }
 
-function formatDateTime(d: Date): string {
-  const day = d.toLocaleDateString(undefined, {
-    weekday: 'short',
+/** Merge the freshly-picked part onto the base value, per mode. */
+function mergeForMode(mode: DateTimeFieldMode, base: Date, picked: Date): Date {
+  if (mode === 'date') {
+    const merged = new Date(base);
+    merged.setFullYear(picked.getFullYear(), picked.getMonth(), picked.getDate());
+    return merged;
+  }
+  if (mode === 'time') {
+    const merged = new Date(base);
+    merged.setHours(picked.getHours(), picked.getMinutes(), 0, 0);
+    return merged;
+  }
+  return picked;
+}
+
+function formatValue(d: Date, mode: DateTimeFieldMode): string {
+  if (mode === 'date') return formatDatePart(d, false);
+  if (mode === 'time') return formatTimePart(d);
+  return `${formatDatePart(d, true)} · ${formatTimePart(d)}`;
+}
+
+function formatDatePart(d: Date, withWeekday: boolean): string {
+  return d.toLocaleDateString(undefined, {
+    ...(withWeekday ? { weekday: 'short' as const } : null),
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
-  const time = d.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return `${day} · ${time}`;
+}
+
+function formatTimePart(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 const styles = StyleSheet.create({
