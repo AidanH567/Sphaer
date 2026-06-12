@@ -62,11 +62,10 @@ Starter-capped copy `iuCO8ENAhfYIJly1JGAeU1` or the giant board node
 `6239:6597`.
 
 **Otherwise next:** the standing user-authorization blockers — deploy
-`supabase/functions/delete-account` + apply the two pending migrations
-(`20260609000000_saved_events_reminder.sql`,
-`20260609010000_denormalized_follow_counts.sql`) then regenerate
-`src/types/supabase.ts` — and Apple Sign In (#2 below) once the Apple
-dev account exists.
+`supabase/functions/delete-account` + apply the **8 pending migrations**
+(full list under "APPLY THE 8 PENDING MIGRATIONS" in the P0 section)
+then regenerate `src/types/supabase.ts` — and Apple Sign In (#2 below)
+once the Apple dev account exists.
 
 ---
 
@@ -118,9 +117,8 @@ must register / configure those before any of this can be tested.
 Fresh three-angle analysis (user journeys / code robustness / launch ops).
 Items verified against code with file evidence; none duplicate earlier sections.
 
-### Report & block — UGC moderation (App Store REJECTION risk)
-Why: zero report/block affordances on events, circles, profiles, or DMs. Apple Guideline 1.2 requires UGC apps to ship content reporting + user blocking + (for chat) a way to filter abusive users. Needs: `reports` table + `blocked_users` table (migrations), report action on event/circle/profile/message long-press or overflow, block from profile + DM, blocked users filtered from feed/chat queries.
-Scope: L. Do before submission.
+### ~~Report & block — UGC moderation~~ — shipped 2026-06-12 (`51abfd7` migration + `121fc81` feature); INERT until migration applied
+Migration `20260612020000_reports_blocked_users.sql` (FIFTH in the gated list) + moderation.service with graceful degradation (missing-table → reads empty, writes show "available after the next app update"; PGRST205 shape verified against the live project). OverflowMenuSheet entry points on user profile (report/block + blocked-state body), event detail, circle detail, DM thread (composer → Unblock bar). Blocked creators filtered from feed/map/mural via useEvents; blocked partners hidden from inbox + badge; blocked senders hidden in group chats. 4 component tests. Residual (filed, small): circle-page activity lists and direct deep links to a blocked user's event aren't filtered.
 
 ### ~~App icons are 1×1-pixel placeholder stubs~~ — shipped 2026-06-12 (`33bdd56`): generate-app-icons.ts emits real icon + adaptive; web favicon still a stub (filed below)
 Why: `assets/images/icon.png` + `adaptive-icon.png` are 69-byte 1×1 PNGs; only splash.png is real. Generate a 1024×1024 icon + Android adaptive (foreground/background, 108dp safe zone) from the SphaerIcon hoops via `scripts/generate-splash.ts`'s sharp pipeline.
@@ -144,17 +142,30 @@ Scope: M. (User call on vendor.)
 
 ---
 
-### NEW (2026-06-12): apply migration `20260612000000_circle_owner_delete_rls.sql`
-Authorization-gated like the other two pending migrations. Until applied, circle delete + member kick UI silently no-op (RLS matches 0 rows).
+### APPLY THE 8 PENDING MIGRATIONS (one `npx supabase db push`, user-authorized)
+The gated list as of 2026-06-12 EOD — all authored + committed, none applied:
+1. `20260609000000_saved_events_reminder.sql`
+2. `20260609010000_denormalized_follow_counts.sql`
+3. `20260612000000_circle_owner_delete_rls.sql` (circle delete + member kick are inert until applied)
+4. `20260612010000_events_subtitle_spots_visibility.sql` (create-form fields silently dropped until applied)
+5. `20260612020000_reports_blocked_users.sql` (report/block UI shows "available after next update" until applied)
+6. `20260612030000_rate_limiting.sql` (messages 30/min, follows 60/hr, reports 10/hr)
+7. `20260612040000_notification_producers.sql` (message/follow/circle-event fan-out + adds notifications to the Realtime publication — live badge updates don't fire without it)
+8. `20260612050000_storage_image_mime_limits.sql` (bucket MIME allowlist + 10MB cap; if hosted push rejects storage.buckets writes, set the same fields in Dashboard → Storage)
+After push: regenerate `src/types/supabase.ts`, drop the documented casts in moderation.service.ts / events.service.ts, and drop getProfile()'s two COUNT queries. The delete-account edge function deploy is still separately pending.
 
-### NEW (2026-06-12): web favicon.png is still a 1×1 stub
-One more sharp output in scripts/generate-app-icons.ts. Scope: S.
+### ~~web favicon.png is still a 1×1 stub~~ — shipped 2026-06-12 (`68dc4d1`): real 48px render, app.json already pointed at it
 
-### NEW (2026-06-12): conditional useState in EventRegistrationSheet (rules-of-hooks)
-Real pre-existing bug surfaced by eslint (~line 130) — hook called conditionally; rule downgraded to warn for that file only. Fix the hook order, restore the rule to error. Scope: S.
+### ~~conditional useState in EventRegistrationSheet~~ — shipped 2026-06-12 (`3130587`): hook hoisted, stale-registering reset, eslint override removed (rules-of-hooks = error everywhere)
 
-### NEW (2026-06-12): eslint 52-warning burn-down + expo-doctor failures
-Lint passes with 52 warnings (incl. duplicate react import in feed/index.tsx); expo-doctor reports 2 failed checks + 4 outdated packages (logged, non-blocking in CI). Burn both down. Scope: S–M.
+### NEW (2026-06-12): eslint warning burn-down (now 46) + expo-doctor failures
+Lint passes with 46 warnings (was 52; override removal + sheet-effect disables accounted for the drop); expo-doctor reports 2 failed checks + 4 outdated packages (logged, non-blocking in CI). Burn both down. Scope: S–M.
+
+### NEW (2026-06-12): Alert.alert is a silent no-op on react-native-web
+Found via the signup bug (422 user_already_exists was alerted → web users saw a dead button). Auth credential screens fixed 2026-06-12 (`d88e277`, inline FormErrorText pattern). ~28 other files still use Alert.alert for failure feedback that web users never see (onboarding, verify-email, create flows' upload errors, profile mutations…). Sweep them to inline errors / FormErrorText / ConfirmSheet. Native users are unaffected (Alert works there), so this is P2 unless web becomes a launch target. Scope: M.
+
+### NEW (2026-06-12): no-op Tabs.Screen declarations in (tabs)/_layout.tsx
+`<Tabs.Screen name="messages" />` / `name="profile"` don't match the flat child routes (`messages/index` etc.) → console warns "No route named 'messages' exists" on every mount and the declarations do nothing. Rename to real route names or delete the lines. Scope: S.
 
 ## P1 — App audit 2026-06-11 (broken or missing expected features)
 
@@ -178,9 +189,8 @@ Scope: M.
 Why: EventRegistrationSheet always renders the scarcity badge regardless of data. Wire to real spots/registration counts or hide until spots exist (Spots field is itself a filed create-form gap).
 Scope: S.
 
-### Cold-start deep link handling
-Why: no `linking` config / initial-URL handling — notification taps and OS-level URL opens won't route on cold start. Prerequisite for the push-notifications item.
-Scope: M.
+### ~~Cold-start deep link handling~~ — shipped 2026-06-12 (`4c1cc3a`)
+expo-router already handled signed-in scheme links; the gap was the signed-out path. Pending-deep-link stash (AsyncStorage, 15-min TTL, survives OAuth relaunch) captured at the (tabs) auth redirect, replayed once after landing in tabs; `pathFromUrl()` normalizes sphaer:// + sphaer.app URLs (27 unit tests). Universal Links (AASA/assetlinks) remain gated on the Apple dev account / Play signing — hook-in points documented in src/lib/linking.ts.
 
 ### ~~Cold-start feed discovery CTA~~ — shipped 2026-06-12 (`c68ba48`)
 Why: a zero-follow user sees explanatory text but no action. Add "Browse circles" CTA to the feed empty state.
@@ -352,7 +362,7 @@ Shipped `app/notifications.tsx` as a root-level `presentation: 'card'` route (th
 Why: Currently notifications only render in-app. Real engagement needs push. **Producer side is also missing** — even after the notifications-screen ships, no Postgres trigger fires on messages INSERT, follows INSERT, or events INSERT, so the in-app notifications list stays empty for new activity. The producer triggers are the bigger half of this item.
 Done when:
 - [ ] **Client:** `expo-notifications` setup + permission flow + `profiles.expo_push_token` column + storage
-- [ ] **Producer:** Postgres triggers on `messages` INSERT (notify recipient), `follows` INSERT (notify followed user), `events` INSERT (notify followers of `events.circle_id` when set — see Activities v2 #18)
+- [x] **Producer:** AUTHORED 2026-06-12 (`4b68aea`, migration `20260612040000_notification_producers.sql`, in the gated apply list) — messages/follows/circle-event triggers + Realtime publication fix; closes Activities v2 #18 too
 - [ ] **Push delivery:** edge function that reads `notifications` rows pending delivery and calls Expo Push API with the user's token
 - [ ] Scheduled job for event reminders (N hours before `events.starts_at` for any user with that event saved)
 - [ ] In-app preferences screen for which notification types to receive
@@ -450,19 +460,11 @@ All 4 suppressions in MuralCanvas (×3) + update-password (×1) now carry a one-
 
 ## P2 — Security (audit 2026-06-09)
 
-### Image upload file-type validation
-Why: `src/services/events.service.ts#uploadEventPoster()` and the profile gallery upload paths guess extension from URI string — no Content-Type validation. A user could upload `.exe` renamed `.jpg`. Bucket RLS limits write to own folder but doesn't prevent malicious file types.
-Done when:
-- [ ] Validate MIME type server-side via an edge function gate OR Supabase Storage `allowed_mime_types` bucket config
-- [ ] Reject anything that isn't `image/jpeg | image/png | image/webp | image/heic`
-- [ ] Optional: add a virus-scan call (VirusTotal API) on upload before making the object public
+### ~~Image upload file-type validation~~ — complete 2026-06-12 pending push (`f9d2f21`)
+Client half shipped earlier (validateImageUpload wired into all upload paths); server half authored as migration `20260612050000_storage_image_mime_limits.sql` (bucket allowed_mime_types + 10MB cap, in the gated apply list). Remaining only: optional virus-scan idea — dropped for v1.
 
-### Rate limiting on writes (messages / follows / notifications)
-Why: No throttle anywhere. A user can spam-send 100 DMs in a second, each firing a notification. Harassment + spam vector.
-Done when:
-- [ ] Postgres function `check_rate_limit(uid uuid, action text)` that reads count from a rolling-window log table; rejects if over threshold
-- [ ] Triggers on `messages` / `follows` / `notifications` INSERT call the function
-- [ ] Thresholds picked per action — e.g. 10 DMs / minute, 30 follows / hour
+### ~~Rate limiting on writes~~ — migration authored 2026-06-12 (`b32f2e6`), pending push
+`20260612030000_rate_limiting.sql`: rolling-window log + SECURITY DEFINER `check_rate_limit`; BEFORE INSERT triggers — messages 30/min, follows 60/hr, reports 10/hr. No trigger on notifications (producer fan-out must not be throttled). EXECUTE revoked from client roles so the log can't be forged. In the gated apply list.
 
 ### Google Maps API key restrictions
 Why: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is bundled into the APK / IPA (unavoidable on Expo). If unrestricted, an attacker can reuse it for their own quota / billing. One-time ops fix.
@@ -506,7 +508,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 ## Backlog (later — months out)
 
-- **Circle group chat (Messaging v2)** — `src/hooks/useCircleMessages.ts` already exists but is unused; circle detail screen has no chat tab. Wire the existing hook + add chat UI inside circle detail (new tab between Members and Activities); existing 1:1 ChatBubble + ChatComposer components should drop in.
+- ~~**Circle group chat (Messaging v2)**~~ — stale, closed 2026-06-12: shipped during the 06-08/09 messaging build. `/messages/circle/[id]` exists with Realtime + Figma header, `useCircleMessages` is wired, and circle detail links to it (circles/[id].tsx ~392). The only unbuilt idea from this entry is an *embedded* chat tab inside the circle page instead of navigation — not planned.
 - **Ticketing / Stripe integration** — schema has `events.is_free` + `price` + `ticket_url` but `registrations.service.ts` is RSVP-only (no payment processor). Investors will ask about monetisation. Big project: Stripe Checkout + webhook for confirmation + refund / cancel path + `paid_at` column on registrations.
 - **Notification triggers (Activities v2 #18 — pair with push notifications)** — Postgres trigger on `events` INSERT fans out a `notifications` row to every user in `circle_follows` WHERE circle_id matches the event's circle_id. Needed once the notifications screen ships, otherwise the screen stays empty for circle-event activity.
 - ~~**Onboarding tutorial (3-screen swipeable intro before signup CTA)**~~ — shipped 2026-06-09. `app/(auth)/intro.tsx` + gated from landing via AsyncStorage `sphaer:has-seen-intro`.
@@ -528,6 +530,7 @@ New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-lite
 
 *Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
 
+- **2026-06-12 (later) — Signup bug + moderation + deep links + migrations batch (10 commits).** `fix(auth) d88e277` — **user-reported bug**: signup 422 (`user_already_exists`) and every login failure were routed to Alert.alert, a silent no-op on react-native-web — web users saw a dead button. Inline FormErrorText + per-field errors now; verified live both ways (curl proved password policy/email provider fine; the 422 only fires for duplicate emails). `fix(events) 3130587` EventRegistrationSheet conditional-useState hoisted, eslint rules-of-hooks back to error. `chore(web) 68dc4d1` real favicon. `feat(db) b32f2e6/4b68aea/f9d2f21/51abfd7` — FOUR authored-not-applied migrations: rate limiting, notification producers (+ Realtime publication fix for the live badge), storage MIME caps, reports+blocked_users (gated list now 8). `fix(ui) 3a2e5cb` — all six bottom sheets' close animations had an unguarded unmount callback; a reopen-during-close (finished:false) killed the Modal — found because it made OverflowMenuSheet unopenable in the headless preview, regression-tested. `feat(moderation) 121fc81` — report & block everywhere (App Store 1.2), graceful degradation until db push, feed/inbox/chat filtering, 4 component tests. `feat(nav) 4c1cc3a` — cold-start deep links survive the auth gate (pending-link stash + replay, 27 unit tests; Universal Links still gated on Apple account). 108/108 tests green. Note: 3 throwaway diag accounts (`sphaer-diag-*@example.com`) were created while reproducing the 422 — delete in Supabase dashboard (MCP connector was down).
 - **2026-06-12 — Audit unblocked batch (5 commits + earlier inbox fix).** `feat(db) e1881fd` circles-delete + creator-kick RLS (authored, NOT applied). `chore(ops) 33bdd56` real app icons (were 1×1 stubs) + eas.json + env validation + store metadata. `feat(events) 8546173` real Follow (was cosmetic), cancel registration, creator attendee list, scarcity-badge removal, save/follow double-tap guards. `feat(circles) 5a7ad34` circle edit screen + delete, member kick, welcome-timer dismiss bug fixed, organizer hardening, partial-upload recovery. `chore(infra) c68ba48` 15s fetch timeout, AppState foreground resume + DST recompute, console gating, eslint+expo-doctor CI (0 errors), feed Browse-circles CTA. Earlier: `fix(messages) b277eee` inbox chip row scrolls (Circles was unreachable on phones) + dead Add-filter chip removed. 75/75 tests green throughout.
 - **2026-06-11 — Unblocked-backlog batch (4 commits).** `feat(events) c4406a4` creator edit & delete (ConfirmSheet delete with cascade-accurate copy; new prefilled edit screen with create-parity validation; RLS verified). `style(messages) 3c46692` DM + event chat headers to Figma 6298:6104 (48px thumbs, ink titles, shadow bar, @username subtitle) + MockConversation→ConversationRowDisplay rename. `chore(theme) 605d2eb` hex→token sweep, 22 replacements/13 files + neutral500 token. `feat(circles) 44e53c6` circle cover upload on creation. Earlier same day: Create-Activity style pass (`4c51ce6`), circle chat header (`84f03be`), circle-detail Organizer section (`ce45511`). 75/75 tests green throughout.
 - **2026-06-11 — Figma structural follow-ups: greeting header + Welcome interstitial + UX pass (UP NEXT #1 closed).** All three items from the audit's structural filing shipped, one commit each. **(1) `style(feed) 5097fa3` — greeting header (`4045:8204`):** SearchFilterBar gained an optional `greeting={{city, rest}}` prop — resting state renders location pin + serif "Berlin what's on Today?!" (20px/148%, `colors.neutral.ink`, city in Medium + underline) with a 45px circular white search button; tapping expands to the standard input + Cancel, Cancel collapses back. Crossfade at `motion.duration.standard` (240ms ease-out, opacity-only, row minHeight-pinned so rows below never shift), skipped under OS reduce-motion. Header inset 16px per frame. FeedHeader passes the prop so Feed/Map/Mural inherit; Circles keeps the audited pill. Design context fetched fresh per the handoff's step zero — corrected three assumptions (button 45px not 50, text ink `#1B1B18` not chocolate, copy "Berlin what's on Today?!" capital-T no comma). **(2) `feat(auth) 632e064` — Welcome interstitial (`5013:10915`):** new `app/(auth)/welcome.tsx` — centered serif "Welcome {firstName}" (26px ink, name Medium) on white, 320ms fade-in (reduce-motion skips), ~1.6s dwell then routes to onboarding, tap anywhere skips, routes exactly once. Name precedence: route param → user_metadata.display_name → profile row. signup.tsx session branch + verify-email.tsx SIGNED_IN listener both route here; (auth) layout got a `welcome` fall-through and a fade stack animation. **(3) UX pass (ui-ux-pro-max):** both interactions audited — timings inside the 150–300ms band, one animated element per view, ease-out entering, 45px ≥ 44pt touch target with press feedback + accessibilityLabel on the icon-only button, h1 heading role on the interstitial, ~15:1 text contrast, graceful one-line truncation at narrow widths / large type. No violations to fix. **Verification note:** the preview tab is headless (visibility:hidden, zero rAF ticks) so JS-driver fades can't play live there — verified via computed styles + behaviour (auto-route landed on /onboarding twice); the fade mechanism is identical to the feed crossfade, which screenshots show completing. **Remaining from the filing:** the filter-icon-in-toggle-row product decision — promoted to UP NEXT #1.
@@ -778,12 +781,8 @@ shippable for the investor demo.
 - **When we come back:** add a second image picker to Create Circle and to
   Edit Circle. `uploadCircleImage()` already supports `kind: 'cover'`.
 
-### 17. Lat/lng auto-resolution from address
-
-- Address is collected but `lat`/`lng` are null. Map view can't pin user-
-  created activities until these are filled in.
-- **When we come back:** Google Places Autocomplete + geocoding. New env var
-  `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` already exists.
+### ~~17. Lat/lng auto-resolution from address~~ — stale, closed 2026-06-12: already shipped
+Create Activity geocodes on submit via `geocodeAddress` (src/lib/geocoding.ts, wired in app/(tabs)/create/index.tsx) with live-geocode fallback. Entry predates that ship.
 
 ### 18. Notifications on new activities from followed circles
 
