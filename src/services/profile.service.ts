@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { validateImageUpload } from '@/utils/upload-validation';
 import type {
+  Profile,
   ProfileUpdate,
   ProfileWithCounts,
   ProfileImage,
@@ -50,6 +51,38 @@ export async function updateProfile(userId: string, updates: ProfileUpdate) {
 /** Type-safe wrapper for replacing the `experiences` JSONB array. */
 export async function updateExperiences(userId: string, experiences: ProfileExperienceEntry[]) {
   return updateProfile(userId, { experiences });
+}
+
+/* ── Search ────────────────────────────────────────────── */
+
+/**
+ * Fuzzy artist search across `display_name` + `username` — powers the feed's
+ * "Artists" section when the search bar has a query. Case-insensitive
+ * contains-match via `ilike`, capped at `limit` rows.
+ *
+ * Sanitization mirrors events.service.getEvents exactly: strip
+ * PostgREST-reserved characters before interpolating into the `.or()` filter
+ * string (commas split filter clauses, parens nest them, asterisk is a
+ * column wildcard, colon separates field.op.value). Without this, a user
+ * typing `anna,*` would inject a malformed filter clause.
+ *
+ * Deliberately excludes no one — blocked-user filtering happens client-side
+ * (the feed reads `blockedIds` from AppContext), matching how useEvents
+ * filters blocked creators.
+ */
+export async function searchProfiles(query: string, limit = 5): Promise<Profile[]> {
+  const safe = query.replace(/[,():*]/g, ' ').trim();
+  if (safe.length === 0) return [];
+
+  const q = `%${safe}%`;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .or(`display_name.ilike.${q},username.ilike.${q}`)
+    .order('display_name', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
 }
 
 /* ── Follow helpers ────────────────────────────────────── */

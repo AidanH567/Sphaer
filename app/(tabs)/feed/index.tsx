@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Alert, ScrollView } from 'react-native';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { useAppContext } from '@/context/AppContext';
 import { useAuthContext } from '@/context/AuthContext';
 import { FeedHeader } from '@/components/feed/FeedHeader';
 import { EventCard } from '@/components/feed/EventCard';
+import { ArtistResultRow } from '@/components/feed/ArtistResultRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EventCardSkeleton } from '@/components/ui/skeletons/EventCardSkeleton';
@@ -18,11 +19,13 @@ import {
   saveEvent,
   unsaveEvent,
 } from '@/services/events.service';
+import { searchProfiles } from '@/services/profile.service';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { haversineKm, NEAR_ME_RADIUS_KM } from '@/utils/geo';
 import { applyChipFilters } from '@/utils/event-filters';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography, radius, shadow } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
+import type { Profile } from '@/types/user.types';
 
 /**
  * Activity feed. Pulls real `events` rows from Supabase via useEvents().
@@ -43,10 +46,15 @@ export default function FeedScreen() {
     userCoords,
     setUserCoords,
     foregroundTick,
+    blockedIds,
   } = useAppContext();
   const { user } = useAuthContext();
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [nearMeBusy, setNearMeBusy] = useState(false);
+  const [artistResults, setArtistResults] = useState<Profile[]>([]);
+  // Monotonic request id — only the latest artist search may write state, so
+  // a slow response for an older query can never clobber newer results.
+  const artistSearchReqId = useRef(0);
 
   // Search + neighbourhood now live in AppContext so Feed / Map / Mural
   // share filter state. Mural can opt in later — Feed and Map opt in now.
@@ -62,6 +70,53 @@ export default function FeedScreen() {
     categories: feedFilters.categories,
     search: debouncedSearch.trim() || undefined,
   });
+
+  // Artist search ("User search" BACKLOG item): when the query has ≥2 chars,
+  // the list view shows up to 5 matching profiles above the event results.
+  // Separate, slightly quicker debounce than the events query — the section
+  // is lightweight and feels better arriving a beat earlier. Runs fully
+  // independently of useEvents so a slow/failed profile fetch never blocks
+  // or delays the event list render.
+  const debouncedArtistQuery = useDebounce(searchText, 250);
+
+  useEffect(() => {
+    const q = debouncedArtistQuery.trim();
+    if (q.length < 2) {
+      setArtistResults([]);
+      return;
+    }
+    const reqId = ++artistSearchReqId.current;
+    searchProfiles(q)
+      .then((profiles) => {
+        if (artistSearchReqId.current === reqId) setArtistResults(profiles);
+      })
+      .catch((err) => {
+        // Degrade silently — events still render; just log for dev builds.
+        console.warn('[Feed] artist search failed:', err);
+        if (artistSearchReqId.current === reqId) setArtistResults([]);
+      });
+    return () => {
+      // Invalidate the in-flight request when the query changes or the
+      // screen unmounts — its late response must be dropped, not applied.
+      artistSearchReqId.current += 1;
+    };
+  }, [debouncedArtistQuery]);
+
+  // Mirror useEvents' blocked-creator filtering (App Store 1.2) for artist
+  // rows: the service excludes no one, the client hides blocked profiles.
+  const visibleArtists = useMemo(
+    () =>
+      blockedIds.size === 0
+        ? artistResults
+        : artistResults.filter((p) => !blockedIds.has(p.id)),
+    [artistResults, blockedIds]
+  );
+
+  // Gate on the LIVE query too (not just the debounced one) so clearing the
+  // search hides the section instantly instead of 250ms later. Hidden while
+  // empty/too short, while first results are still loading, and on 0 matches
+  // — no empty-state noise above the events.
+  const showArtists = searchText.trim().length >= 2 && visibleArtists.length > 0;
 
   // Refetch whenever the feed comes back into focus — covers the
   // "just created an activity, come back to feed" case.
@@ -394,7 +449,7 @@ export default function FeedScreen() {
           body={error}
           onRetry={refetch}
         />
-      ) : visibleEvents.length === 0 ? (
+      ) : visibleEvents.length === 0 && !showArtists ? (
         <View style={styles.center}>
           <EmptyState
             icon={
@@ -455,6 +510,26 @@ export default function FeedScreen() {
         <FlatList
           data={visibleEvents}
           keyExtractor={(item) => item.id}
+          // Compact "Artists" section above the event results while searching
+          // (list view only — Map + Mural stay events-only). Appears/disappears
+          // with the result set; no space is reserved while it loads, so the
+          // events below shift down when it lands — accepted trade-off.
+          // When the search matches artists but zero events, the list renders
+          // with just this header (the events EmptyState branch is skipped).
+          ListHeaderComponent={
+            showArtists ? (
+              <View style={styles.artistsSection}>
+                <Text style={styles.artistsLabel} accessibilityRole="header">
+                  Artists
+                </Text>
+                <View style={styles.artistsCard}>
+                  {visibleArtists.map((p) => (
+                    <ArtistResultRow key={p.id} profile={p} />
+                  ))}
+                </View>
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <EventCard
               event={item}
@@ -464,6 +539,9 @@ export default function FeedScreen() {
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          // First tap on a result should open it even while the search
+          // keyboard is up — without this the tap only dismisses the keyboard.
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.black} />
           }
@@ -514,6 +592,26 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: colors.white,
+  },
+  // Artists search section — sits inside the FlatList header, above the
+  // event cards. Label mirrors the chip-row typography (ui / sm / medium);
+  // the card matches the EventCard surface (white, radius.sm) with the
+  // shared shadow token, and the rows inside form one grouped list.
+  artistsSection: {
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.md,
+  },
+  artistsLabel: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.neutral600,
+    marginBottom: spacing.xs,
+  },
+  artistsCard: {
+    backgroundColor: colors.white,
+    borderRadius: radius.sm,
+    ...shadow.sm,
   },
   center: {
     flex: 1,
