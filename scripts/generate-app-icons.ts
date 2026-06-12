@@ -13,6 +13,11 @@
  *     circle of 66/108 of the canvas — launchers may mask anything
  *     outside it). The solid white back layer comes from
  *     android.adaptiveIcon.backgroundColor in app.json.
+ *   - assets/images/favicon.png       48×48 (Expo's web default), same
+ *     white-canvas artwork rendered at the full 1024px internal canvas
+ *     with a larger glyph fraction (so the hoops survive tab size), then
+ *     Lanczos-downsampled to 48px so the thin strokes anti-alias cleanly
+ *     instead of vanishing.
  *
  * Resolves the P0 backlog item: "App icons are 1×1 placeholder stubs."
  *
@@ -26,6 +31,7 @@ import * as fs from 'node:fs';
 const projectRoot = path.resolve(__dirname, '..');
 const ICON_PATH = path.join(projectRoot, 'assets', 'images', 'icon.png');
 const ADAPTIVE_PATH = path.join(projectRoot, 'assets', 'images', 'adaptive-icon.png');
+const FAVICON_PATH = path.join(projectRoot, 'assets', 'images', 'favicon.png');
 
 const CANVAS = 1024;
 const INK = '#2B2A27';
@@ -56,6 +62,15 @@ const SAFE_RADIUS = ((66 / 108) * CANVAS) / 2; // ≈ 312.9
 const INK_HALF_DIAGONAL = Math.sqrt((INK_W / 2) ** 2 + (INK_H / 2) ** 2); // ≈ 30.64
 const ADAPTIVE_SCALE = SAFE_RADIUS / INK_HALF_DIAGONAL; // ≈ 10.2
 
+// ── favicon.png sizing ───────────────────────────────────────────────────
+// Expo's web default favicon is 48×48. Rendering the SVG straight at 48px
+// would leave the 3.4-unit strokes ~2px and ragged, so render at the full
+// 1024px canvas — with the glyph pushed to 80% width for legibility at tab
+// size — then downsample to 48px (Lanczos) for clean anti-aliased strokes.
+const FAVICON_SIZE = 48;
+const FAVICON_GLYPH_FRACTION = 0.8;
+const FAVICON_SCALE = (CANVAS * FAVICON_GLYPH_FRACTION) / INK_W; // ≈ 16.4
+
 /** The two-hoop logo paths (78×78 source viewBox), stroke-scaled by the group transform. */
 const HOOPS = `
     <path
@@ -85,11 +100,20 @@ function iconSvg(scale: number, opaqueBackground: boolean): string {
 </svg>`;
 }
 
-async function writePng(svg: string, outPath: string, label: string): Promise<void> {
-  const buf = await sharp(Buffer.from(svg)).png().toBuffer();
+async function writePng(
+  svg: string,
+  outPath: string,
+  label: string,
+  outSize: number = CANVAS,
+): Promise<void> {
+  let pipeline = sharp(Buffer.from(svg));
+  if (outSize !== CANVAS) {
+    pipeline = pipeline.resize(outSize, outSize, { kernel: sharp.kernel.lanczos3 });
+  }
+  const buf = await pipeline.png().toBuffer();
   fs.writeFileSync(outPath, buf);
   const size = (buf.length / 1024).toFixed(1);
-  console.log(`✓ Wrote ${label}: ${CANVAS}×${CANVAS}, ${size} KB → ${outPath}`);
+  console.log(`✓ Wrote ${label}: ${outSize}×${outSize}, ${size} KB → ${outPath}`);
 }
 
 async function main() {
@@ -101,6 +125,10 @@ async function main() {
   // Android adaptive-icon foreground — transparent, glyph inside the
   // 66/108 safe-zone circle (white comes from adaptiveIcon.backgroundColor).
   await writePng(iconSvg(ADAPTIVE_SCALE, false), ADAPTIVE_PATH, 'adaptive-icon.png');
+
+  // Web favicon — opaque white like icon.png (chocolate hoops stay visible
+  // on dark browser tabs), rendered large then downsampled to 48×48.
+  await writePng(iconSvg(FAVICON_SCALE, true), FAVICON_PATH, 'favicon.png', FAVICON_SIZE);
 }
 
 main().catch((err) => {
