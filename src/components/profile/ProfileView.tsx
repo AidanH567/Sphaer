@@ -16,6 +16,8 @@ const DIVIDER = colors.neutral.divider;
 const TESTIMONIAL_BG = colors.appleMail; // matches Feed bg, already a Figma token
 const TESTIMONIAL_BORDER = colors.neutral.neutral400;
 const LINK = '#3572C7';
+// Figma verified-badge green (frame 3637:4767) — no success/green token in
+// src/constants/theme.ts yet; promote this there if a second consumer appears.
 const SUCCESS = '#2A7E3B';
 const BORDER = '#CCD0D7';
 
@@ -116,8 +118,18 @@ export function ProfileView({
 
         <View style={styles.nameRow}>
           <Text style={styles.name}>{profile.displayName}</Text>
+          {/* SealCheck-style verified badge (Profile v2 #1). Real profiles
+              get `verified` through adaptProfileToDisplay → isVerified();
+              the flag is only ever true once migration 20260612060000 is
+              applied and the team has vetted the artist. */}
           {profile.verified && (
-            <MaterialCommunityIcons name="check-decagram" size={18} color={SUCCESS} />
+            <MaterialCommunityIcons
+              name="check-decagram"
+              size={18}
+              color={SUCCESS}
+              accessible
+              accessibilityLabel="Verified artist"
+            />
           )}
         </View>
 

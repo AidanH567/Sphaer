@@ -10,6 +10,23 @@ export interface ProfileCounts {
 }
 
 /**
+ * Narrow runtime read of `profiles.verified` (Profile v2 #1).
+ *
+ * The column lands with migration 20260612060000_profiles_verified.sql; the
+ * generated `Profile` type won't know it until types are regenerated after
+ * `npx supabase db push`. Until then we probe the row shape through one
+ * documented `Record<string, unknown>` cast — no `any`, and a pre-migration
+ * database (where `select('*')` simply doesn't return the column) yields
+ * false instead of crashing. Strict `=== true` also shields against any
+ * non-boolean junk coming over the wire.
+ */
+export function isVerified(profile: Profile | null): boolean {
+  if (!profile) return false;
+  const row = profile as Record<string, unknown>;
+  return 'verified' in row && row.verified === true;
+}
+
+/**
  * Map a real Supabase `Profile` (+ live counts + gallery rows) onto the
  * `MockProfile` shape that ProfileView consumes. Keeping the adapter shared
  * means the personal /profile screen and the public /user/[id] screen both
@@ -33,7 +50,7 @@ export function adaptProfileToDisplay(
     location: locationLine,
     website: profile?.website ?? '',
     avatarUrl: profile?.avatar_url ?? '',
-    verified: false, // deferred — see BACKLOG.md "Verified badge"
+    verified: isVerified(profile), // live once migration 20260612060000 is pushed
     followersCount: counts.followers,
     followingCount: counts.following,
     circlesCount: counts.circles,
