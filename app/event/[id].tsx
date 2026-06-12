@@ -8,6 +8,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { EventRegistrationSheet } from '@/components/ui/EventRegistrationSheet';
+import { OverflowMenuSheet } from '@/components/ui/OverflowMenuSheet';
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
@@ -61,6 +63,10 @@ export default function EventDetailScreen() {
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+
+  // Moderation entry point (App Store 1.2) — overflow menu → report sheet.
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
 
   // Creator-only attendees sheet (people registered for this activity).
   const [attendeesOpen, setAttendeesOpen] = useState(false);
@@ -360,6 +366,18 @@ export default function EventDetailScreen() {
               color={colors.text.primary}
             />
           </TouchableOpacity>
+          {/* Creators manage their own activity via edit/delete — the only
+              overflow action is Report, which never applies to your own. */}
+          {!isCreator && (
+            <TouchableOpacity
+              onPress={() => setOverflowVisible(true)}
+              style={styles.navButton}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -563,6 +581,25 @@ export default function EventDetailScreen() {
           }
           await registerForEvent(details.eventId, user.id, details.quantity);
         }}
+      />
+
+      {/* Moderation overflow (non-creators only) */}
+      <OverflowMenuSheet
+        visible={overflowVisible}
+        actions={[
+          {
+            label: 'Report event',
+            icon: 'flag-outline',
+            onPress: () => setReportVisible(true),
+          },
+        ]}
+        onClose={() => setOverflowVisible(false)}
+      />
+      <ReportSheet
+        visible={reportVisible}
+        targetType="event"
+        targetId={id ?? null}
+        onClose={() => setReportVisible(false)}
       />
     </SafeAreaView>
   );

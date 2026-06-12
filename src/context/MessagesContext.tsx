@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/context/AuthContext';
+import { useAppContext } from '@/context/AppContext';
 import * as messagesService from '@/services/messages.service';
 import type {
   Conversation,
@@ -58,6 +59,7 @@ async function fetchPartnerProfile(partnerId: string): Promise<Profile | null> {
 
 export function MessagesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthContext();
+  const { blockedIds } = useAppContext();
   const userId = user?.id;
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -469,14 +471,28 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, refresh, handleIncomingDM]);
 
+  // Blocked-user filtering (App Store 1.2): DM conversations with blocked
+  // partners disappear from the inbox AND stop counting toward the tab
+  // badge. Filtered at the exposed value, not in state, so unblocking
+  // instantly restores the thread without a refetch. Group chats (event /
+  // circle) stay listed — only the blocked sender's messages are hidden,
+  // by useEventMessages / useCircleMessages.
+  const visibleConversations = useMemo(
+    () =>
+      blockedIds.size === 0
+        ? conversations
+        : conversations.filter((c) => !(c.kind === 'dm' && blockedIds.has(c.partner.id))),
+    [conversations, blockedIds]
+  );
+
   const totalUnread = useMemo(
-    () => conversations.reduce((sum, c) => sum + c.unread_count, 0),
-    [conversations]
+    () => visibleConversations.reduce((sum, c) => sum + c.unread_count, 0),
+    [visibleConversations]
   );
 
   const value = useMemo(
-    () => ({ conversations, totalUnread, isLoading, error, refresh, markRead }),
-    [conversations, totalUnread, isLoading, error, refresh, markRead]
+    () => ({ conversations: visibleConversations, totalUnread, isLoading, error, refresh, markRead }),
+    [visibleConversations, totalUnread, isLoading, error, refresh, markRead]
   );
 
   return <MessagesContext.Provider value={value}>{children}</MessagesContext.Provider>;

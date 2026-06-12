@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAppContext } from '@/context/AppContext';
 import * as messagesService from '@/services/messages.service';
 import type {
   Message,
@@ -31,6 +32,7 @@ function generateClientId(): string {
  * No "Seen X" tracking — group chats skip the line by design.
  */
 export function useCircleMessages(userId: string | undefined, circleId: string | undefined) {
+  const { blockedIds } = useAppContext();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,5 +180,14 @@ export function useCircleMessages(userId: string | undefined, circleId: string |
     [userId, circleId]
   );
 
-  return { messages, isLoading, error, sendMessage, retryMessage, refetch };
+  // Blocked-user filtering (App Store 1.2): hide messages from blocked
+  // senders, in history and live inserts alike. Filtered at the boundary
+  // (not in state) so unblocking restores them without a refetch.
+  const visibleMessages = useMemo(
+    () =>
+      blockedIds.size === 0 ? messages : messages.filter((m) => !blockedIds.has(m.sender_id)),
+    [messages, blockedIds]
+  );
+
+  return { messages: visibleMessages, isLoading, error, sendMessage, retryMessage, refetch };
 }

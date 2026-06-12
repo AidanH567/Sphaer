@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { useAuthContext } from '@/context/AuthContext';
+import { getBlockedIds } from '@/services/moderation.service';
 import type { EventFilters } from '@/types/event.types';
 
 type FeedView = 'list' | 'map' | 'mural';
@@ -46,6 +48,16 @@ interface AppContextValue {
    * yesterday's window.
    */
   foregroundTick: number;
+  /**
+   * Profile ids the signed-in user has blocked (App Store Guideline 1.2 —
+   * blocked users' content must disappear). Hydrated on auth and on app
+   * resume; refreshed after block/unblock via refreshBlocked(). Feed,
+   * messages inbox, and group-chat hooks filter against this Set
+   * client-side — cheap O(1) lookups, and it keeps working even before
+   * the blocked_users table exists server-side (reads degrade to empty).
+   */
+  blockedIds: Set<string>;
+  refreshBlocked: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue>({
@@ -58,9 +70,12 @@ const AppContext = createContext<AppContextValue>({
   getPosterSize: () => undefined,
   setPosterSize: () => {},
   foregroundTick: 0,
+  blockedIds: new Set<string>(),
+  refreshBlocked: async () => {},
 });
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuthContext();
   const [feedView, setFeedView] = useState<FeedView>('list');
   const [feedFilters, setFeedFilters] = useState<EventFilters>({});
   const [userCoords, setUserCoords] = useState<UserCoords | null>(null);
@@ -103,6 +118,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []);
 
+  // ── Blocked users ──────────────────────────────────────────────────────
+  const userId = user?.id;
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+
+  const refreshBlocked = useCallback(async () => {
+    if (!userId) {
+      setBlockedIds(new Set());
+      return;
+    }
+    try {
+      setBlockedIds(new Set(await getBlockedIds(userId)));
+    } catch (err) {
+      // Transient failure (network): keep the previous set — flashing a
+      // blocked user's content back in would be worse than a stale list.
+      // ("Table missing" already degrades to [] inside the service.)
+      if (__DEV__) console.error('[AppContext] refreshBlocked failed:', err);
+    }
+  }, [userId]);
+
+  // Hydrate on sign-in/out and re-check on app resume — a cheap id-only
+  // select, so piggybacking on foregroundTick costs one tiny query.
+  useEffect(() => {
+    void foregroundTick;
+    refreshBlocked();
+  }, [refreshBlocked, foregroundTick]);
+
   return (
     <AppContext.Provider
       value={{
@@ -115,6 +156,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         getPosterSize,
         setPosterSize,
         foregroundTick,
+        blockedIds,
+        refreshBlocked,
       }}
     >
       {children}

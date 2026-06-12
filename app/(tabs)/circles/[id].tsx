@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { CircleActivityCard } from '@/components/circles/CircleActivityCard';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
+import { OverflowMenuSheet } from '@/components/ui/OverflowMenuSheet';
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useCircle } from '@/hooks/useCircles';
@@ -48,6 +50,10 @@ export default function CircleDetailScreen() {
 
   // Creator-only delete confirm (navBar trash button).
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+
+  // Moderation entry point (App Store 1.2) — overflow menu → report sheet.
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
   // Creator-only member kick confirm — set when the creator long-presses a
   // row in the Members sheet. null means no confirm pending.
   const [kickTarget, setKickTarget] = useState<Profile | null>(null);
@@ -328,6 +334,18 @@ export default function CircleDetailScreen() {
           >
             <Ionicons name="share-outline" size={22} color={colors.text.primary} />
           </TouchableOpacity>
+          {/* Creators manage their circle via edit/delete — the only
+              overflow action is Report, which never applies to your own. */}
+          {!isCreator && (
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setOverflowVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -598,6 +616,25 @@ export default function CircleDetailScreen() {
           router.replace('/(tabs)/circles');
         }}
         onClose={() => setDeleteConfirmVisible(false)}
+      />
+
+      {/* Moderation overflow (non-creators only) */}
+      <OverflowMenuSheet
+        visible={overflowVisible}
+        actions={[
+          {
+            label: 'Report circle',
+            icon: 'flag-outline',
+            onPress: () => setReportVisible(true),
+          },
+        ]}
+        onClose={() => setOverflowVisible(false)}
+      />
+      <ReportSheet
+        visible={reportVisible}
+        targetType="circle"
+        targetId={circle.id}
+        onClose={() => setReportVisible(false)}
       />
     </SafeAreaView>
   );

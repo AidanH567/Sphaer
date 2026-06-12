@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +13,18 @@ import { ProfileView } from '@/components/profile/ProfileView';
 import { adaptProfileToDisplay } from '@/components/profile/adaptProfile';
 import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
+import { OverflowMenuSheet } from '@/components/ui/OverflowMenuSheet';
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { useAuthContext } from '@/context/AuthContext';
+import { useAppContext } from '@/context/AppContext';
+import {
+  blockUser,
+  unblockUser,
+  ModerationUnavailableError,
+} from '@/services/moderation.service';
 import {
   getProfile,
   getProfileImages,
@@ -46,11 +58,51 @@ export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthContext();
+  const { blockedIds, refreshBlocked } = useAppContext();
   const isOwnProfile = Boolean(user?.id && id && user.id === id);
+  const isBlockedUser = Boolean(id && blockedIds.has(id));
 
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found' | 'error'>('loading');
   const [retryTick, setRetryTick] = useState(0);
+
+  // Moderation entry point (App Store 1.2): overflow → report / block.
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
+  const [unblockBusy, setUnblockBusy] = useState(false);
+
+  async function handleBlock() {
+    if (!user?.id || !id) return;
+    try {
+      await blockUser(user.id, id);
+      await refreshBlocked(); // flips this screen to the blocked state
+      setBlockConfirmVisible(false);
+    } catch (e: unknown) {
+      if (e instanceof ModerationUnavailableError) {
+        setBlockConfirmVisible(false);
+        Alert.alert('Not available yet', e.message);
+        return;
+      }
+      throw e; // ConfirmSheet alerts and keeps the sheet open for retry
+    }
+  }
+
+  async function handleUnblock() {
+    if (!user?.id || !id || unblockBusy) return;
+    setUnblockBusy(true);
+    try {
+      await unblockUser(user.id, id);
+      await refreshBlocked();
+    } catch (e: unknown) {
+      Alert.alert(
+        'Could not unblock',
+        e instanceof ModerationUnavailableError ? e.message : 'Please try again.'
+      );
+    } finally {
+      setUnblockBusy(false);
+    }
+  }
 
   // Follow state for the displayed user — loaded on mount, persisted on toggle.
   // followBusy guards against double-tap while the network call is in flight.
@@ -190,20 +242,34 @@ export default function UserProfileScreen() {
         >
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </TouchableOpacity>
-        {displayProfile && (
-          <TouchableOpacity
-            onPress={() =>
-              shareProfile({
-                id: displayProfile.id,
-                displayName: displayProfile.displayName,
-              }).catch(() => {})
-            }
-            style={styles.navButton}
-            accessibilityRole="button"
-            accessibilityLabel="Share profile"
-          >
-            <Ionicons name="share-outline" size={22} color={colors.text.primary} />
-          </TouchableOpacity>
+        {/* Share + overflow hide in the blocked state — the only affordance
+            there is the Unblock button in the body. */}
+        {displayProfile && !isBlockedUser && (
+          <View style={styles.navRight}>
+            <TouchableOpacity
+              onPress={() =>
+                shareProfile({
+                  id: displayProfile.id,
+                  displayName: displayProfile.displayName,
+                }).catch(() => {})
+              }
+              style={styles.navButton}
+              accessibilityRole="button"
+              accessibilityLabel="Share profile"
+            >
+              <Ionicons name="share-outline" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+            {!isOwnProfile && (
+              <TouchableOpacity
+                onPress={() => setOverflowVisible(true)}
+                style={styles.navButton}
+                accessibilityRole="button"
+                accessibilityLabel="More options"
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color={colors.text.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -228,7 +294,27 @@ export default function UserProfileScreen() {
         />
       )}
 
-      {status === 'found' && displayProfile && (
+      {/* Blocked state replaces the whole profile body (App Store 1.2):
+          blocking must make the person's content disappear, not just
+          disable a button. */}
+      {status === 'found' && displayProfile && isBlockedUser && (
+        <View style={styles.blockedState}>
+          <Avatar
+            uri={displayProfile.avatarUrl}
+            name={displayProfile.displayName}
+            size={BLOCKED_AVATAR}
+          />
+          <Text style={styles.blockedTitle}>
+            You&apos;ve blocked {displayProfile.displayName}
+          </Text>
+          <Text style={styles.blockedBody}>
+            They can&apos;t message you, and their activities are hidden from your feed.
+          </Text>
+          <Button label="Unblock" onPress={handleUnblock} isLoading={unblockBusy} size="md" />
+        </View>
+      )}
+
+      {status === 'found' && displayProfile && !isBlockedUser && (
         <>
           <ProfileView
             profile={displayProfile}
@@ -288,6 +374,43 @@ export default function UserProfileScreen() {
           />
         </>
       )}
+
+      {/* Moderation sheets — outside the body branches so the block
+          confirm can animate out while the body flips to the blocked state. */}
+      <OverflowMenuSheet
+        visible={overflowVisible}
+        actions={[
+          {
+            label: 'Report user',
+            icon: 'flag-outline',
+            onPress: () => setReportVisible(true),
+          },
+          isBlockedUser
+            ? { label: 'Unblock user', icon: 'person-add-outline', onPress: handleUnblock }
+            : {
+                label: 'Block user',
+                icon: 'person-remove-outline',
+                destructive: true,
+                onPress: () => setBlockConfirmVisible(true),
+              },
+        ]}
+        onClose={() => setOverflowVisible(false)}
+      />
+      <ReportSheet
+        visible={reportVisible}
+        targetType="profile"
+        targetId={id ?? null}
+        onClose={() => setReportVisible(false)}
+      />
+      <ConfirmSheet
+        visible={blockConfirmVisible}
+        title={`Block ${displayProfile?.displayName ?? 'this user'}?`}
+        message="They won't be able to message you, and you won't see their activities or messages. They won't be notified."
+        confirmLabel="Block"
+        destructive
+        onConfirm={handleBlock}
+        onClose={() => setBlockConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -323,6 +446,8 @@ async function fetchRealProfile(id: string): Promise<MockProfile | null> {
   );
 }
 
+const BLOCKED_AVATAR = 96;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   navBar: {
@@ -333,6 +458,34 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   navButton: { padding: spacing.sm },
+  navRight: { flexDirection: 'row', alignItems: 'center' },
+  blockedState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    // Lift the group toward the optical center — pure centering reads low
+    // because the navBar already occupies the top.
+    paddingBottom: spacing['3xl'],
+  },
+  blockedTitle: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 18,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  blockedBody: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+    marginBottom: spacing.sm,
+  },
   center: {
     flex: 1,
     alignItems: 'center',

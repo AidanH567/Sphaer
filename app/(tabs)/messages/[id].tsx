@@ -1,27 +1,36 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '@/context/AuthContext';
+import { useAppContext } from '@/context/AppContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useMessages } from '@/hooks/useMessages';
 import { ChatBubble } from '@/components/messaging/ChatBubble';
 import { MessageInput } from '@/components/messaging/MessageInput';
 import { Avatar } from '@/components/ui/Avatar';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { OverflowMenuSheet } from '@/components/ui/OverflowMenuSheet';
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { MessageBubbleSkeletonList } from '@/components/ui/skeletons/MessageBubbleSkeleton';
+import {
+  blockUser,
+  unblockUser,
+  ModerationUnavailableError,
+} from '@/services/moderation.service';
 import { colors, typography, spacing } from '@/constants/theme';
 import { formatSeenTime } from '@/utils/date';
 import type { OptimisticMessage } from '@/types/message.types';
@@ -38,9 +47,53 @@ export default function ConversationScreen() {
   const { id: partnerId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthContext();
+  const { blockedIds, refreshBlocked } = useAppContext();
   const { profile: partner } = useProfile(partnerId);
   const { markRead } = useMessagesContext();
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
+
+  // Moderation entry point (App Store 1.2): overflow → report / block.
+  // While the partner is blocked the composer is replaced by an inline
+  // unblock bar — history stays readable, sending is off.
+  const partnerBlocked = Boolean(partnerId && blockedIds.has(partnerId));
+  const partnerName = partner?.display_name ?? partner?.username ?? 'this user';
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
+  const [unblockBusy, setUnblockBusy] = useState(false);
+
+  async function handleBlock() {
+    if (!user?.id || !partnerId) return;
+    try {
+      await blockUser(user.id, partnerId);
+      await refreshBlocked(); // swaps the composer for the unblock bar
+      setBlockConfirmVisible(false);
+    } catch (e: unknown) {
+      if (e instanceof ModerationUnavailableError) {
+        setBlockConfirmVisible(false);
+        Alert.alert('Not available yet', e.message);
+        return;
+      }
+      throw e; // ConfirmSheet alerts and keeps the sheet open for retry
+    }
+  }
+
+  async function handleUnblock() {
+    if (!user?.id || !partnerId || unblockBusy) return;
+    setUnblockBusy(true);
+    try {
+      await unblockUser(user.id, partnerId);
+      await refreshBlocked();
+    } catch (e: unknown) {
+      Alert.alert(
+        'Could not unblock',
+        e instanceof ModerationUnavailableError ? e.message : 'Please try again.'
+      );
+    } finally {
+      setUnblockBusy(false);
+    }
+  }
 
   const {
     messages,
@@ -123,7 +176,16 @@ export default function ConversationScreen() {
             </View>
           </TouchableOpacity>
         )}
-        <View style={{ width: 40 }} />
+        {/* Same footprint as the back button, so partnerInfo stays centered
+            (this slot was a width-40 spacer before the overflow landed). */}
+        <TouchableOpacity
+          onPress={() => setOverflowVisible(true)}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="More options"
+        >
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text.primary} />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -162,8 +224,62 @@ export default function ConversationScreen() {
           />
         )}
 
-        <MessageInput onSend={sendMessage} />
+        {partnerBlocked ? (
+          <View style={[styles.blockedBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+            <Text style={styles.blockedBarText} numberOfLines={2}>
+              You blocked {partnerName} — Unblock to message
+            </Text>
+            <TouchableOpacity
+              onPress={handleUnblock}
+              disabled={unblockBusy}
+              accessibilityRole="button"
+              accessibilityLabel={`Unblock ${partnerName}`}
+            >
+              <Text style={[styles.blockedBarAction, unblockBusy && styles.blockedBarActionBusy]}>
+                {unblockBusy ? 'Unblocking…' : 'Unblock'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <MessageInput onSend={sendMessage} />
+        )}
       </KeyboardAvoidingView>
+
+      {/* Moderation sheets */}
+      <OverflowMenuSheet
+        visible={overflowVisible}
+        actions={[
+          {
+            label: 'Report user',
+            icon: 'flag-outline',
+            onPress: () => setReportVisible(true),
+          },
+          partnerBlocked
+            ? { label: 'Unblock', icon: 'person-add-outline', onPress: handleUnblock }
+            : {
+                label: 'Block',
+                icon: 'person-remove-outline',
+                destructive: true,
+                onPress: () => setBlockConfirmVisible(true),
+              },
+        ]}
+        onClose={() => setOverflowVisible(false)}
+      />
+      <ReportSheet
+        visible={reportVisible}
+        targetType="profile"
+        targetId={partnerId ?? null}
+        onClose={() => setReportVisible(false)}
+      />
+      <ConfirmSheet
+        visible={blockConfirmVisible}
+        title={`Block ${partnerName}?`}
+        message="They won't be able to message you, and you won't see their activities or messages. They won't be notified."
+        confirmLabel="Block"
+        destructive
+        onConfirm={handleBlock}
+        onClose={() => setBlockConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -211,6 +327,35 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingVertical: spacing.base },
+  // Replaces MessageInput while the partner is blocked — same top border
+  // and bottom inset so the layout doesn't jump when toggling block state.
+  blockedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.md,
+  },
+  blockedBarText: {
+    flex: 1,
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 18,
+  },
+  blockedBarAction: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
+    padding: spacing.xs,
+  },
+  blockedBarActionBusy: {
+    opacity: 0.5,
+  },
 });
 
 export const ErrorBoundary = makeRouteErrorBoundary('messages-dm');
