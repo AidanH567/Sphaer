@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Profile } from '@/types/user.types';
 
 // ---------------------------------------------------------------------------
 // Report & block (App Store Guideline 1.2). The `blocked_users` and `reports`
@@ -148,6 +149,43 @@ export async function getBlockedIds(userId: string): Promise<string[]> {
     throw error;
   }
   return (data ?? []).map((r) => r.blocked_id);
+}
+
+/** Full profiles this user has blocked, newest block first — powers the
+ *  Settings "Blocked accounts" list. Two steps rather than a PostgREST
+ *  embed: the moderation client is cast to a schema that only knows
+ *  `blocked_users`/`reports`, so a `profiles(*)` join wouldn't typecheck —
+ *  and the embed needs an FK PostgREST can resolve anyway. Step 1 reads the
+ *  blocked ids (degrades to [] when the table is missing); step 2 hydrates
+ *  them through the real client, which knows `profiles`. Any profile that's
+ *  since been deleted just drops out. */
+export async function listBlockedProfiles(userId: string): Promise<Profile[]> {
+  const { data, error } = await moderationDb
+    .from('blocked_users')
+    .select('blocked_id, created_at')
+    .eq('blocker_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+
+  const rows = data ?? [];
+  const orderedIds = rows.map((r) => r.blocked_id);
+  if (orderedIds.length === 0) return [];
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', orderedIds);
+  if (profilesError) throw profilesError;
+
+  // `.in()` doesn't preserve the block-recency order, so re-sort by the
+  // original id sequence (most-recently-blocked first).
+  const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
+  return orderedIds
+    .map((id) => byId.get(id))
+    .filter((p): p is Profile => p !== undefined);
 }
 
 /** Has `userId` blocked `otherId`? One-directional by design. */

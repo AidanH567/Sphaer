@@ -12,6 +12,7 @@ import { ProfileView } from '@/components/profile/ProfileView';
 import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCard';
 import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEventsSheet';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
+import { BlockedAccountsSheet } from '@/components/moderation/BlockedAccountsSheet';
 import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
 import { computeProfileCompletion } from '@/utils/profile-completion';
 import { getMockProfileById, CURRENT_USER_PROFILE_ID } from '@/data/mockProfiles';
@@ -96,6 +97,9 @@ export default function ProfileScreen() {
   // "DELETE" prompt was rejected as over-engineered for a solo demo (see BACKLOG).
   const [deleteConfirm1Visible, setDeleteConfirm1Visible] = useState(false);
   const [deleteConfirm2Visible, setDeleteConfirm2Visible] = useState(false);
+
+  // Blocked-accounts list (App Store 1.2 — unblocking happens here).
+  const [blockedSheetVisible, setBlockedSheetVisible] = useState(false);
 
   // Stats popups — exactly one open at a time via a single discriminator.
   // 'saved' and 'tickets' aren't public stats but use the same sheet machinery.
@@ -292,6 +296,16 @@ export default function ProfileScreen() {
     />
   );
 
+  // Blocked-accounts list — self-loads on open and degrades to the empty
+  // state without a session, so it's safe in both the dev-fallback and
+  // authed render paths.
+  const blockedSheet = (
+    <BlockedAccountsSheet
+      visible={blockedSheetVisible}
+      onClose={() => setBlockedSheetVisible(false)}
+    />
+  );
+
   const deleteAccountSheets = (
     <>
       <ConfirmSheet
@@ -409,11 +423,17 @@ export default function ProfileScreen() {
         <ProfileView
           profile={mock}
           isOwnProfile
-          trailingSlot={<SettingsSection onDeletePress={handleDeleteAccount} />}
+          trailingSlot={
+            <SettingsSection
+              onBlockedPress={() => setBlockedSheetVisible(true)}
+              onDeletePress={handleDeleteAccount}
+            />
+          }
         />
         {signOutSheet}
         {deleteAccountSheets}
         {unfollowSheet}
+        {blockedSheet}
       </SafeAreaView>
     );
   }
@@ -449,7 +469,12 @@ export default function ProfileScreen() {
           onActivitiesPress={() => setOpenSheet('activities')}
           onSavedPress={() => setOpenSheet('saved')}
           onTicketsPress={() => setOpenSheet('tickets')}
-          trailingSlot={<SettingsSection onDeletePress={handleDeleteAccount} />}
+          trailingSlot={
+            <SettingsSection
+              onBlockedPress={() => setBlockedSheetVisible(true)}
+              onDeletePress={handleDeleteAccount}
+            />
+          }
         />
       )}
 
@@ -457,6 +482,7 @@ export default function ProfileScreen() {
       {statsSheets}
       {deleteAccountSheets}
       {unfollowSheet}
+      {blockedSheet}
     </SafeAreaView>
   );
 }
@@ -519,9 +545,31 @@ function TopBar({
 
 // ─── Settings section — Delete account row ───────────────────────────────────
 
-function SettingsSection({ onDeletePress }: { onDeletePress: () => void }) {
+function SettingsSection({
+  onBlockedPress,
+  onDeletePress,
+}: {
+  onBlockedPress: () => void;
+  onDeletePress: () => void;
+}) {
   return (
     <View style={styles.settingsSection}>
+      <TouchableOpacity
+        style={styles.settingsRow}
+        onPress={onBlockedPress}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Blocked accounts"
+      >
+        <Ionicons name="ban-outline" size={20} color={colors.text.secondary} />
+        <Text style={styles.settingsRowText}>Blocked accounts</Text>
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={colors.text.tertiary}
+          style={styles.settingsRowChevron}
+        />
+      </TouchableOpacity>
       <TouchableOpacity
         style={styles.settingsRow}
         onPress={onDeletePress}
@@ -594,6 +642,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
+  },
+  settingsRowText: {
+    flex: 1,
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 15,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  settingsRowChevron: {
+    marginLeft: 'auto',
   },
   settingsRowTextDestructive: {
     fontFamily: typography.fontFamily.ui,
