@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,6 +39,20 @@ export default function NotificationsScreen() {
   const { user } = useAuthContext();
   const { notifications, unreadCount, isLoading, error, refetch, markAllRead } =
     useNotifications(user?.id);
+
+  // Pull-to-refresh. `refetch()` is tick-based — it bumps an internal tick
+  // and returns void; the hook's fetch effect re-runs and toggles isLoading.
+  // So we hold `refreshing` true after the call and clear it once the fetch
+  // settles (isLoading flips back to false), giving the spinner a real
+  // lifetime instead of vanishing on the next frame.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    refetch();
+  }, [refetch]);
+  useEffect(() => {
+    if (refreshing && !isLoading) setRefreshing(false);
+  }, [refreshing, isLoading]);
 
   // Per-row mark-as-read. The hook doesn't expose this today; do it
   // directly here and patch the local list via an in-memory map. Keeps the
@@ -97,7 +112,10 @@ export default function NotificationsScreen() {
           onBack={() => router.back()}
           backLabel="Back"
         />
-      ) : isLoading ? (
+      ) : isLoading && notifications.length === 0 && !refreshing ? (
+        // Centered spinner is for the true initial load only. During a
+        // pull-to-refresh (rows already present) we keep the list mounted so
+        // the RefreshControl owns the spinner and the list doesn't disappear.
         <View style={styles.loading}>
           <ActivityIndicator color={colors.black} />
         </View>
@@ -128,6 +146,13 @@ export default function NotificationsScreen() {
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.neutral.chocolate}
+            />
+          }
         />
       )}
     </SafeAreaView>

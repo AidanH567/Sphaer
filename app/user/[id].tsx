@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,6 +67,19 @@ export default function UserProfileScreen() {
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found' | 'error'>('loading');
   const [retryTick, setRetryTick] = useState(0);
+
+  // Pull-to-refresh. Bumping retryTick re-runs the profile-fetch effect; we
+  // hold the spinner until `status` leaves 'loading' (the effect sets it back
+  // to found/not_found/error when the fetch settles). Reuses the same trigger
+  // as the error-state Retry button — no extra fetch path.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = () => {
+    setRefreshing(true);
+    setRetryTick((t) => t + 1);
+  };
+  useEffect(() => {
+    if (refreshing && status !== 'loading') setRefreshing(false);
+  }, [refreshing, status]);
 
   // Moderation entry point (App Store 1.2): overflow → report / block.
   const [overflowVisible, setOverflowVisible] = useState(false);
@@ -277,7 +291,11 @@ export default function UserProfileScreen() {
         )}
       </View>
 
-      {status === 'loading' && <ProfileSkeleton />}
+      {/* Initial load shows the skeleton. A pull-to-refresh also flips status
+          back to 'loading' for an instant — but if we already have a profile
+          we keep ProfileView mounted (below) so the RefreshControl gesture
+          isn't torn out from under the user. */}
+      {status === 'loading' && !(refreshing && displayProfile) && <ProfileSkeleton />}
 
       {status === 'not_found' && (
         <ErrorState
@@ -318,7 +336,12 @@ export default function UserProfileScreen() {
         </View>
       )}
 
-      {status === 'found' && displayProfile && !isBlockedUser && (
+      {/* Keep the profile mounted during a pull-to-refresh even though status
+          dips to 'loading' for that instant — otherwise the ScrollView (and
+          its RefreshControl) would unmount mid-gesture. */}
+      {(status === 'found' || (refreshing && status === 'loading')) &&
+        displayProfile &&
+        !isBlockedUser && (
         <>
           <ProfileView
             profile={displayProfile}
@@ -333,6 +356,13 @@ export default function UserProfileScreen() {
             onFollowingPress={() => setOpenSheet('following')}
             onCirclesPress={() => setOpenSheet('circles')}
             onActivitiesPress={() => setOpenSheet('activities')}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.neutral.chocolate}
+              />
+            }
           />
 
           <EntityListSheet

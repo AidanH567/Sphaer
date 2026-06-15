@@ -253,6 +253,45 @@ Scope: L. (User call.)
 
 ---
 
+## Feature-gap scan 2026-06-15 (NEW — not yet built)
+
+Fresh read of the app vs. README/schema. Verified against this file (no dupes). Codebase is mature — the only pure-`console.log` dead handlers in all of `app/` are the two inbox header buttons (#1, #2).
+
+### P1 — real holes a user will hit
+
+#### New-conversation picker (inbox "+" is a dead stub)
+Why: the inbox "Start new conversation" button only `console.log`s — you can only DM by visiting a profile first; no `/messages/new` route exists. Evidence: `app/(tabs)/messages/index.tsx:213`. Needs a user-search/recent-contacts picker → opens the DM thread. Scope: M.
+
+#### ~~Pull-to-refresh on inbox / notifications / profile~~ — shipped 2026-06-15 (`see ✓ Shipped`)
+Why: RefreshControl was wired only on feed/circles/mural. Inbox (`messages/index.tsx`), notifications (`notifications.tsx`), and `/user/[id]` had none. Scope: S–M.
+
+#### Profile cover image (promised + schema-backed, unbuilt)
+Why: README lists "profile photo + cover image" and `profiles.cover_url` exists, but there's no upload UI and no render — ProfileView's hero shows only the avatar. Evidence: `ProfileView.tsx:116`, `profile-completion.ts:16` ("no editor for it today"). Needs a 16:9 picker in ProfileForm + `uploadProfileCover` (mirror `uploadCircleCover`) + banner render on own + `/user/[id]`. Scope: M.
+
+### P2 — robustness / UX polish
+
+#### Inbox "options" meatball is a dead stub
+Why: top-left ellipsis `console.log`s but advertises `accessibilityLabel="Open options"` to screen readers. Either build a real menu (mark-all-read, message settings) or remove. Evidence: `app/(tabs)/messages/index.tsx:203`. Scope: S.
+
+#### Disciplines collected but never displayed
+Why: onboarding + Edit Profile capture `disciplines[]`, but ProfileView never renders them — orphaned data README promises. Evidence: `onboarding.tsx:47`, `ProfileForm.tsx:384`; absent from `ProfileView.tsx`. Confirm against Figma before building (artist frame may omit a chip row). Scope: S.
+
+#### Saved-events sheet has no un-save
+Why: you can save an event but can't remove it from the Saved sheet — `EntityListSheet` only exposes long-press for the Following (user) variant. `unsaveEvent()` already exists. Evidence: `profile/index.tsx:379`, `EntityListSheet.tsx:186`. Scope: S.
+
+#### Circle group chat — no leave / report / moderation from inside
+Why: the circle chat header links out to the circle page but has no overflow menu — can't leave the circle or report it / report a sender from the conversation (DM threads got this). Evidence: `app/(tabs)/messages/circle/[id].tsx`. Scope: S–M.
+
+### Later / decision-gated
+
+#### Global connectivity / offline awareness
+Why: every failure renders the same generic offline ErrorState regardless of cause; no `NetInfo` layer to distinguish offline vs. server error, no auto-retry-on-reconnect. Scope: M. (Vendor/product call — pairs with the auth-error offline copy already shipped.)
+
+#### Event detail — "Contact organizer" CTA
+Why: circle detail shipped an Organizer row with Follow + Contact→DM; event detail's artist row only has Follow. Inconsistent. Confirm against Figma event-detail frame (`3491:2499`) first. Evidence: `app/event/[id].tsx` artist row. Scope: S.
+
+---
+
 ## P0 — App Store launch blockers (audit 2026-06-09 — promote candidates)
 
 These are submission-blockers, not polish. Each is a near-guaranteed App

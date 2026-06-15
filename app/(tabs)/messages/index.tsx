@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { typography } from '@/constants/theme';
+import { colors, typography } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
 import { formatMessageTime } from '@/utils/date';
@@ -173,6 +174,18 @@ export default function MessagesScreen() {
   const { user } = useAuthContext();
   const { conversations, isLoading, error, refresh } = useMessagesContext();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh. `refresh()` is a real promise that resolves when the
+  // re-fetch settles, so we can drive the spinner straight off the await.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh]);
 
   const rows: RowWithRoute[] = useMemo(() => {
     const filtered = (() => {
@@ -260,7 +273,10 @@ export default function MessagesScreen() {
       </View>
 
       {/* Conversation list */}
-      {isLoading ? (
+      {/* Only show the centered spinner on the true initial load — a
+          pull-to-refresh (rows already present) must keep the list visible
+          and let the RefreshControl render its own spinner instead. */}
+      {isLoading && rows.length === 0 && !refreshing ? (
         <View style={styles.emptyState}>
           <ActivityIndicator color={INK} />
         </View>
@@ -289,6 +305,13 @@ export default function MessagesScreen() {
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.neutral.chocolate}
+            />
+          }
         />
       )}
     </SafeAreaView>

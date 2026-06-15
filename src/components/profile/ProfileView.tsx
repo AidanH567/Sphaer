@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import type { RefreshControlProps } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/constants/theme';
@@ -68,6 +69,13 @@ interface ProfileViewProps {
    * coupling that placeholder to this shared component.
    */
   trailingSlot?: React.ReactNode;
+  /**
+   * Optional RefreshControl forwarded to the internal ScrollView so the
+   * /user/[id] screen can add pull-to-refresh without owning the scroll
+   * container. Left undefined by the own-profile tab — no behaviour change
+   * there.
+   */
+  refreshControl?: React.ReactElement<RefreshControlProps>;
 }
 
 /**
@@ -90,6 +98,7 @@ export function ProfileView({
   onToggleFollow,
   followBusy,
   trailingSlot,
+  refreshControl,
 }: ProfileViewProps) {
   // Legacy local-only toggle. Only used when the caller didn't pass real
   // isFollowing + onToggleFollow props (e.g. some embedded preview).
@@ -111,6 +120,7 @@ export function ProfileView({
       style={styles.scroll}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
     >
       {/* ── Hero ─────────────────────────────────────────── */}
       <View style={styles.hero}>
