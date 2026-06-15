@@ -23,7 +23,7 @@ import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { signInWithGoogle } from '@/services/auth.service';
 import { isValidEmail, isValidPassword } from '@/utils/validators';
-import { isAlreadyRegisteredError } from '@/utils/auth-errors';
+import { formatAuthError } from '@/utils/auth-errors';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma tokens — Sign Up Flow Screen 1.1 (node 5013:10790)
@@ -39,25 +39,61 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ displayName?: string; email?: string; password?: string }>({});
-  // Non-field submit failures (network, unexpected server errors). Rendered
-  // inline — Alert.alert is a no-op on react-native-web, so alerting here
-  // left web users with a silently dead Sign up button.
+  // Non-field submit failures (network, timeout, unexpected server errors).
+  // Rendered inline — Alert.alert is a no-op on react-native-web, so alerting
+  // here left web users with a silently dead Sign up button.
   const [formError, setFormError] = useState<string | null>(null);
+  // Set to the entered email when signup fails because the account already
+  // exists — drives the tappable "Log in instead →" recovery affordance.
+  const [recoverEmail, setRecoverEmail] = useState<string | null>(null);
+
+  type FieldKey = 'displayName' | 'email' | 'password';
+
+  /** Validation for a single field — shared by on-blur and on-submit. */
+  function fieldError(field: FieldKey): string | undefined {
+    if (field === 'displayName') {
+      const n = displayName.trim();
+      if (n.length < 2 || n.length > 50) return 'Name must be 2–50 characters';
+    }
+    if (field === 'email' && !isValidEmail(email)) return 'Enter a valid email address';
+    if (field === 'password' && !isValidPassword(password)) {
+      return 'Password must be at least 8 characters';
+    }
+    return undefined;
+  }
+
+  /** Validate one field when focus leaves it — but never nag a pristine
+   *  (still-empty) field; submit catches those as "required". */
+  function handleBlur(field: FieldKey) {
+    const value = field === 'displayName' ? displayName : field === 'email' ? email : password;
+    if (!value.trim()) return;
+    setErrors((prev) => ({ ...prev, [field]: fieldError(field) }));
+  }
+
+  /** onChangeText wrapper: update the value and clear that field's error plus
+   *  any stale form-level error / recovery prompt (clear-on-edit). */
+  function changeHandler(field: FieldKey, setter: (t: string) => void) {
+    return (t: string) => {
+      setter(t);
+      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
+      if (formError) setFormError(null);
+      if (recoverEmail) setRecoverEmail(null);
+    };
+  }
 
   function validate(): boolean {
-    const next: typeof errors = {};
-    const trimmedName = displayName.trim();
-    if (trimmedName.length < 2 || trimmedName.length > 50) {
-      next.displayName = 'Name must be 2–50 characters';
-    }
-    if (!isValidEmail(email)) next.email = 'Enter a valid email address';
-    if (!isValidPassword(password)) next.password = 'Password must be at least 8 characters';
+    const next: typeof errors = {
+      displayName: fieldError('displayName'),
+      email: fieldError('email'),
+      password: fieldError('password'),
+    };
     setErrors(next);
-    return Object.keys(next).length === 0;
+    return !next.displayName && !next.email && !next.password;
   }
 
   async function handleSignUp() {
     setFormError(null);
+    setRecoverEmail(null);
     if (!validate()) return;
     try {
       const result = await signUp(email, password, displayName.trim());
@@ -78,16 +114,15 @@ export default function SignUpScreen() {
         );
       }
     } catch (e: unknown) {
-      if (isAlreadyRegisteredError(e)) {
-        setErrors((prev) => ({
-          ...prev,
-          email: 'This email is already registered — log in instead.',
-        }));
+      const fe = formatAuthError(e, 'signup');
+      if (fe.field) {
+        // formatAuthError uses 'name'; this screen's state key is 'displayName'.
+        const key: FieldKey = fe.field === 'name' ? 'displayName' : fe.field;
+        setErrors((prev) => ({ ...prev, [key]: fe.message }));
       } else {
-        setFormError(
-          e instanceof Error ? e.message : 'Something went wrong — please try again.'
-        );
+        setFormError(fe.message);
       }
+      setRecoverEmail(fe.offerLogin ? email.trim() : null);
     }
   }
 
@@ -150,25 +185,44 @@ export default function SignUpScreen() {
               <AuthField
                 label="Name"
                 value={displayName}
-                onChangeText={setDisplayName}
+                onChangeText={changeHandler('displayName', setDisplayName)}
+                onBlur={() => handleBlur('displayName')}
                 placeholder="Your name"
                 autoCapitalize="words"
                 autoComplete="name"
                 error={errors.displayName}
               />
-              <AuthField
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="your@email.com"
-                keyboardType="email-address"
-                autoComplete="email"
-                error={errors.email}
-              />
+              <View>
+                <AuthField
+                  label="Email"
+                  value={email}
+                  onChangeText={changeHandler('email', setEmail)}
+                  onBlur={() => handleBlur('email')}
+                  placeholder="your@email.com"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  error={errors.email}
+                />
+                {recoverEmail && (
+                  <TouchableOpacity
+                    style={styles.recoverLink}
+                    onPress={() =>
+                      router.replace(
+                        `/(auth)/login?email=${encodeURIComponent(recoverEmail)}` as never,
+                      )
+                    }
+                    accessibilityRole="link"
+                    accessibilityLabel="Log in instead"
+                  >
+                    <Text style={styles.recoverText}>Log in instead →</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <AuthField
                 label="Password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={changeHandler('password', setPassword)}
+                onBlur={() => handleBlur('password')}
                 placeholder="Min. 8 characters"
                 secureTextEntry
                 autoComplete="password-new"
@@ -296,6 +350,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   signinLink: {
+    color: LINK_BLUE,
+  },
+
+  // Contextual recovery shown under the email field on a duplicate-account
+  // error — one tap to login with the email carried over.
+  recoverLink: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  recoverText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    fontWeight: typography.fontWeight.medium,
     color: LINK_BLUE,
   },
 

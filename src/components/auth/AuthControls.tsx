@@ -117,23 +117,31 @@ const fieldStyles = StyleSheet.create({
 export function FormErrorText({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <Text
-      style={formErrorStyles.text}
+    <View
+      style={formErrorStyles.row}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
-      {message}
-    </Text>
+      <Ionicons name="alert-circle" size={15} color={ERROR_RED} />
+      <Text style={formErrorStyles.text}>{message}</Text>
+    </View>
   );
 }
 
 const formErrorStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
   text: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 13,
     lineHeight: 17,
     color: ERROR_RED,
-    textAlign: 'center',
+    flexShrink: 1,
   },
 });
 

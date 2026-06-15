@@ -16,6 +16,7 @@ import { AuthField, AuthPrimaryButton } from '@/components/auth/AuthControls';
 import { colors, typography } from '@/constants/theme';
 import { requestPasswordReset } from '@/services/auth.service';
 import { isValidEmail } from '@/utils/validators';
+import { formatAuthError } from '@/utils/auth-errors';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Figma tokens — mirrors the Sign Up / Login chrome (Figma 5013:10790)
@@ -44,8 +45,9 @@ export default function ResetPasswordScreen() {
       // leaking which addresses are registered.
       setSent(true);
     } catch (e: unknown) {
-      // Real failures (network down, malformed payload) still show through.
-      setEmailError(e instanceof Error ? e.message : 'Could not send reset link.');
+      // Friendly copy for network / rate-limit / unexpected failures. The
+      // reset form has a single field, so everything renders under email.
+      setEmailError(formatAuthError(e, 'reset').message);
     } finally {
       setSubmitting(false);
     }

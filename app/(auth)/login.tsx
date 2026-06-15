@@ -8,7 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SphaerIcon } from '@/components/SphaerLogo';
@@ -19,7 +19,7 @@ import {
   GoogleButton,
   OrDivider,
 } from '@/components/auth/AuthControls';
-import { isInvalidCredentialsError } from '@/utils/auth-errors';
+import { formatAuthError } from '@/utils/auth-errors';
 import { colors, typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { signInWithGoogle } from '@/services/auth.service';
@@ -33,8 +33,12 @@ const LINK_BLUE = '#367AFF';
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn, isLoading } = useAuth();
+  // Carried over from signup's "Log in instead →" recovery affordance: when
+  // a user tries to sign up with an existing email, we route here with it
+  // prefilled so they only have to enter their password.
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(emailParam ?? '');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   // Non-field submit failures, rendered inline — Alert.alert is a no-op on
@@ -52,13 +56,10 @@ export default function LoginScreen() {
     try {
       await signIn(email, password);
     } catch (e: unknown) {
-      if (isInvalidCredentialsError(e)) {
-        setFormError('Email or password is incorrect.');
-      } else {
-        setFormError(
-          e instanceof Error ? e.message : 'Something went wrong — please try again.'
-        );
-      }
+      const fe = formatAuthError(e, 'login');
+      if (fe.field === 'email') setErrors((prev) => ({ ...prev, email: fe.message }));
+      else if (fe.field === 'password') setErrors((prev) => ({ ...prev, password: fe.message }));
+      else setFormError(fe.message);
     }
   }
 
@@ -114,7 +115,11 @@ export default function LoginScreen() {
               <AuthField
                 label="Email"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                  if (formError) setFormError(null);
+                }}
                 placeholder="your@email.com"
                 keyboardType="email-address"
                 autoComplete="email"
@@ -123,10 +128,15 @@ export default function LoginScreen() {
               <AuthField
                 label="Password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+                  if (formError) setFormError(null);
+                }}
                 placeholder="Your password"
                 secureTextEntry
                 autoComplete="password"
+                autoFocus={!!emailParam}
                 error={errors.password}
               />
 
