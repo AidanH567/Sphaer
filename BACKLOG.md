@@ -61,11 +61,11 @@ chips, or both. Then implement accordingly.
 Starter-capped copy `iuCO8ENAhfYIJly1JGAeU1` or the giant board node
 `6239:6597`.
 
-**Otherwise next:** the standing user-authorization blockers — deploy
-`supabase/functions/delete-account` + apply the **9 pending migrations**
-(full list under "APPLY THE 9 PENDING MIGRATIONS" in the P0 section)
-then regenerate `src/types/supabase.ts` — and Apple Sign In (#2 below)
-once the Apple dev account exists.
+**Otherwise next:** the 9 pending migrations are now **APPLIED** (2026-06-15,
+see the struck "APPLY THE 9 PENDING MIGRATIONS" entry below). Remaining
+user-authorization blockers: deploy `supabase/functions/delete-account`,
+regenerate `src/types/supabase.ts` (`gen types --linked`), and Apple Sign In
+(#2 below) once the Apple dev account exists.
 
 ---
 
@@ -142,18 +142,9 @@ Scope: M. (User call on vendor.)
 
 ---
 
-### APPLY THE 9 PENDING MIGRATIONS (one `npx supabase db push`, user-authorized)
-The gated list as of 2026-06-12 EOD — all authored + committed, none applied:
-1. `20260609000000_saved_events_reminder.sql`
-2. `20260609010000_denormalized_follow_counts.sql`
-3. `20260612000000_circle_owner_delete_rls.sql` (circle delete + member kick are inert until applied)
-4. `20260612010000_events_subtitle_spots_visibility.sql` (create-form fields silently dropped until applied)
-5. `20260612020000_reports_blocked_users.sql` (report/block UI shows "available after next update" until applied)
-6. `20260612030000_rate_limiting.sql` (messages 30/min, follows 60/hr, reports 10/hr)
-7. `20260612040000_notification_producers.sql` (message/follow/circle-event fan-out + adds notifications to the Realtime publication — live badge updates don't fire without it)
-8. `20260612050000_storage_image_mime_limits.sql` (bucket MIME allowlist + 10MB cap; if hosted push rejects storage.buckets writes, set the same fields in Dashboard → Storage)
-9. `20260612060000_profiles_verified.sql` (verified badge renders FALSE until applied; grant via dashboard)
-After push: regenerate `src/types/supabase.ts`, drop the documented casts in moderation.service.ts / events.service.ts, and drop getProfile()'s two COUNT queries. The delete-account edge function deploy is still separately pending.
+### ~~APPLY THE 9 PENDING MIGRATIONS~~ — ✅ ALL APPLIED 2026-06-15 (via Supabase MCP, user-authorized)
+All 9 applied to production in order through the connected Supabase integration (the local CLI was never logged in/linked). Verified: `list_migrations` shows all 9 recorded; `reports` / `blocked_users` / `rate_limit_log` tables exist with RLS; `tsc` clean; a live report submit inserted + persisted a `reports` row end-to-end (then removed). So now LIVE: saved-event reminder column, denormalized follow counts (+ triggers), circle delete + member-kick RLS, event subtitle/spots/visibility/media columns, report & block tables, rate limiting (messages 30/min · follows 60/hr · reports 10/hr), notification producers (+ notifications added to the Realtime publication), storage MIME/10MB caps, `profiles.verified` (+ anti-self-grant trigger).
+**Remaining follow-ups (non-blocking):** (a) regenerate `src/types/supabase.ts` via `npx supabase gen types typescript --linked` — until then the documented casts in moderation.service.ts / events.service.ts + getProfile()'s two COUNT queries keep working and `tsc` is green; (b) the delete-account edge function deploy is still separately pending; (c) security advisor: the new SECURITY DEFINER **trigger** functions are EXECUTE-able by anon/authenticated (low risk — trigger fns aren't RPC-callable in practice) — optional hardening = `REVOKE EXECUTE … FROM anon, authenticated`; (d) leaked-password protection still OFF (dashboard toggle).
 
 ### ~~web favicon.png is still a 1×1 stub~~ — shipped 2026-06-12 (`68dc4d1`): real 48px render, app.json already pointed at it
 
