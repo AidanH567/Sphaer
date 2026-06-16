@@ -10,7 +10,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { MuralPoster } from './MuralPoster';
-import { MuralMinimap } from './MuralMinimap';
 import type { MuralLayout, PosterRect } from '@/hooks/useMuralLayout';
 import { colors } from '@/constants/theme';
 
@@ -89,9 +88,6 @@ export function MuralCanvas({
   const scale = useSharedValue(FIXED_SCALE);
   const savedTranslateX = useSharedValue(initialTX);
   const savedTranslateY = useSharedValue(initialTY);
-  // Flips true on pan begin, false on end. The minimap reads this to bump its
-  // opacity 0.7 → 1.0 during active interaction, mirroring the iOS scrollbar.
-  const isInteracting = useSharedValue(false);
 
   // postersRef stays in sync with whatever the layout produced so the JS tap
   // handler always hit-tests against the current set without re-creating the
@@ -203,7 +199,6 @@ export function MuralCanvas({
         .onStart(() => {
           savedTranslateX.value = translateX.value;
           savedTranslateY.value = translateY.value;
-          isInteracting.value = true;
         })
         .onUpdate((e) => {
           const newX = savedTranslateX.value + e.translationX;
@@ -214,16 +209,12 @@ export function MuralCanvas({
             canvasHeight,
             scale.value
           );
-          // On web, hard-clamp (no rubber-band) so a mouse drag never
-          // over-shoots past the wall edges into the black background.
-          // Rubber-band on native still feels iOS-correct under touch.
-          if (RUN_GESTURE_ON_JS) {
-            translateX.value = clampWorklet(newX, xBounds.min, xBounds.max);
-            translateY.value = clampWorklet(newY, yBounds.min, yBounds.max);
-          } else {
-            translateX.value = rubberBand(newX, xBounds.min, xBounds.max);
-            translateY.value = rubberBand(newY, yBounds.min, yBounds.max);
-          }
+          // Pull past the wall edges with rubber-band resistance (both
+          // platforms) — on release the decay/spring snaps it back. This is
+          // the iOS overscroll feel; a brief peek of the dark backdrop at the
+          // edge is the intended "you've hit a limit" cue.
+          translateX.value = rubberBand(newX, xBounds.min, xBounds.max);
+          translateY.value = rubberBand(newY, yBounds.min, yBounds.max);
         })
         .onEnd((e) => {
           const xBounds = boundsForWorklet(viewportWidth, canvasWidth, scale.value);
@@ -232,22 +223,22 @@ export function MuralCanvas({
             canvasHeight,
             scale.value
           );
-          // Momentum: a flick keeps gliding across the wall and rubber-stops
-          // at the edges (native) / hard-stops (web). Makes a big plane feel
-          // explorable instead of "drag, lift, drag, lift."
+          // Momentum + snap-back: a flick keeps gliding, and on hitting an
+          // edge it overshoots then springs back (rubberBandEffect, both
+          // platforms — incl. the web build the phone runs). Releasing
+          // mid-overscroll likewise snaps back into bounds.
           translateX.value = withDecay({
             velocity: e.velocityX,
             clamp: [xBounds.min, xBounds.max],
-            rubberBandEffect: !RUN_GESTURE_ON_JS,
-            rubberBandFactor: 0.6,
+            rubberBandEffect: true,
+            rubberBandFactor: 0.85,
           });
           translateY.value = withDecay({
             velocity: e.velocityY,
             clamp: [yBounds.min, yBounds.max],
-            rubberBandEffect: !RUN_GESTURE_ON_JS,
-            rubberBandFactor: 0.6,
+            rubberBandEffect: true,
+            rubberBandFactor: 0.85,
           });
-          isInteracting.value = false;
         })
         .runOnJS(RUN_GESTURE_ON_JS),
     // Re-create when canvas geometry changes so onUpdate closes over fresh
@@ -293,24 +284,6 @@ export function MuralCanvas({
     [translateX, translateY, scale, canvasOpacity]
   );
 
-  // Teleport: animate translate so a chosen canvas point lands at viewport
-  // centre. Called from the minimap's tap handler.
-  const teleportTo = (canvasX: number, canvasY: number) => {
-    const s = scale.value;
-    const targetTX = viewportWidth / 2 - canvasX * s;
-    const targetTY = viewportHeight / 2 - canvasY * s;
-    const x = boundsFor(viewportWidth, canvasWidth, s);
-    const y = boundsFor(viewportHeight, canvasHeight, s);
-    translateX.value = withSpring(
-      clampJS(targetTX, x.min, x.max),
-      SPRING_CONFIG
-    );
-    translateY.value = withSpring(
-      clampJS(targetTY, y.min, y.max),
-      SPRING_CONFIG
-    );
-  };
-
   return (
     <View style={styles.viewport}>
       <GestureDetector gesture={composed}>
@@ -331,18 +304,6 @@ export function MuralCanvas({
           </Animated.View>
         </View>
       </GestureDetector>
-      <MuralMinimap
-        posters={posters}
-        canvasWidth={canvasWidth}
-        canvasHeight={canvasHeight}
-        viewportWidth={viewportWidth}
-        viewportHeight={viewportHeight}
-        translateX={translateX}
-        translateY={translateY}
-        scale={scale}
-        isInteracting={isInteracting}
-        onTeleport={teleportTo}
-      />
     </View>
   );
 }
@@ -379,11 +340,6 @@ function boundsForWorklet(viewport: number, canvas: number, s: number) {
     return { min: c, max: c };
   }
   return { min: viewport - scaled, max: 0 };
-}
-
-function clampWorklet(v: number, lo: number, hi: number) {
-  'worklet';
-  return Math.max(lo, Math.min(hi, v));
 }
 
 function rubberBand(v: number, lo: number, hi: number) {
