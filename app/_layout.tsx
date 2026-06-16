@@ -8,6 +8,7 @@ import { AuthProvider, useAuthContext } from '@/context/AuthContext';
 import { AppProvider } from '@/context/AppContext';
 import { MessagesProvider } from '@/context/MessagesContext';
 import { consumePendingDeepLink, isDeepLinkablePath } from '@/lib/linking';
+import { useWebAutoUpdate } from '@/hooks/useWebAutoUpdate';
 import { motion } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -93,6 +94,10 @@ export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
+
+  // Web-only: reload the public build when a newer one is live (defeats iOS
+  // Safari's stale-tab / bfcache restore). No-op on native and dev.
+  useWebAutoUpdate();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
