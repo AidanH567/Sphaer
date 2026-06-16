@@ -50,6 +50,19 @@ const SPRING_CONFIG = {
   mass: 0.9,
 };
 
+// Edge snap-back tuning. SNAP_SPRING is a firm, quick spring used when the wall
+// is released while overscrolled — a decisive "lock back into place" instead of
+// a lazy drift (withDecay's soft rubber-band barely travels under the tight ~8%
+// cap, so it read as "no change"; an explicit spring is the felt difference).
+// SNAP_RUBBER_FACTOR is the firmer overshoot return for a momentum flick that
+// carries past an edge.
+const SNAP_SPRING = {
+  damping: 24,
+  stiffness: 280,
+  mass: 0.6,
+};
+const SNAP_RUBBER_FACTOR = 0.1;
+
 /**
  * Free-pan canvas for the mural — a large fixed-zoom poster wall.
  *
@@ -233,22 +246,44 @@ export function MuralCanvas({
             canvasHeight,
             scale.value
           );
-          // Momentum + snap-back: a flick keeps gliding, and on hitting an
-          // edge it overshoots then springs back (rubberBandEffect, both
-          // platforms — incl. the web build the phone runs). Releasing
-          // mid-overscroll likewise snaps back into bounds.
-          translateX.value = withDecay({
-            velocity: e.velocityX,
-            clamp: [xBounds.min, xBounds.max],
-            rubberBandEffect: true,
-            rubberBandFactor: 0.2,
-          });
-          translateY.value = withDecay({
-            velocity: e.velocityY,
-            clamp: [yBounds.min, yBounds.max],
-            rubberBandEffect: true,
-            rubberBandFactor: 0.2,
-          });
+          const xClamped = Math.max(
+            xBounds.min,
+            Math.min(xBounds.max, translateX.value)
+          );
+          const yClamped = Math.max(
+            yBounds.min,
+            Math.min(yBounds.max, translateY.value)
+          );
+          // Snap-back has two regimes, chosen per axis:
+          //  • Released while overscrolled past an edge → spring straight home
+          //    with a firm, quick spring (SNAP_SPRING). This is the pronounced
+          //    "locks back into place"; withDecay's soft rubber-band barely
+          //    travels under the ~8% cap, which is why nudging rubberBandFactor
+          //    read as no change.
+          //  • Released in-bounds → withDecay glides with momentum and clamps;
+          //    a flick reaching an edge overshoots a touch then springs back,
+          //    now firmer (rubberBandFactor SNAP_RUBBER_FACTOR).
+          // Both run on native and the web build the phone loads.
+          if (translateX.value !== xClamped) {
+            translateX.value = withSpring(xClamped, SNAP_SPRING);
+          } else {
+            translateX.value = withDecay({
+              velocity: e.velocityX,
+              clamp: [xBounds.min, xBounds.max],
+              rubberBandEffect: true,
+              rubberBandFactor: SNAP_RUBBER_FACTOR,
+            });
+          }
+          if (translateY.value !== yClamped) {
+            translateY.value = withSpring(yClamped, SNAP_SPRING);
+          } else {
+            translateY.value = withDecay({
+              velocity: e.velocityY,
+              clamp: [yBounds.min, yBounds.max],
+              rubberBandEffect: true,
+              rubberBandFactor: SNAP_RUBBER_FACTOR,
+            });
+          }
         })
         .runOnJS(RUN_GESTURE_ON_JS),
     // Re-create when canvas geometry changes so onUpdate closes over fresh
