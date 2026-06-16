@@ -25,9 +25,10 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 /**
  * Mural — the third view of the feed, alongside list (index.tsx) and map.
  *
- * Visual: a 2D pan-and-pinch canvas of poster thumbnails laid out as
- * horizontal bands. Tap a poster → event detail. Pinch zooms between
- * fit-whole-wall and 2×.
+ * Visual: a large fixed-zoom 2D poster wall — Figma-scale posters packed
+ * edge-to-edge across a plane bigger than the viewport, freely pannable in
+ * any direction with fling momentum. Tap a poster → event detail; a minimap
+ * shows your position on the wall.
  *
  * Data shape parity with Feed: same useEvents call, same feedFilters
  * applied (categories pre-filter at the service; search + neighbourhood
@@ -191,10 +192,10 @@ export default function MuralScreen() {
   );
 
   // Refresh affordance. Feed list has FlatList's RefreshControl on overscroll;
-  // the Mural canvas already owns vertical drag (pan-and-pinch), so a true
-  // overscroll-to-refresh would fight the pan gesture's rubber-band. A small
-  // floating refresh button is a more reliable affordance — accessible (single
-  // tap), visible (top-right corner), and doesn't risk regressing the pan/zoom.
+  // the Mural canvas already owns drag in every direction (free 2D pan), so a
+  // true overscroll-to-refresh would fight the pan gesture's rubber-band. A
+  // small floating refresh button is a more reliable affordance — accessible
+  // (single tap), visible (top-right corner), and doesn't regress the pan.
   const [isRefreshing, setIsRefreshing] = useState(false);
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;

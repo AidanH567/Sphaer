@@ -33,13 +33,15 @@ const MIN_ASPECT = 0.4;
 const MAX_ASPECT = 2.0;
 const FALLBACK_ASPECT = 2 / 3; // 2:3 portrait — matches dimensions fallback
 
-// Fixed band height in viewport pixels. The Figma Mural shows posters at
-// ~30–50px wide (iPhone width ~390), implying band heights of ~120–160. We
-// pick 140 as the sweet spot: dense enough to read as a "wall of posters,"
-// big enough that tap targets stay above HIG minimums. Previously we used
-// `screenHeight / 2` (~400px on iPhone) which gave magazine-cover-sized
-// posters — wrong design intent.
-const BAND_HEIGHT = 140;
+// Fixed band height in viewport pixels = poster height at the wall's fixed
+// zoom. The Figma Mural frames (6251:7053 / 6251:7903) show bold, near-
+// magazine-sized posters — roughly 150–200px tall on a 390px-wide iPhone,
+// ~2 across at a time — not tiny thumbnails. 200 matches that immersive
+// "pasted poster wall" feel; combined with the fixed-zoom canvas it makes
+// the plane comfortably larger than the viewport in BOTH axes so you can
+// freely pan around it (vs. the old shrink-to-fill behaviour that collapsed
+// exploration to a single axis).
+const BAND_HEIGHT = 200;
 // Minimum bands stacked vertically. Stops the wall from collapsing to one
 // row when there are very few events, and keeps a useful "vertical to
 // explore" feel even at small data sets.
