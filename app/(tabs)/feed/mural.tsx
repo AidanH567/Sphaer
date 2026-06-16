@@ -245,8 +245,8 @@ export default function MuralScreen() {
           />
         )}
 
-        {/* Light wrapper (same colour as the header) — the canvas background
-            is colors.black and ErrorState's title uses dark text.primary. */}
+        {/* Light wrapper (same colour as the header) — the canvas backdrop is
+            now colors.white and ErrorState's title uses dark text.primary. */}
         {showError && error !== null && (
           <View style={styles.errorWrap}>
             <ErrorState
@@ -277,7 +277,7 @@ export default function MuralScreen() {
 
         {isLoading && !viewportReady && (
           <View style={styles.center}>
-            <ActivityIndicator color={colors.white} />
+            <ActivityIndicator color={colors.text.primary} />
           </View>
         )}
 
@@ -331,8 +331,8 @@ function SkeletonWall({ viewportWidth, viewportHeight }: SkeletonWallProps) {
         posters.map((p, i) => (
           <MotiView
             key={`${y}-${i}`}
-            from={{ opacity: 0.35 }}
-            animate={{ opacity: 0.6 }}
+            from={{ opacity: 0.6 }}
+            animate={{ opacity: 1 }}
             transition={{
               type: 'timing',
               duration: 900,
@@ -352,7 +352,7 @@ function SkeletonWall({ viewportWidth, viewportHeight }: SkeletonWallProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.black },
+  container: { flex: 1, backgroundColor: colors.white },
   // Header is a flex item, not an absolute overlay. The earlier overlay
   // design caused the canvas's top posters to render UNDER the search bar /
   // category chips because canvasSlot's flex:1 extended to y=0. With the
@@ -373,16 +373,17 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: typography.fontFamily.ui,
     fontSize: typography.fontSize.base,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.text.secondary,
     textAlign: 'center',
   },
   skeletonContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.black,
+    backgroundColor: colors.white,
   },
   skeletonPoster: {
     position: 'absolute',
-    backgroundColor: '#2A2A2A',
+    // Light placeholder grey on the white wall (was a dark block on black).
+    backgroundColor: colors.neutral.hiddenLines,
   },
   refreshButton: {
     position: 'absolute',

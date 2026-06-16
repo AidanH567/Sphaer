@@ -26,7 +26,13 @@ interface MuralCanvasProps {
 // brief is a "fixed-zoom wall plane that can be freely panned," and the
 // minimap covers the "see the whole wall at once" need.
 const FIXED_SCALE = 1;
-const RUBBER_BAND_RESISTANCE = 0.4;
+// Progressive (iOS-style) overscroll. Near the edge the rubber band gives at
+// slope RUBBER_BAND_COEFF, then stiffens the further you pull, asymptotically
+// capping the pull at RUBBER_BAND_MAX_FRACTION of the viewport. So however hard
+// or fast the drag, the wall can never be dragged more than ~12% of the screen
+// past its edge — the fix for "can scroll out too far". See progressiveGive().
+const RUBBER_BAND_COEFF = 0.5;
+const RUBBER_BAND_MAX_FRACTION = 0.12;
 const TAP_MAX_DISTANCE = 10;
 
 // On web we intentionally skip the Reanimated Babel plugin (see
@@ -209,12 +215,13 @@ export function MuralCanvas({
             canvasHeight,
             scale.value
           );
-          // Pull past the wall edges with rubber-band resistance (both
-          // platforms) — on release the decay/spring snaps it back. This is
-          // the iOS overscroll feel; a brief peek of the dark backdrop at the
-          // edge is the intended "you've hit a limit" cue.
-          translateX.value = rubberBand(newX, xBounds.min, xBounds.max);
-          translateY.value = rubberBand(newY, yBounds.min, yBounds.max);
+          // Pull past the wall edges with progressive rubber-band resistance
+          // (both platforms) — the further you drag the stiffer it gets, hard-
+          // capped at ~12% of the viewport so you can't wander far out. On
+          // release the decay/spring snaps it back. A brief peek of the white
+          // backdrop at the edge is the intended "you've hit a limit" cue.
+          translateX.value = rubberBand(newX, xBounds.min, xBounds.max, viewportWidth);
+          translateY.value = rubberBand(newY, yBounds.min, yBounds.max, viewportHeight);
         })
         .onEnd((e) => {
           const xBounds = boundsForWorklet(viewportWidth, canvasWidth, scale.value);
@@ -231,13 +238,13 @@ export function MuralCanvas({
             velocity: e.velocityX,
             clamp: [xBounds.min, xBounds.max],
             rubberBandEffect: true,
-            rubberBandFactor: 0.35,
+            rubberBandFactor: 0.2,
           });
           translateY.value = withDecay({
             velocity: e.velocityY,
             clamp: [yBounds.min, yBounds.max],
             rubberBandEffect: true,
-            rubberBandFactor: 0.35,
+            rubberBandFactor: 0.2,
           });
         })
         .runOnJS(RUN_GESTURE_ON_JS),
@@ -342,17 +349,27 @@ function boundsForWorklet(viewport: number, canvas: number, s: number) {
   return { min: viewport - scaled, max: 0 };
 }
 
-function rubberBand(v: number, lo: number, hi: number) {
+// iOS-style progressive overscroll. `offset` is the distance dragged past an
+// edge; the returned give starts at slope RUBBER_BAND_COEFF and asymptotes to
+// `limit` (= RUBBER_BAND_MAX_FRACTION × viewport) as offset → ∞, so the wall can
+// never be pulled more than `limit` past its edge however hard you drag.
+function progressiveGive(offset: number, limit: number) {
   'worklet';
-  if (v < lo) return lo - (lo - v) * RUBBER_BAND_RESISTANCE;
-  if (v > hi) return hi + (v - hi) * RUBBER_BAND_RESISTANCE;
+  return (1 - 1 / ((offset * RUBBER_BAND_COEFF) / limit + 1)) * limit;
+}
+
+function rubberBand(v: number, lo: number, hi: number, dim: number) {
+  'worklet';
+  const limit = dim * RUBBER_BAND_MAX_FRACTION;
+  if (v < lo) return lo - progressiveGive(lo - v, limit);
+  if (v > hi) return hi + progressiveGive(v - hi, limit);
   return v;
 }
 
 const styles = StyleSheet.create({
   viewport: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.white,
     overflow: 'hidden',
   },
   gestureLayer: {
@@ -370,6 +387,6 @@ const styles = StyleSheet.create({
     transformOrigin: '0 0',
     // NO backgroundColor here — the canvas is position:absolute + transform,
     // which creates a stacking context; painting it would cover poster
-    // children. The viewport keeps the black backdrop while panning.
+    // children. The viewport keeps the white backdrop while panning.
   },
 });
