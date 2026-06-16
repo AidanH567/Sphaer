@@ -27,12 +27,15 @@ interface MuralCanvasProps {
 // minimap covers the "see the whole wall at once" need.
 const FIXED_SCALE = 1;
 // Progressive (iOS-style) overscroll. Near the edge the rubber band gives at
-// slope RUBBER_BAND_COEFF, then stiffens the further you pull, asymptotically
-// capping the pull at RUBBER_BAND_MAX_FRACTION of the viewport. So however hard
-// or fast the drag, the wall can never be dragged more than ~12% of the screen
-// past its edge — the fix for "can scroll out too far". See progressiveGive().
-const RUBBER_BAND_COEFF = 0.5;
-const RUBBER_BAND_MAX_FRACTION = 0.12;
+// slope RUBBER_BAND_COEFF (0.35 — firmer than the old linear 0.4), then
+// stiffens the further you pull, asymptotically capping the pull at
+// RUBBER_BAND_MAX_FRACTION of the viewport. So however hard or fast the drag,
+// the wall can never be dragged more than ~8% of the screen past its edge —
+// tuned deliberately firm so a normal pull visibly resists ("can scroll out
+// too far"); a looser slope/cap read as no change vs the old curve. See
+// progressiveGive().
+const RUBBER_BAND_COEFF = 0.35;
+const RUBBER_BAND_MAX_FRACTION = 0.08;
 const TAP_MAX_DISTANCE = 10;
 
 // On web we intentionally skip the Reanimated Babel plugin (see
@@ -217,7 +220,7 @@ export function MuralCanvas({
           );
           // Pull past the wall edges with progressive rubber-band resistance
           // (both platforms) — the further you drag the stiffer it gets, hard-
-          // capped at ~12% of the viewport so you can't wander far out. On
+          // capped at ~8% of the viewport so you can't wander far out. On
           // release the decay/spring snaps it back. A brief peek of the white
           // backdrop at the edge is the intended "you've hit a limit" cue.
           translateX.value = rubberBand(newX, xBounds.min, xBounds.max, viewportWidth);
