@@ -231,13 +231,13 @@ export function MuralCanvas({
             velocity: e.velocityX,
             clamp: [xBounds.min, xBounds.max],
             rubberBandEffect: true,
-            rubberBandFactor: 0.85,
+            rubberBandFactor: 0.35,
           });
           translateY.value = withDecay({
             velocity: e.velocityY,
             clamp: [yBounds.min, yBounds.max],
             rubberBandEffect: true,
-            rubberBandFactor: 0.85,
+            rubberBandFactor: 0.35,
           });
         })
         .runOnJS(RUN_GESTURE_ON_JS),
