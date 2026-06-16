@@ -18,22 +18,22 @@ interface MuralCanvasProps {
   viewportWidth: number;
   viewportHeight: number;
   onPosterTap: (eventId: string) => void;
+  // Increment to glide the wall to a fresh random in-bounds position (the
+  // refresh "shuffle"). Unchanged value across renders = no shuffle.
+  shuffleToken?: number;
 }
 
 // The wall renders at a FIXED zoom — posters at their natural (Figma-scale)
 // size — so the canvas is larger than the viewport on both axes and the only
 // interaction is free 2D panning. Pinch-zoom is intentionally absent: the
-// brief is a "fixed-zoom wall plane that can be freely panned," and the
-// minimap covers the "see the whole wall at once" need.
+// brief is a "fixed-zoom wall plane that can be freely panned."
 const FIXED_SCALE = 1;
 // Progressive (iOS-style) overscroll. Near the edge the rubber band gives at
 // slope RUBBER_BAND_COEFF (0.35 — firmer than the old linear 0.4), then
 // stiffens the further you pull, asymptotically capping the pull at
 // RUBBER_BAND_MAX_FRACTION of the viewport. So however hard or fast the drag,
 // the wall can never be dragged more than ~8% of the screen past its edge —
-// tuned deliberately firm so a normal pull visibly resists ("can scroll out
-// too far"); a looser slope/cap read as no change vs the old curve. See
-// progressiveGive().
+// tuned deliberately firm so a normal pull visibly resists. See progressiveGive().
 const RUBBER_BAND_COEFF = 0.35;
 const RUBBER_BAND_MAX_FRACTION = 0.08;
 const TAP_MAX_DISTANCE = 10;
@@ -44,18 +44,12 @@ const TAP_MAX_DISTANCE = 10;
 // explicit acknowledgement gesture-handler wants. On native, we keep the
 // default (UI-thread worklets) so jitter-free panning keeps working.
 const RUN_GESTURE_ON_JS = Platform.OS === 'web';
-const SPRING_CONFIG = {
-  damping: 18,
-  stiffness: 140,
-  mass: 0.9,
-};
 
 // Edge snap-back tuning. SNAP_SPRING is a firm, quick spring used when the wall
-// is released while overscrolled — a decisive "lock back into place" instead of
-// a lazy drift (withDecay's soft rubber-band barely travels under the tight ~8%
-// cap, so it read as "no change"; an explicit spring is the felt difference).
-// SNAP_RUBBER_FACTOR is the firmer overshoot return for a momentum flick that
-// carries past an edge.
+// is released while overscrolled — a decisive "lock back into place". Its
+// overshoot resolves the OVERSCROLLED axis back toward the clamped edge, i.e.
+// into the wall, never out into empty space. SNAP_RUBBER_FACTOR is the firmer
+// overshoot return for a momentum flick that carries past an edge.
 const SNAP_SPRING = {
   damping: 24,
   stiffness: 280,
@@ -63,22 +57,36 @@ const SNAP_SPRING = {
 };
 const SNAP_RUBBER_FACTOR = 0.1;
 
+// Repositioning animations use withTiming (monotonic — never overshoots its
+// target), so a relayout clamp or a refresh shuffle can NEVER momentarily
+// expose empty space the way an underdamped spring could.
+const REPOSITION_DURATION = 280; // ms — relayout clamp back into new bounds
+const SHUFFLE_DURATION = 480; // ms — glide to a random spot on refresh
+
 /**
  * Free-pan canvas for the mural — a large fixed-zoom poster wall.
  *
  * Interaction: pan (drag) in any direction + tap. A flick keeps gliding
  * (momentum) and rubber-stops at the wall edges, so the plane reads as a
- * space you roam rather than a carousel you swipe. There is no zoom: the
- * wall sits at a fixed scale where posters are Figma-sized, and the canvas
- * (from useMuralLayout) is naturally bigger than the viewport in BOTH axes —
- * that's what makes the 2D exploration work.
+ * space you roam rather than a carousel you swipe. There is no zoom: the wall
+ * sits at a fixed scale where posters are Figma-sized, and the canvas (from
+ * useMuralLayout) is naturally bigger than the viewport in BOTH axes — that's
+ * what makes the 2D exploration work.
  *
- * Bounds: the canvas is canvasW × canvasH at the fixed scale. When it exceeds
- * the viewport, translate is clamped so the canvas edges align with the
- * viewport edges (max = 0, min = viewport − canvas). When it fits inside the
- * viewport (a tiny filtered set), translate locks to centre. During an active
- * drag, exceeding bounds applies rubber-band resistance (native); on release,
- * withDecay carries momentum and clamps back into bounds.
+ * Bounds are a SINGLE SOURCE OF TRUTH held in shared values (canvasW/H, vpW/H)
+ * that the pan gesture reads LIVE at event time. The gesture is built ONCE with
+ * a stable identity and never recaptures dimensions, so it can never run
+ * against stale bounds — that race (the wall going live a frame before its
+ * bounds settled) was the "first drag drifts, second drag locks in" bug. When
+ * the canvas exceeds the viewport, translate is clamped so the canvas edges
+ * align with the viewport edges (max = 0, min = viewport − canvas). When it
+ * fits inside the viewport (a tiny filtered set), translate locks to centre.
+ * During an active drag, exceeding bounds applies progressive rubber-band
+ * resistance; on release the wall springs/decays back into bounds.
+ *
+ * Initial framing: the wall is centred the instant real bounds exist (the
+ * bounds-sync effect), not via useSharedValue's one-shot initialiser — that
+ * initialiser captured first-render dims and never re-synced.
  *
  * Tap hit-testing happens on the JS thread (runOnJS): read the current
  * translate, project the screen tap into canvas coords, walk posters to find
@@ -92,24 +100,33 @@ export function MuralCanvas({
   viewportWidth,
   viewportHeight,
   onPosterTap,
+  shuffleToken = 0,
 }: MuralCanvasProps) {
   const { posters, canvasWidth, canvasHeight } = layout;
 
-  // Fixed zoom: the wall never scales. Centre it in the viewport at mount so
-  // it extends in all four directions, inviting exploration. With the canvas
-  // larger than the viewport (the common case) centerOf returns a negative
-  // offset that frames the middle of the wall; for a tiny filtered set that
-  // fits the viewport it locks to centre (no pan into empty space).
-  const initialTX = centerOf(viewportWidth, canvasWidth, FIXED_SCALE);
-  const initialTY = centerOf(viewportHeight, canvasHeight, FIXED_SCALE);
-
-  const translateX = useSharedValue(initialTX);
-  const translateY = useSharedValue(initialTY);
+  // Pan position. Seeded to the mount-time centre (mount only happens once
+  // bounds are ready, so this is correct and avoids a top-left flash) and then
+  // owned by the bounds-sync effect below, which re-centres on first valid
+  // bounds and clamps on every later relayout.
+  const translateX = useSharedValue(centerOf(viewportWidth, canvasWidth, FIXED_SCALE));
+  const translateY = useSharedValue(
+    centerOf(viewportHeight, canvasHeight, FIXED_SCALE)
+  );
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
   // `scale` is held at FIXED_SCALE for the canvas's life — it never mutates,
-  // but stays a shared value so the minimap + tap math read it uniformly.
+  // but stays a shared value so the tap math reads it uniformly.
   const scale = useSharedValue(FIXED_SCALE);
-  const savedTranslateX = useSharedValue(initialTX);
-  const savedTranslateY = useSharedValue(initialTY);
+
+  // Bounds inputs as shared values = the single source of truth the gesture
+  // reads LIVE. Seeded from the current props and kept in sync by the effect.
+  const canvasW = useSharedValue(canvasWidth);
+  const canvasH = useSharedValue(canvasHeight);
+  const vpW = useSharedValue(viewportWidth);
+  const vpH = useSharedValue(viewportHeight);
+
+  // Canvas opacity, used to fade-dip during filter-driven layout changes.
+  const canvasOpacity = useSharedValue(1);
 
   // postersRef stays in sync with whatever the layout produced so the JS tap
   // handler always hit-tests against the current set without re-creating the
@@ -123,30 +140,52 @@ export function MuralCanvas({
     onPosterTapRef.current = onPosterTap;
   }, [onPosterTap]);
 
-  // Canvas opacity, used to fade-dip during filter-driven layout changes.
-  // Stays at 1.0 outside of those moments — no first-mount flash.
-  const canvasOpacity = useSharedValue(1);
-
-  // When the canvas shape changes (filter rebuilt the wall), gently spring the
-  // viewport back into the new bounds rather than jump-cutting, and dip opacity
-  // so the relayout reads as a deliberate transition. Skip the dip on first
-  // mount (prev ref unset) so landing on the screen isn't a flash.
+  // ─── Bounds sync + initial centre + relayout clamp ───────────────────────
+  // Runs whenever the wall or viewport is (re)measured. This is the ONLY place
+  // the pan position is corrected for geometry; the gesture reads the same
+  // shared values live, so the two can never disagree.
+  const hasCenteredRef = useRef(false);
   const prevCanvasRef = useRef<{ w: number; h: number } | null>(null);
   useEffect(() => {
-    const x = boundsFor(viewportWidth, canvasWidth, scale.value);
-    const y = boundsFor(viewportHeight, canvasHeight, scale.value);
-    translateX.value = withSpring(
-      clampJS(translateX.value, x.min, x.max),
-      SPRING_CONFIG
-    );
-    translateY.value = withSpring(
-      clampJS(translateY.value, y.min, y.max),
-      SPRING_CONFIG
-    );
+    // Push the latest dims into the shared values the gesture reads live.
+    canvasW.value = canvasWidth;
+    canvasH.value = canvasHeight;
+    vpW.value = viewportWidth;
+    vpH.value = viewportHeight;
+
+    const ready =
+      canvasWidth > 0 &&
+      canvasHeight > 0 &&
+      viewportWidth > 0 &&
+      viewportHeight > 0;
+    if (!ready) return;
+
+    const x = boundsFor(viewportWidth, canvasWidth, FIXED_SCALE);
+    const y = boundsFor(viewportHeight, canvasHeight, FIXED_SCALE);
+
+    if (!hasCenteredRef.current) {
+      // First valid bounds → frame the centre of the wall immediately, no
+      // animation (and so no overshoot), so the wall is correctly positioned
+      // and fully clamped before the first possible touch.
+      translateX.value = centerOf(viewportWidth, canvasWidth, FIXED_SCALE);
+      translateY.value = centerOf(viewportHeight, canvasHeight, FIXED_SCALE);
+      hasCenteredRef.current = true;
+      prevCanvasRef.current = { w: canvasWidth, h: canvasHeight };
+      return;
+    }
+
+    // Later relayout (filter / refetch reshaped the wall): clamp the current
+    // position into the new bounds with a MONOTONIC glide — withTiming never
+    // overshoots, so this can't briefly expose empty space.
+    translateX.value = withTiming(clampJS(translateX.value, x.min, x.max), {
+      duration: REPOSITION_DURATION,
+    });
+    translateY.value = withTiming(clampJS(translateY.value, y.min, y.max), {
+      duration: REPOSITION_DURATION,
+    });
 
     const prev = prevCanvasRef.current;
-    const sameShape =
-      prev && prev.w === canvasWidth && prev.h === canvasHeight;
+    const sameShape = prev && prev.w === canvasWidth && prev.h === canvasHeight;
     if (prev && !sameShape) {
       canvasOpacity.value = withTiming(0.25, { duration: 140 }, () => {
         canvasOpacity.value = withTiming(1, { duration: 220 });
@@ -155,9 +194,28 @@ export function MuralCanvas({
     prevCanvasRef.current = { w: canvasWidth, h: canvasHeight };
     // Reanimated shared values are intentionally NOT in the dep list — they
     // don't trigger React renders and including them would force-recreate the
-    // effect on every gesture tick, breaking the smooth relayout.
+    // effect on every gesture tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasWidth, canvasHeight, viewportWidth, viewportHeight]);
+
+  // ─── Refresh "shuffle" ───────────────────────────────────────────────────
+  // Glide to a random position GUARANTEED inside the current bounds. Skips the
+  // initial mount (token unchanged) and waits until the wall has been centred.
+  const prevShuffleRef = useRef(shuffleToken);
+  useEffect(() => {
+    if (shuffleToken === prevShuffleRef.current) return;
+    prevShuffleRef.current = shuffleToken;
+    if (!hasCenteredRef.current) return;
+    const x = boundsFor(viewportWidth, canvasWidth, FIXED_SCALE);
+    const y = boundsFor(viewportHeight, canvasHeight, FIXED_SCALE);
+    // min + rand·(max − min) is always within [min, max]; when an axis is
+    // locked (canvas ≤ viewport) min === max so that axis simply stays put.
+    const tx = x.min + Math.random() * (x.max - x.min);
+    const ty = y.min + Math.random() * (y.max - y.min);
+    translateX.value = withTiming(tx, { duration: SHUFFLE_DURATION });
+    translateY.value = withTiming(ty, { duration: SHUFFLE_DURATION });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shuffleToken]);
 
   // Web-only wheel handler.
   //
@@ -169,6 +227,7 @@ export function MuralCanvas({
   // Fixed zoom → every wheel gesture is a pan; we ignore ctrlKey (trackpad
   // pinch) so the wall never zooms. We attach a native listener with
   // `passive: false` so we can preventDefault and stop the browser fighting us.
+  // Bounds are read live from the shared values, same as the pan gesture.
   const viewportRef = useRef<View | null>(null);
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -179,19 +238,19 @@ export function MuralCanvas({
       // Pan only. Hard-clamp to bounds: wheel events are discrete with no
       // "release" to spring back from, so a clamp matches Maps / Figma.
       e.preventDefault();
-      const xB = boundsFor(viewportWidth, canvasWidth, scale.value);
-      const yB = boundsFor(viewportHeight, canvasHeight, scale.value);
+      if (vpW.value <= 0 || canvasW.value <= 0) return;
+      const xB = boundsFor(vpW.value, canvasW.value, scale.value);
+      const yB = boundsFor(vpH.value, canvasH.value, scale.value);
       translateX.value = clampJS(translateX.value - e.deltaX, xB.min, xB.max);
       translateY.value = clampJS(translateY.value - e.deltaY, yB.min, yB.max);
     };
 
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
-    // translateX/Y and scale are Reanimated shared values — excluded
-    // deliberately. The handler reads .value at fire time, so it always sees
-    // the latest gesture state without re-subscribing.
+    // Shared values are read at fire time, so this listener never needs
+    // re-subscribing — attach once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewportWidth, viewportHeight, canvasWidth, canvasHeight]);
+  }, []);
 
   const handleTap = (screenX: number, screenY: number) => {
     const tx = translateX.value;
@@ -215,6 +274,10 @@ export function MuralCanvas({
     }
   };
 
+  // Built ONCE — reads canvas/viewport bounds live from shared values, so it
+  // never needs rebuilding when the wall is (re)measured. Stable identity means
+  // GestureDetector never re-binds mid-touch, so the very first drag is always
+  // clamped against the correct, current bounds.
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
@@ -223,29 +286,23 @@ export function MuralCanvas({
           savedTranslateY.value = translateY.value;
         })
         .onUpdate((e) => {
+          // Gate: never act on uninitialised bounds.
+          if (vpW.value <= 0 || canvasW.value <= 0) return;
           const newX = savedTranslateX.value + e.translationX;
           const newY = savedTranslateY.value + e.translationY;
-          const xBounds = boundsForWorklet(viewportWidth, canvasWidth, scale.value);
-          const yBounds = boundsForWorklet(
-            viewportHeight,
-            canvasHeight,
-            scale.value
-          );
-          // Pull past the wall edges with progressive rubber-band resistance
-          // (both platforms) — the further you drag the stiffer it gets, hard-
-          // capped at ~8% of the viewport so you can't wander far out. On
-          // release the decay/spring snaps it back. A brief peek of the white
+          const xBounds = boundsForWorklet(vpW.value, canvasW.value, scale.value);
+          const yBounds = boundsForWorklet(vpH.value, canvasH.value, scale.value);
+          // Pull past the wall edges with progressive rubber-band resistance —
+          // the further you drag the stiffer it gets, hard-capped at ~8% of the
+          // viewport so you can't wander far out. A brief peek of the white
           // backdrop at the edge is the intended "you've hit a limit" cue.
-          translateX.value = rubberBand(newX, xBounds.min, xBounds.max, viewportWidth);
-          translateY.value = rubberBand(newY, yBounds.min, yBounds.max, viewportHeight);
+          translateX.value = rubberBand(newX, xBounds.min, xBounds.max, vpW.value);
+          translateY.value = rubberBand(newY, yBounds.min, yBounds.max, vpH.value);
         })
         .onEnd((e) => {
-          const xBounds = boundsForWorklet(viewportWidth, canvasWidth, scale.value);
-          const yBounds = boundsForWorklet(
-            viewportHeight,
-            canvasHeight,
-            scale.value
-          );
+          if (vpW.value <= 0 || canvasW.value <= 0) return;
+          const xBounds = boundsForWorklet(vpW.value, canvasW.value, scale.value);
+          const yBounds = boundsForWorklet(vpH.value, canvasH.value, scale.value);
           const xClamped = Math.max(
             xBounds.min,
             Math.min(xBounds.max, translateX.value)
@@ -256,14 +313,11 @@ export function MuralCanvas({
           );
           // Snap-back has two regimes, chosen per axis:
           //  • Released while overscrolled past an edge → spring straight home
-          //    with a firm, quick spring (SNAP_SPRING). This is the pronounced
-          //    "locks back into place"; withDecay's soft rubber-band barely
-          //    travels under the ~8% cap, which is why nudging rubberBandFactor
-          //    read as no change.
+          //    with a firm, quick spring (SNAP_SPRING). Its overshoot resolves
+          //    back toward the edge, i.e. into the wall — never out to white.
           //  • Released in-bounds → withDecay glides with momentum and clamps;
           //    a flick reaching an edge overshoots a touch then springs back,
-          //    now firmer (rubberBandFactor SNAP_RUBBER_FACTOR).
-          // Both run on native and the web build the phone loads.
+          //    firm (rubberBandFactor SNAP_RUBBER_FACTOR).
           if (translateX.value !== xClamped) {
             translateX.value = withSpring(xClamped, SNAP_SPRING);
           } else {
@@ -286,10 +340,10 @@ export function MuralCanvas({
           }
         })
         .runOnJS(RUN_GESTURE_ON_JS),
-    // Re-create when canvas geometry changes so onUpdate closes over fresh
-    // bounds. Shared values are excluded — worklets read .value at event time.
+    // Stable identity: bounds come from shared values read live, so no geometry
+    // deps. Shared values / refs are excluded — read at event time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canvasWidth, canvasHeight, viewportWidth, viewportHeight]
+    []
   );
 
   const tapGesture = useMemo(
@@ -375,7 +429,7 @@ function clampJS(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// Worklet-prefixed variants — Reanimated requires the directive on every
+// Worklet-prefixed variant — Reanimated requires the directive on every
 // function called from a worklet body.
 function boundsForWorklet(viewport: number, canvas: number, s: number) {
   'worklet';

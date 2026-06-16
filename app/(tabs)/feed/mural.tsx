@@ -197,8 +197,14 @@ export default function MuralScreen() {
   // small floating refresh button is a more reliable affordance — accessible
   // (single tap), visible (top-right corner), and doesn't regress the pan.
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Bumped on each refresh press → MuralCanvas glides to a fresh random
+  // in-bounds position (the "shuffle"). Fires immediately on press; the
+  // refetch runs in the background and the canvas re-clamps if the wall
+  // reshapes, so the shuffle target always stays valid.
+  const [shuffleToken, setShuffleToken] = useState(0);
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
+    setShuffleToken((t) => t + 1);
     setIsRefreshing(true);
     try {
       await refetch();
@@ -242,6 +248,7 @@ export default function MuralScreen() {
             viewportWidth={viewport.width}
             viewportHeight={viewport.height}
             onPosterTap={handlePosterTap}
+            shuffleToken={shuffleToken}
           />
         )}
 
