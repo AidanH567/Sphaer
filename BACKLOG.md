@@ -35,6 +35,61 @@ session feels like it's stretching past ~3 hours, stop and hand back.
 
 ---
 
+## 🐞 Glitches & bugs — Lara's Figma audit (2026-06-17)
+
+Source: Figma "Glitches & bugs documentation" (node 6516:19) + a messaging bug
+and a web-responsiveness ask from the user. Triaged + partly fixed in the
+2026-06-17 session. Legend: ✅ fixed this session · 🔒 blocked (needs a
+decision / asset / repro from the team).
+
+### ✅ Fixed this session
+- **Web responsiveness / bottom scrollbar** — app shell pinned to `100dvh` via
+  new `app/+html.tsx`; fits every phone, bottom nav always visible, no page
+  scrollbar (content scrolls inside its own ScrollViews). Also removes the iOS
+  overscroll bounce.
+- **"Get Booked" → "Book"** — event-detail CTA copy (`app/event/[id].tsx`).
+- **Street shown twice** — event-detail top row shows venue/district only; the
+  full street address appears once in the Location section; the venue line is
+  skipped when it just equals the address (`app/event/[id].tsx`).
+- **"Sub Title" → "Subtitle"** — create-form label + alert copy
+  (`app/(tabs)/create/index.tsx`).
+- **Address autocomplete stray/leading comma** — `cleanAddress()` strips a
+  leading/trailing/doubled comma from Google's `formattedAddress` on first pick
+  (`src/lib/places.ts`).
+- **Message the host from an event** — added a direct 1:1 Message button to the
+  event-detail artist row → `/messages/[creatorId]` (the same known-good path as
+  the profile's Message button).
+
+### 🔒 Blocked — needs input
+- **Create-activity crashes / loses progress** ("collapses, I get kicked out") —
+  no static cause found; the `create-activity` ErrorBoundary catches a render
+  throw and resets the form. NEEDS the exact error text (the red error screen /
+  browser console) or repro steps to pin it.
+- **Messaging error "already following, via the event"** — the 1:1 message path
+  has zero follow dependency, so it can't error on follow state; the new direct
+  Message button uses that known-good path. If an error still shows, NEEDS the
+  exact error message + which button (the new 1:1 Message vs the event
+  group-chat icon).
+- **Back button dead after sign-up / "couldn't go back to add Neukölln"** —
+  onboarding → location is one-way by design (`router.replace`, `/location` has
+  `gestureEnabled:false`). NEEDS a decision: allow back-to-edit during onboarding
+  (push + a back affordance) vs rely on Edit Profile afterwards.
+- **"needs a comma" (missing comma)** — pinned near the address; exact screen
+  unclear from the note. NEEDS the specific screenshot (one-char fix once found).
+- **Drop circle avatar OR cover image** — NEEDS which one to keep (schema + UI).
+- **Add profile social links (Insta/LinkedIn…)** — NEEDS go-ahead (new
+  `profiles` columns + form UI).
+- **Cover-image crop/frame control** — NEEDS go-ahead (new feature).
+- **Uploaded-media purpose (gallery? videos?)** — NEEDS product intent before
+  labelling/wiring it.
+- **Create preview: add description + participant count, match Rabon's design,
+  add approve / keep-editing buttons** — NEEDS Rabon's preview design spec.
+- **Onboarding copy** — team is "still deciding"; NEEDS the final copy.
+- **3 too-vague notes** — "overlay here", "does this dropdown work + change the
+  icon", "change things for pitching" — NEEDS which screen / what exactly.
+
+---
+
 ## ▶ UP NEXT
 
 ### 1. Feed filter affordance — product decision needed (Figma 4045:8204)

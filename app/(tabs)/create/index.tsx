@@ -272,7 +272,7 @@ export default function CreateScreen() {
         // the alert sits on top of the feed we navigate to below.
         Alert.alert(
           'Published',
-          'Sub Title/Spots/visibility will activate after the next database update.'
+          'Subtitle/Spots/visibility will activate after the next database update.'
         );
       }
 
@@ -364,12 +364,12 @@ export default function CreateScreen() {
           />
         </View>
 
-        {/* 3 — Sub Title */}
+        {/* 3 — Subtitle */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Sub Title</Text>
+          <Text style={styles.sectionLabel}>Subtitle</Text>
           <TextInput
             style={styles.subtitleInput}
-            accessibilityLabel="Sub Title"
+            accessibilityLabel="Subtitle"
             value={subtitle}
             onChangeText={setSubtitle}
             multiline

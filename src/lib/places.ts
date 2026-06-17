@@ -163,7 +163,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     const loc = json.location;
     if (!loc) return null;
 
-    const formatted = json.formattedAddress ?? '';
+    const formatted = cleanAddress(json.formattedAddress ?? '');
     const displayName = json.displayName?.text ?? null;
     // Strip "name" when Google just echoes the address (plain street results).
     const venueName = displayName && !formatted.startsWith(displayName) ? displayName : null;
@@ -185,6 +185,22 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 }
 
 // ─── Internal ────────────────────────────────────────────────────────────────
+
+/**
+ * Tidy a Google `formattedAddress` before we show/store it. Google can return
+ * a stray leading comma when a result has no street number (e.g.
+ * ", 12049 Berlin, Germany"), which read as the "comma before which is wrong"
+ * bug. Strip leading/trailing commas + whitespace and collapse any doubled
+ * comma so the saved address is clean on the first pick, not only after a
+ * re-edit.
+ */
+function cleanAddress(raw: string): string {
+  return raw
+    .replace(/\s*,\s*,\s*/g, ', ') // collapse ", ," → ", "
+    .replace(/^[\s,]+/, '') // strip leading comma / space
+    .replace(/[\s,]+$/, '') // strip trailing comma / space
+    .trim();
+}
 
 interface AddressComponentNew {
   longText: string;

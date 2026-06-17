@@ -397,8 +397,11 @@ export default function EventDetailScreen() {
           <Text style={styles.title}>{event.title}</Text>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={15} color={colors.text.tertiary} />
+            {/* Short locality only (venue, else district) — the full street
+                address lives in the Location section below, so it isn't shown
+                twice. See Lara's "street is double" note. */}
             <Text style={styles.locationText}>
-              {event.location_name ?? event.address ?? 'Berlin'}
+              {event.location_name ?? event.neighbourhood ?? event.borough ?? 'Berlin'}
             </Text>
           </View>
 
@@ -431,6 +434,21 @@ export default function EventDetailScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
+
+            {/* Message the host — direct 1:1, routes to the same conversation
+                screen as their profile's Message button (the known-good path).
+                Hidden on your own event. */}
+            {!isCreator && (
+              <TouchableOpacity
+                style={styles.messageButton}
+                onPress={() => router.push(`/messages/${event.creator_id}`)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Message ${event.creator?.display_name ?? 'host'}`}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.black} />
+              </TouchableOpacity>
+            )}
 
             {/* Hidden on your own event — you can't follow yourself. */}
             {!isCreator && (
@@ -489,7 +507,9 @@ export default function EventDetailScreen() {
           <Text style={styles.sectionHeading}>Location</Text>
           {event.location_name || event.address ? (
             <>
-              {event.location_name && (
+              {/* Skip the venue line when it just repeats the address (no real
+                  venue name) so the street isn't printed twice. */}
+              {event.location_name && event.location_name !== event.address && (
                 <Text style={styles.venueName}>{event.location_name}</Text>
               )}
               {event.address && <Text style={styles.address}>{event.address}</Text>}
@@ -534,7 +554,7 @@ export default function EventDetailScreen() {
           activeOpacity={0.85}
           accessibilityRole="button"
         >
-          <Text style={styles.bookButtonText}>Get Booked</Text>
+          <Text style={styles.bookButtonText}>Book</Text>
         </TouchableOpacity>
       </View>
 
@@ -689,6 +709,15 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.ui,
     fontSize: 13,
     color: colors.text.tertiary,
+  },
+  messageButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   followButton: {
     paddingHorizontal: spacing.lg,
