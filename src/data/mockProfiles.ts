@@ -39,6 +39,8 @@ export interface MockProfile {
   role: string;
   location: string;
   website: string;
+  instagram?: string;
+  linkedin?: string;
   avatarUrl: string;
   verified: boolean;
   followersCount: number;

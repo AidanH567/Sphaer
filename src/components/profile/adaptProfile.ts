@@ -49,6 +49,8 @@ export function adaptProfileToDisplay(
     role: (profile?.bio ?? '').trim(),
     location: locationLine,
     website: profile?.website ?? '',
+    instagram: profile?.instagram ?? '',
+    linkedin: profile?.linkedin ?? '',
     avatarUrl: profile?.avatar_url ?? '',
     verified: isVerified(profile), // live once migration 20260612060000 is pushed
     followersCount: counts.followers,

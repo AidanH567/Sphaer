@@ -146,15 +146,45 @@ export function ProfileView({
         <Text style={styles.metaText}>{profile.role}</Text>
         <Text style={styles.metaText}>{profile.location}</Text>
 
-        <TouchableOpacity
-          style={styles.websiteRow}
-          onPress={() => Linking.openURL(`https://${profile.website}`)}
-          activeOpacity={0.7}
-          accessibilityRole="link"
-        >
-          <Ionicons name="link-outline" size={13} color={LINK} />
-          <Text style={styles.website}>{profile.website}</Text>
-        </TouchableOpacity>
+        {!!profile.website && (
+          <TouchableOpacity
+            style={styles.websiteRow}
+            onPress={() => Linking.openURL(buildSocialUrl(profile.website, 'https://'))}
+            activeOpacity={0.7}
+            accessibilityRole="link"
+          >
+            <Ionicons name="link-outline" size={13} color={LINK} />
+            <Text style={styles.website}>{profile.website}</Text>
+          </TouchableOpacity>
+        )}
+        {!!profile.instagram && (
+          <TouchableOpacity
+            style={styles.websiteRow}
+            onPress={() =>
+              Linking.openURL(buildSocialUrl(profile.instagram!, 'https://instagram.com/'))
+            }
+            activeOpacity={0.7}
+            accessibilityRole="link"
+            accessibilityLabel="Instagram profile"
+          >
+            <Ionicons name="logo-instagram" size={13} color={LINK} />
+            <Text style={styles.website}>{profile.instagram}</Text>
+          </TouchableOpacity>
+        )}
+        {!!profile.linkedin && (
+          <TouchableOpacity
+            style={styles.websiteRow}
+            onPress={() =>
+              Linking.openURL(buildSocialUrl(profile.linkedin!, 'https://linkedin.com/in/'))
+            }
+            activeOpacity={0.7}
+            accessibilityRole="link"
+            accessibilityLabel="LinkedIn profile"
+          >
+            <Ionicons name="logo-linkedin" size={13} color={LINK} />
+            <Text style={styles.website}>{profile.linkedin}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Stats */}
         <View style={styles.stats}>
@@ -451,6 +481,14 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
 
 function Divider() {
   return <View style={styles.divider} />;
+}
+
+// Build a tappable URL from a social value that may be a full URL or a bare
+// handle (e.g. "@studio" → instagram.com/studio). Real URLs pass through.
+function buildSocialUrl(value: string, base: string): string {
+  const v = value.trim();
+  if (/^https?:\/\//i.test(v)) return v;
+  return base + v.replace(/^@/, '');
 }
 
 const styles = StyleSheet.create({

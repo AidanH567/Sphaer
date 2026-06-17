@@ -53,6 +53,8 @@ function makeHost(
     disciplines: [],
     location: 'Berlin',
     website: null,
+    instagram: null,
+    linkedin: null,
     about: null,
     neighborhood: null,
     experiences: [],

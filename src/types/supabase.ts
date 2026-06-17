@@ -538,6 +538,8 @@ export type Database = {
           display_name: string | null
           experiences: ProfileExperienceEntry[]
           id: string
+          instagram: string | null
+          linkedin: string | null
           location: string | null
           neighborhood: string | null
           onboarding_completed: boolean
@@ -554,6 +556,8 @@ export type Database = {
           display_name?: string | null
           experiences?: ProfileExperienceEntry[]
           id: string
+          instagram?: string | null
+          linkedin?: string | null
           location?: string | null
           neighborhood?: string | null
           onboarding_completed?: boolean
@@ -570,6 +574,8 @@ export type Database = {
           display_name?: string | null
           experiences?: ProfileExperienceEntry[]
           id?: string
+          instagram?: string | null
+          linkedin?: string | null
           location?: string | null
           neighborhood?: string | null
           onboarding_completed?: boolean

@@ -25,6 +25,8 @@ export interface ProfileFormValues {
   location: string;     // city
   neighborhood: string; // optional finer-grained
   website: string;
+  instagram: string;    // handle or URL
+  linkedin: string;     // handle or URL
   disciplines: string[];
   avatar_url: string | null;
   experiences: ProfileExperienceEntry[];
@@ -378,6 +380,25 @@ export function ProfileForm({
           keyboardType="url"
           maxLength={120}
           error={errors.website}
+        />
+        <Input
+          label="Instagram (optional)"
+          icon="logo-instagram"
+          placeholder="@yourhandle"
+          value={values.instagram}
+          onChangeText={(t) => update('instagram', t)}
+          autoCapitalize="none"
+          maxLength={120}
+        />
+        <Input
+          label="LinkedIn (optional)"
+          icon="logo-linkedin"
+          placeholder="linkedin.com/in/you"
+          value={values.linkedin}
+          onChangeText={(t) => update('linkedin', t)}
+          autoCapitalize="none"
+          keyboardType="url"
+          maxLength={160}
         />
       </View>
 

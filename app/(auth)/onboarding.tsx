@@ -29,6 +29,8 @@ export default function OnboardingScreen() {
     location: profile?.location ?? 'Berlin',
     neighborhood: profile?.neighborhood ?? '',
     website: profile?.website ?? '',
+    instagram: profile?.instagram ?? '',
+    linkedin: profile?.linkedin ?? '',
     disciplines: profile?.disciplines ?? [],
     avatar_url: profile?.avatar_url ?? null,
     experiences: profile?.experiences ?? [],
@@ -44,6 +46,8 @@ export default function OnboardingScreen() {
         location: values.location || null,
         neighborhood: values.neighborhood || null,
         website: values.website || null,
+        instagram: values.instagram || null,
+        linkedin: values.linkedin || null,
         disciplines: values.disciplines,
         avatar_url: values.avatar_url,
       });
