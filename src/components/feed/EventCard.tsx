@@ -48,6 +48,10 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
   const priceLabel =
     (event as MockEvent).priceLabel ?? formatPrice(event.price, event.is_free);
   const locationLabel = event.location_name ?? event.address ?? 'Berlin';
+  // `subtitle` is a v3 column not yet in the generated Event type — read it
+  // defensively. `going_count` is populated by the feed query (getEvents).
+  const subtitle = (event as { subtitle?: string | null }).subtitle ?? null;
+  const goingCount = event.going_count ?? 0;
 
   // The bookmark is a SIBLING of the card press surface, absolutely
   // positioned over it — a button may not contain another button (invalid
@@ -63,9 +67,21 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
       >
         {/* Left — text area */}
         <View style={styles.content}>
-          <Text style={styles.title} numberOfLines={3}>
-            {event.title}
-          </Text>
+          <View style={styles.topBlock}>
+            <Text style={styles.title} numberOfLines={2}>
+              {event.title}
+            </Text>
+            {!!subtitle && (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            )}
+            {!!event.description && (
+              <Text style={styles.description} numberOfLines={2}>
+                {event.description}
+              </Text>
+            )}
+          </View>
 
           <View style={styles.meta}>
             <Text style={styles.metaLine}>{dateLabel}</Text>
@@ -73,6 +89,9 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
             <Text style={styles.metaLine} numberOfLines={1}>
               {locationLabel}
             </Text>
+            {goingCount > 0 && (
+              <Text style={styles.going}>{goingCount} going</Text>
+            )}
             <Text style={styles.price}>{priceLabel === 'FREE' ? 'Free' : priceLabel}</Text>
           </View>
         </View>
@@ -144,6 +163,21 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.regular,
     color: CHOCOLATE,
   },
+  // Title + subtitle + description grouped at the top; meta sits at the
+  // bottom via the content's space-between.
+  topBlock: { gap: 4 },
+  subtitle: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.body,
+  },
+  description: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    lineHeight: 17,
+    color: CARD_META,
+  },
   meta: {
     gap: 2,
   },
@@ -153,6 +187,12 @@ const styles = StyleSheet.create({
     // Figma feed card: meta is SF Pro Regular (400), not Medium.
     fontWeight: typography.fontWeight.regular,
     color: CARD_META,
+  },
+  going: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 14,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.body,
   },
   price: {
     fontFamily: typography.fontFamily.ui,

@@ -10,7 +10,8 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
     .select(`
       *,
       creator:profiles!events_creator_id_fkey(*),
-      circle:circles(*)
+      circle:circles(*),
+      going:event_registrations(count)
     `)
     .order('created_at', { ascending: false });
 
@@ -54,7 +55,13 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data as EventWithRelations[]) ?? [];
+  // Flatten the embedded count aggregate — event_registrations(count) returns
+  // `going: [{ count }]` — into a plain going_count per event for the card.
+  type WithGoing = EventWithRelations & { going?: { count: number }[] };
+  return ((data as WithGoing[]) ?? []).map((e) => ({
+    ...e,
+    going_count: e.going?.[0]?.count ?? 0,
+  }));
 }
 
 export async function getEventById(id: string): Promise<EventWithRelations | null> {

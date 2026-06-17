@@ -10,6 +10,9 @@ export interface EventWithRelations extends Event {
   creator: Profile | null;
   circle: Circle | null;
   is_saved?: boolean;
+  /** People registered/going — populated by the feed query's embedded
+   *  event_registrations(count). Absent on synthetic/preview events. */
+  going_count?: number;
 }
 
 export interface EventFilters {
