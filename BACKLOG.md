@@ -42,51 +42,55 @@ and a web-responsiveness ask from the user. Triaged + partly fixed in the
 2026-06-17 session. Legend: ✅ fixed this session · 🔒 blocked (needs a
 decision / asset / repro from the team).
 
-### ✅ Fixed this session
-- **Web responsiveness / bottom scrollbar** — app shell pinned to `100dvh` via
-  new `app/+html.tsx`; fits every phone, bottom nav always visible, no page
-  scrollbar (content scrolls inside its own ScrollViews). Also removes the iOS
-  overscroll bounce.
-- **"Get Booked" → "Book"** — event-detail CTA copy (`app/event/[id].tsx`).
-- **Street shown twice** — event-detail top row shows venue/district only; the
-  full street address appears once in the Location section; the venue line is
-  skipped when it just equals the address (`app/event/[id].tsx`).
-- **"Sub Title" → "Subtitle"** — create-form label + alert copy
-  (`app/(tabs)/create/index.tsx`).
-- **Address autocomplete stray/leading comma** — `cleanAddress()` strips a
-  leading/trailing/doubled comma from Google's `formattedAddress` on first pick
-  (`src/lib/places.ts`).
-- **Message the host from an event** — added a direct 1:1 Message button to the
-  event-detail artist row → `/messages/[creatorId]` (the same known-good path as
-  the profile's Message button).
+### ✅ Done
+- **Web responsiveness / bottom scrollbar** — app shell pinned to `100dvh`
+  (`app/+html.tsx`); fits every phone, bottom nav always visible, content scrolls
+  inside its own ScrollViews. Also removes the iOS overscroll bounce.
+- **About field placeholder escaped its box** — shared `Input` now grows for
+  `multiline` content (`src/components/ui/Input.tsx`).
+- **"Get Booked" → "Book"** — event-detail CTA (`app/event/[id].tsx`).
+- **Street shown twice** — top row shows venue/district only; the full address
+  appears once in the Location section (`app/event/[id].tsx`).
+- **"Sub Title" → "Subtitle"** — create-form label + alert (`app/(tabs)/create/index.tsx`).
+- **Address autocomplete stray comma** — `cleanAddress()` strips a leading/
+  trailing/doubled comma from Google's `formattedAddress` (`src/lib/places.ts`).
+- **Message the host from an event** — direct 1:1 Message button on the event
+  artist row → `/messages/[creatorId]` (`app/event/[id].tsx`).
+- **#6 Social links** — `instagram`/`linkedin` columns (migration
+  `20260617000000`) + fields in onboarding/edit + tappable links on the profile.
+- **#9 Feed card expanded** — event card now shows the subtitle, a description
+  snippet, and an "X going" count (`src/components/feed/EventCard.tsx`; the feed
+  query embeds `event_registrations(count)`).
 
-### 🔒 Blocked — needs input
-- **Create-activity crashes / loses progress** ("collapses, I get kicked out") —
-  no static cause found; the `create-activity` ErrorBoundary catches a render
-  throw and resets the form. NEEDS the exact error text (the red error screen /
-  browser console) or repro steps to pin it.
-- **Messaging error "already following, via the event"** — the 1:1 message path
-  has zero follow dependency, so it can't error on follow state; the new direct
-  Message button uses that known-good path. If an error still shows, NEEDS the
-  exact error message + which button (the new 1:1 Message vs the event
-  group-chat icon).
-- **Back button dead after sign-up / "couldn't go back to add Neukölln"** —
+### ✅ Resolved — no change needed
+- **#2 "can only message people you follow"** — checked every layer (messages
+  RLS insert/select, the rate-limit + notification triggers, the client, and
+  moderation `blockedIds`): there is NO follow gate; messaging already works
+  without following. The new follow-independent Message button is the clean path.
+  If a specific "blocked" page still recurs it's a different cause — need the
+  exact error.
+- **#5 Circle avatar vs cover** — keep both: the cover image lives on the circle
+  *detail* page (Lara didn't realise). No change.
+
+### ▶ NEXT — max priority (do right after this patch, with a `/grill-me`)
+- **#7 + #8 Cover-image crop + media gallery** — let events & circles upload and
+  arrange more images about their event/circle, and crop the cover frame. One
+  piece of work; grill to scope the UX + storage before building.
+
+### 🔒 From Figma — revisit with the team
+- **#1 Create-activity crashes / loses progress** ("collapses, I get kicked
+  out") — no static cause found; the `create-activity` ErrorBoundary catches a
+  render throw and resets the form. NEEDS the exact error text (red screen /
+  console) or repro steps.
+- **#3 Back button dead after sign-up / "couldn't go back to add Neukölln"** —
   onboarding → location is one-way by design (`router.replace`, `/location` has
   `gestureEnabled:false`). NEEDS a decision: allow back-to-edit during onboarding
-  (push + a back affordance) vs rely on Edit Profile afterwards.
-- **"needs a comma" (missing comma)** — pinned near the address; exact screen
-  unclear from the note. NEEDS the specific screenshot (one-char fix once found).
-- **Drop circle avatar OR cover image** — NEEDS which one to keep (schema + UI).
-- **Add profile social links (Insta/LinkedIn…)** — NEEDS go-ahead (new
-  `profiles` columns + form UI).
-- **Cover-image crop/frame control** — NEEDS go-ahead (new feature).
-- **Uploaded-media purpose (gallery? videos?)** — NEEDS product intent before
-  labelling/wiring it.
-- **Create preview: add description + participant count, match Rabon's design,
-  add approve / keep-editing buttons** — NEEDS Rabon's preview design spec.
-- **Onboarding copy** — team is "still deciding"; NEEDS the final copy.
-- **3 too-vague notes** — "overlay here", "does this dropdown work + change the
-  icon", "change things for pitching" — NEEDS which screen / what exactly.
+  vs rely on Edit Profile afterwards.
+- **#4 "needs a comma" (missing comma)** — exact screen unclear from the note.
+  NEEDS the specific screenshot (one-char fix once found).
+- **#10 Onboarding copy** — team is "still deciding"; NEEDS the final wording.
+- **#11 Three too-vague notes** — "overlay here", "does this dropdown work +
+  change the icon", "change things for pitching" — NEEDS which screen / what.
 
 ---
 
