@@ -245,6 +245,8 @@ export default function EventDetailScreen() {
   const displayPrice = priceLabel === 'FREE' ? 'Free' : priceLabel;
   const dateLabel = formatEventDateCompact(event.starts_at);
   const aboutParagraphs = (event.description ?? '').split('\n\n').filter(Boolean);
+  // media_urls is a v3 column not yet in the generated Event type — read via cast.
+  const mediaUrls = (event as { media_urls?: string[] | null }).media_urls ?? [];
   const isCreator = user?.id === event.creator_id;
 
   async function handleShare() {
@@ -498,6 +500,31 @@ export default function EventDetailScreen() {
               {aboutExpanded ? 'Read less' : 'Read more >'}
             </Text>
           </TouchableOpacity>
+
+          {/* Media — extra photos/flyers the host uploaded (the Figma media
+              section, and what the Create-form media button feeds). Hidden when
+              empty. Horizontal, fixed-size tiles so there's no layout shift. */}
+          {mediaUrls.length > 0 && (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.sectionHeading}>Media</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.mediaScroll}
+              >
+                {mediaUrls.map((uri, i) => (
+                  <Image
+                    key={`${uri}-${i}`}
+                    source={{ uri }}
+                    style={styles.mediaImage}
+                    contentFit="cover"
+                    accessibilityLabel={`Event media ${i + 1}`}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          )}
 
           <View style={styles.divider} />
 
@@ -770,6 +797,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text.secondary,
     marginTop: 2,
+  },
+  mediaScroll: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingRight: spacing.base,
+  },
+  mediaImage: {
+    width: 150,
+    height: 200,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
   },
   mapBox: {
     height: 180,
