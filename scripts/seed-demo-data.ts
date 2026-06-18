@@ -40,6 +40,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { MOCK_EVENTS } from '../src/data/mockEvents';
 import { MOCK_CIRCLES } from '../src/data/mockCircles';
@@ -580,6 +581,60 @@ function mockIdToUuid(mockId: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
 }
 
+// ─── Demo enrichment: posters + galleries ─────────────────────────────────────
+
+// Lara's 2026 poster slugs — files committed under scripts/seed-assets/posters/.
+const LARA_SLUGS = [
+  'fuego-libre', 'earthbodies', 'lines-borders-bodies', 'refined-play',
+  'afro-cuban-summer', 'nigerian-film-festival', 'civic-ai-berlin',
+  'women-in-network', 'sensory-drift', 'berlin-shiatsu',
+];
+
+/**
+ * Upload each committed poster to BOTH buckets: event-posters (used for event
+ * posters + media galleries) and profile-gallery (so ghost galleries can reuse
+ * them). Idempotent via upsert.
+ */
+async function uploadPosters(): Promise<number> {
+  const dir = path.join(projectRoot, 'scripts', 'seed-assets', 'posters');
+  let ok = 0;
+  for (const slug of LARA_SLUGS) {
+    const buf = fs.readFileSync(path.join(dir, `${slug}.png`));
+    for (const bucket of ['event-posters', 'profile-gallery']) {
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(`lara-2026/${slug}.png`, buf, { upsert: true, contentType: 'image/png' });
+      if (error) console.warn(`  ⚠ poster ${slug} → ${bucket}: ${error.message}`);
+      else ok += 1;
+    }
+  }
+  return ok;
+}
+
+/**
+ * Give each ghost 4 gallery images (drawn from the poster set) so /user pages
+ * render a filled artwork grid instead of an empty section. Deterministic ids
+ * keep it idempotent.
+ */
+async function seedGalleries(
+  specs: GhostSpec[],
+  uuidByMockId: Map<string, string>,
+): Promise<number> {
+  const rows = specs.flatMap((spec, gi) => {
+    const profileId = uuidByMockId.get(spec.mockId);
+    if (!profileId) return [];
+    return [0, 1, 2, 3].map((k) => ({
+      id: mockIdToUuid(`${spec.mockId}-gallery-${k}`),
+      profile_id: profileId,
+      path: `lara-2026/${LARA_SLUGS[(gi * 3 + k) % LARA_SLUGS.length]}.png`,
+      sort_order: k,
+    }));
+  });
+  const { error } = await supabase.from('profile_images').upsert(rows, { onConflict: 'id' });
+  if (error) console.warn(`  ⚠ galleries: ${error.message}`);
+  return error ? 0 : rows.length;
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -631,52 +686,17 @@ async function main() {
     if (error) console.warn(`  ⚠ profile update for ${spec.email}: ${error.message}`);
   }
 
-  // 3. Insert events
-  console.log(`▶ Inserting ${MOCK_EVENTS.length} events…`);
-  let eventOk = 0;
-  let eventSkip = 0;
-  for (const mock of MOCK_EVENTS) {
-    const creatorUuid = ghostUuidByMockId.get(mock.creator_id);
-    if (!creatorUuid) {
-      console.warn(`  ⚠ skip event ${mock.id}: no creator mapping for ${mock.creator_id}`);
-      eventSkip += 1;
-      continue;
-    }
-    const { error } = await supabase.from('events').upsert(
-      {
-        id: mockIdToUuid(mock.id),
-        creator_id: creatorUuid,
-        circle_id: null,
-        title: mock.title,
-        description: mock.description ?? null,
-        location_name: mock.location_name ?? null,
-        address: mock.address ?? null,
-        lat: mock.lat ?? null,
-        lng: mock.lng ?? null,
-        // Backfill neighbourhood from the postcode in the mock address.
-        // Live user-created events get this set from Places autocomplete
-        // on Create Activity; the mocks predate that flow so we map by
-        // postcode here. See neighbourhoodForAddress() below.
-        neighbourhood: neighbourhoodForAddress(mock.address),
-        starts_at: mock.starts_at,
-        ends_at: mock.ends_at ?? null,
-        categories: mock.categories ?? [],
-        poster_url: mock.poster_url ?? null,
-        ticket_url: mock.ticket_url ?? null,
-        is_free: mock.is_free,
-        price: mock.price ?? null,
-      },
-      { onConflict: 'id' }
-    );
-    if (error) {
-      console.warn(`  ⚠ event "${mock.title}" → ${error.message}`);
-      eventSkip += 1;
-    } else {
-      eventOk += 1;
-    }
-  }
+  // 3. Upload Lara's posters to Storage (event-posters + profile-gallery).
+  console.log('▶ Uploading posters…');
+  const posterCount = await uploadPosters();
 
-  // 4. Insert circles — distribute creator_id across ghosts round-robin
+  // 4. Ghost galleries — a few posters each so /user grids aren't empty.
+  console.log('▶ Seeding profile galleries…');
+  const galleryCount = await seedGalleries(ghostSpecs, ghostUuidByMockId);
+
+  // 5. Insert circles FIRST — events now reference circle_id, and the FK needs
+  //    the circle row to already exist. The on_circle_created trigger auto-
+  //    admins the creator.
   const ghostUuids = Array.from(ghostUuidByMockId.values());
   console.log(`▶ Inserting ${MOCK_CIRCLES.length} circles…`);
   let circleOk = 0;
@@ -707,15 +727,66 @@ async function main() {
     }
   }
 
+  // 6. Insert events — circle_id mapped through the same mockIdToUuid so the
+  //    event lands on its circle's "Upcoming Activities", plus the v3 columns
+  //    (subtitle, media_urls) the Create form already writes. The
+  //    on_event_created trigger auto-registers the creator.
+  console.log(`▶ Inserting ${MOCK_EVENTS.length} events…`);
+  let eventOk = 0;
+  let eventSkip = 0;
+  for (const mock of MOCK_EVENTS) {
+    const creatorUuid = ghostUuidByMockId.get(mock.creator_id);
+    if (!creatorUuid) {
+      console.warn(`  ⚠ skip event ${mock.id}: no creator mapping for ${mock.creator_id}`);
+      eventSkip += 1;
+      continue;
+    }
+    // Prefer the mock's explicit neighbourhood (newer seed events set it);
+    // older events fall back to the postcode-derived value.
+    const row = {
+      id: mockIdToUuid(mock.id),
+      creator_id: creatorUuid,
+      circle_id: mock.circle_id ? mockIdToUuid(mock.circle_id) : null,
+      title: mock.title,
+      description: mock.description ?? null,
+      location_name: mock.location_name ?? null,
+      address: mock.address ?? null,
+      lat: mock.lat ?? null,
+      lng: mock.lng ?? null,
+      neighbourhood: mock.neighbourhood ?? neighbourhoodForAddress(mock.address),
+      starts_at: mock.starts_at,
+      ends_at: mock.ends_at ?? null,
+      categories: mock.categories ?? [],
+      poster_url: mock.poster_url ?? null,
+      ticket_url: mock.ticket_url ?? null,
+      is_free: mock.is_free,
+      price: mock.price ?? null,
+      // v3 columns — present in the DB, not yet in the generated Insert type.
+      subtitle: mock.subtitle ?? null,
+      media_urls: mock.media_urls ?? null,
+    };
+    const { error } = await supabase
+      .from('events')
+      .upsert(row as Database['public']['Tables']['events']['Insert'], { onConflict: 'id' });
+    if (error) {
+      console.warn(`  ⚠ event "${mock.title}" → ${error.message}`);
+      eventSkip += 1;
+    } else {
+      eventOk += 1;
+    }
+  }
+
   console.log('');
   console.log('────────────────────────────────────────');
   console.log(`✅ Seeded:`);
   console.log(`   ${ghostSpecs.length} ghost users`);
-  console.log(`   ${eventOk} events  (${eventSkip} skipped)`);
+  console.log(`   ${posterCount} poster uploads · ${galleryCount} gallery rows`);
   console.log(`   ${circleOk} circles (${circleSkip} skipped)`);
+  console.log(`   ${eventOk} events  (${eventSkip} skipped)`);
   console.log('────────────────────────────────────────');
-  console.log('Triggers should have auto-registered creators on events');
-  console.log('and auto-admined creators on circles. Reload your app to see them.');
+  console.log('Triggers auto-registered creators on events and auto-admined');
+  console.log('creators on circles. Bulk relationships (follows / members /');
+  console.log('attendees) are seeded separately via SQL. Reload to see them.');
 }
 
 main().catch((e) => {
