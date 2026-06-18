@@ -15,6 +15,12 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
     `)
     .order('created_at', { ascending: false });
 
+  // Feed shows public events only — invite_only ("by link") events stay out of
+  // the listing (still reachable by direct link / the detail page). This is also
+  // how junk/test events are kept soft-hidden from the demo. `visibility` is null
+  // for the default-public events the Create form never explicitly stamps.
+  query = query.or('visibility.is.null,visibility.eq.anyone');
+
   if (filters?.search) {
     // Server-side fuzzy match across the four most-searched columns. `.or()`
     // takes a PostgREST filter string; `%` wildcards each side make this a
