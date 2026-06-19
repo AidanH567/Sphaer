@@ -335,9 +335,12 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 
+  // Rabon Figma audit (R11): the search-container text read too large (was
+  // md/17). Drop to base/15 so the placeholder + typed text match body copy
+  // — keeps placeholder and input identical so nothing jumps on focus.
   searchPlaceholder: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: typography.fontSize.md,
+    fontSize: typography.fontSize.base,
     color: colors.text.tertiary,
     fontWeight: typography.fontWeight.regular,
   },
@@ -345,7 +348,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: typography.fontFamily.ui,
-    fontSize: typography.fontSize.md,
+    fontSize: typography.fontSize.base,
     color: colors.text.primary,
     paddingVertical: 0,
     minWidth: 0,
@@ -362,7 +365,12 @@ const styles = StyleSheet.create({
   },
 
   middleSlot: {
-    paddingHorizontal: 30,
+    // Rabon Figma audit (R3): the toggle must sit on the same 16px margins as
+    // the search row above it (was 30px → looked inset / off-grid). The
+    // ViewToggle is width:100% with space-between, so a 16px inset lets its
+    // outer pills sit flush to the margins ("the button needs to fill the
+    // margins"). Matches the 4-point grid (R8).
+    paddingHorizontal: 16,
     paddingBottom: 20,
   },
 

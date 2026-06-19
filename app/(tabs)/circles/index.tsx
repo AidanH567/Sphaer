@@ -236,7 +236,9 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.ui,
     fontSize: 13,
     color: colors.text.tertiary,
-    marginTop: 2,
+    // Rabon Figma audit (R12 / R8): the title→subtitle gap was an off-grid 2px.
+    // Snap to 4 (spacing.xs) so the header sits on the 4-point grid.
+    marginTop: spacing.xs,
   },
   row: {
     paddingHorizontal: spacing.base,
