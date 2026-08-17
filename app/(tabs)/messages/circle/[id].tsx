@@ -10,6 +10,7 @@ import { useMessagesContext } from '@/context/MessagesContext';
 import { useCircleMessages } from '@/hooks/useCircleMessages';
 import { ChatBubble } from '@/components/messaging/ChatBubble';
 import { MessageInput } from '@/components/messaging/MessageInput';
+import { PinnedEventsSection } from '@/components/messaging/PinnedEventsSection';
 import { supabase } from '@/lib/supabase';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { OptimisticMessage } from '@/types/message.types';
@@ -136,6 +137,12 @@ export default function CircleChatScreen() {
         )}
         <View style={{ width: 40 }} />
       </View>
+
+      {/* Lara 2026-08-17 #5 — pinned events + mini-calendar, so a shared
+          event doesn't scroll away into the conversation. Sits outside the
+          KeyboardAvoidingView so it stays anchored under the header while
+          the message list is the thing that shrinks for the keyboard. */}
+      <PinnedEventsSection circleId={circleId} circleName={circle?.name} />
 
       <KeyboardAvoidingView
         style={styles.flex}

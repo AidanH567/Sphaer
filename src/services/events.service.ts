@@ -107,6 +107,42 @@ export async function getEventsByCreator(userId: string): Promise<EventWithRelat
   return (data as EventWithRelations[]) ?? [];
 }
 
+/**
+ * Events bound to a circle from the start of today onward — the source for
+ * the pinned-events section above the circle group chat.
+ *
+ * There is deliberately no `pinned` column. In Sphaer an event already
+ * belongs to a circle via `events.circle_id`, so "the pinned events of this
+ * chat" IS "this circle's upcoming events": nothing to pin by hand, nothing
+ * to unpin when a party is over, and no way for the pin list to drift out of
+ * sync with reality.
+ *
+ * The window opens at LOCAL midnight rather than `now` so an event that
+ * started earlier today and is still running comes back from the database;
+ * `selectUpcoming` in utils/pinned-events then applies the precise
+ * "has it ended yet" rule client-side.
+ */
+export async function getCircleUpcomingEvents(
+  circleId: string,
+  opts?: { from?: Date; limit?: number }
+): Promise<EventWithRelations[]> {
+  const from = opts?.from ?? new Date();
+  const windowStart = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const { data, error } = await supabase
+    .from('events')
+    .select(`
+      *,
+      creator:profiles!events_creator_id_fkey(*),
+      circle:circles(*)
+    `)
+    .eq('circle_id', circleId)
+    .gte('starts_at', windowStart.toISOString())
+    .order('starts_at', { ascending: true })
+    .limit(opts?.limit ?? 20);
+  if (error) throw error;
+  return (data as EventWithRelations[]) ?? [];
+}
+
 // ---------------------------------------------------------------------------
 // Create Activity v3 fields (migration 20260612010000_events_subtitle_spots_
 // visibility.sql). The generated EventInsert type doesn't know these columns
