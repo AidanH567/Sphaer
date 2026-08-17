@@ -4,10 +4,12 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/ui/Input';
+import { NeighborhoodSelectInput } from '@/components/ui/NeighborhoodSelectInput';
 import { Button } from '@/components/ui/Button';
 import { Tag } from '@/components/ui/Tag';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { EVENT_CATEGORIES } from '@/constants/categories';
+import { matchBerlinNeighborhood } from '@/constants/berlinNeighborhoods';
 import {
   uploadAvatar,
   uploadGalleryImages,
@@ -67,6 +69,7 @@ export function ProfileForm({
     bio?: string;
     about?: string;
     website?: string;
+    neighborhood?: string;
   }>({});
 
   // Gallery is "live" — adds/removes persist immediately, not on submit
@@ -230,6 +233,19 @@ export function ProfileForm({
     if (values.about && values.about.length > 600) {
       next.about = 'About section is too long (600 characters max)';
     }
+    // Neighbourhood must come from the fixed Berlin list. The select
+    // component already makes free text impossible, so this only fires as
+    // a safety net — EXCEPT for a legacy free-text value carried over
+    // unchanged from before the fixed list, which may pass through so old
+    // profiles keep saving other edits. Once the user touches the field,
+    // only a canonical pick (or empty) is accepted.
+    if (
+      values.neighborhood &&
+      values.neighborhood !== initialValues.neighborhood &&
+      matchBerlinNeighborhood(values.neighborhood) === null
+    ) {
+      next.neighborhood = 'Pick a neighbourhood from the list';
+    }
     if (values.website) {
       const w = values.website.trim();
       // Accept bare domains too — strip protocol before testing.
@@ -364,12 +380,11 @@ export function ProfileForm({
           onChangeText={(t) => update('location', t)}
           maxLength={60}
         />
-        <Input
+        <NeighborhoodSelectInput
           label="Neighborhood (optional)"
-          placeholder="Prenzlauerberg"
           value={values.neighborhood}
-          onChangeText={(t) => update('neighborhood', t)}
-          maxLength={60}
+          onSelect={(n) => update('neighborhood', n)}
+          error={errors.neighborhood}
         />
         <Input
           label="Website (optional)"
