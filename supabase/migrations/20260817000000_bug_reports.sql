@@ -83,15 +83,28 @@ ALTER TABLE public.bug_reports ENABLE ROW LEVEL SECURITY;
 --   SELECT — reporters see their own reports.
 --   UPDATE/DELETE — no policies at all; the triage tooling uses the
 --            service role, which bypasses RLS.
+-- ANY SIGNED-IN USER MAY REPORT A BUG.
+--
+-- Changed before this migration was ever applied (2026-08-17, Aidan): "why
+-- don't we make it that anyone can report a bug or suggest a change right now?
+-- We are just testing." Correct for now -- while the userbase is Aidan, Lara
+-- and Rabon, a per-account flag buys nothing and costs a manual SQL step per
+-- person, which is friction on the exact people whose feedback we want.
+--
+-- The `profiles.is_designer` column is KEPT even though nothing gates on it
+-- any more. Re-tightening later is then one policy, not a schema change --
+-- add back `AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND
+-- p.is_designer)` below. Worth doing before real users arrive, because an
+-- open insert with no rate limit is a spam surface once the app is public.
+--
+-- Still enforced: you can only file AS yourself, and only at status 'new' --
+-- so nobody can forge another user's report or self-approve one.
 DROP POLICY IF EXISTS "bug_reports_insert_designer" ON public.bug_reports;
-CREATE POLICY "bug_reports_insert_designer" ON public.bug_reports
+DROP POLICY IF EXISTS "bug_reports_insert_any_user" ON public.bug_reports;
+CREATE POLICY "bug_reports_insert_any_user" ON public.bug_reports
   FOR INSERT WITH CHECK (
     (SELECT auth.uid()) = reporter
     AND status = 'new'
-    AND EXISTS (
-      SELECT 1 FROM public.profiles p
-      WHERE p.id = (SELECT auth.uid()) AND p.is_designer
-    )
   );
 
 DROP POLICY IF EXISTS "bug_reports_select_own" ON public.bug_reports;

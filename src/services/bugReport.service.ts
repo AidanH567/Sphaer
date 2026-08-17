@@ -65,10 +65,31 @@ function isMissingBucketError(error: { message?: string }): boolean {
 }
 
 /**
- * Is this user a flagged designer? Gates the hidden "Report a bug" entry.
- * Fails CLOSED: returns false when the column doesn't exist yet, when
- * there's no such profile, or on any error — the entry point simply stays
- * hidden rather than surfacing a gate-check failure to the user.
+ * May this user report a bug? Currently: ANY signed-in user.
+ *
+ * Opened up 2026-08-17 on Aidan's call — "we are just testing". While the
+ * userbase is three people, a per-account flag buys nothing and costs a manual
+ * SQL step for each of them, which is friction on exactly the people whose
+ * feedback we want. The RLS policy was opened to match, before the migration
+ * was ever applied.
+ *
+ * ⚠️ To re-gate before real users arrive: return the `is_designer` lookup
+ * below AND restore the matching clause in the RLS insert policy. BOTH are
+ * required — this function only hides the entry point; the policy is what
+ * actually stops an insert. Changing one and not the other gives you either a
+ * hidden-but-open API or a visible-but-refusing button.
+ *
+ * The `profiles.is_designer` column is deliberately kept for that reason.
+ */
+export async function canReportBug(userId: string): Promise<boolean> {
+  return Boolean(userId);
+}
+
+/**
+ * Is this user a flagged designer? No longer gates reporting (see
+ * `canReportBug`), but kept for the triage view, which will need to tell a
+ * team report from a user report.
+ * Fails CLOSED on any error, including the column not existing yet.
  */
 export async function getIsDesigner(userId: string): Promise<boolean> {
   try {

@@ -8,9 +8,26 @@ import {
 import { UploadValidationError } from '@/utils/upload-validation';
 
 /**
- * Is the given user a flagged designer? Gates the hidden "Report a bug"
- * entry point. Defaults to (and fails closed to) false — the row simply
- * doesn't render until the check resolves true.
+ * May this user see the "Report a bug" entry? Currently: anyone signed in.
+ *
+ * Opened 2026-08-17 (Aidan): "right now let's just open it for everyone" —
+ * the userbase is three people and a per-account flag is pure friction on
+ * exactly the people whose feedback we want.
+ *
+ * ⚠️ THE PLANNED END STATE IS TWO SCREENS, NOT A RE-GATE. Aidan's call:
+ * a light USER-facing "report a problem / suggest a change", and a fuller
+ * ADMIN one (triage, status, the drafted fix-prompt). When that is built,
+ * this hook splits — `useCanReportBug` for everyone, `useIsDesigner` for the
+ * admin surface — and `profiles.is_designer` becomes the switch between them.
+ * That is why the column is still there and still populated.
+ */
+export function useCanReportBug(userId: string | undefined): boolean {
+  return Boolean(userId);
+}
+
+/**
+ * Is the given user a flagged designer? No longer gates reporting — kept for
+ * the admin/triage surface described above. Fails closed to false.
  */
 export function useIsDesigner(userId: string | undefined): boolean {
   const [isDesigner, setIsDesigner] = useState(false);

@@ -3,23 +3,28 @@ import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '@/context/AuthContext';
-import { useIsDesigner } from '@/hooks/useBugReport';
+import { useCanReportBug } from '@/hooks/useBugReport';
 import { colors, typography, spacing } from '@/constants/theme';
 
 /**
- * Hidden "Report a bug" settings row (design doc "Sphaer Bug System —
- * 2026-08-17"). Fully self-contained on purpose: it checks the server-set
- * profiles.is_designer flag itself and renders NOTHING for everyone else,
- * so the host settings section needs exactly one JSX line and no state.
- * Fails closed — no session, no flag, or schema not yet migrated all
- * mean the row simply doesn't exist.
+ * "Report a bug" settings row (design doc "Sphaer Bug System — 2026-08-17").
+ * Self-contained on purpose: it decides its own visibility, so the host
+ * settings section needs exactly one JSX line and no state.
+ *
+ * Visible to ANY signed-in user as of 2026-08-17 (Aidan: "right now let's
+ * just open it for everyone" — we are testing with three people, and a
+ * per-account flag is friction on the people whose feedback we want).
+ * Signed out, it still renders nothing.
+ *
+ * Planned: this becomes the light USER-facing report, with a separate fuller
+ * ADMIN screen for triage — see `useCanReportBug` / `useIsDesigner`.
  */
 export function BugReportRow() {
   const router = useRouter();
   const { user } = useAuthContext();
-  const isDesigner = useIsDesigner(user?.id);
+  const canReport = useCanReportBug(user?.id);
 
-  if (!isDesigner) return null;
+  if (!canReport) return null;
 
   return (
     <TouchableOpacity
