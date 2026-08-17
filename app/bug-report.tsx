@@ -15,18 +15,26 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from '@/context/AuthContext';
-import { useBugReportSubmit, useIsDesigner } from '@/hooks/useBugReport';
+import { useBugReportSubmit, useCanReportBug } from '@/hooks/useBugReport';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
- * Hidden designer bug-report screen (design doc "Sphaer Bug System —
- * 2026-08-17", inlet 2). Reached only via the "Report a bug" row in the
- * profile settings section, which renders solely for profiles flagged
- * is_designer — but the flag is re-checked here too, so a deep link from
- * a non-designer lands on a dead end, not a working form.
+ * Bug-report screen (design doc "Sphaer Bug System — 2026-08-17", inlet 2).
+ * Reached via the "Report a bug" row in profile settings.
+ *
+ * Open to ANY signed-in user since 2026-08-17. The check is repeated here
+ * rather than trusted from the entry row, so a deep link from a signed-OUT
+ * visitor still lands on a dead end instead of a form that cannot submit.
+ *
+ * ⚠️ This guard is the FOURTH place the permission lives — table policy,
+ * storage policy, entry row, and here. Opening the first three and missing
+ * this one shipped a screen that rendered "Nothing here." to its own author
+ * (2026-08-17). If the rule changes again, grep `useCanReportBug` AND both
+ * RLS policies; a permission expressed in four places will be changed in
+ * three.
  *
  * Fields: description (required), screen picker (fixed list of app
  * surfaces — the entry point lives on Profile, so auto-capturing the
@@ -53,7 +61,7 @@ const SCREEN_OPTIONS = [
 export default function BugReportScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
-  const isDesigner = useIsDesigner(user?.id);
+  const canReport = useCanReportBug(user?.id);
   const { state, errorMessage, submit } = useBugReportSubmit(user?.id);
 
   const [description, setDescription] = useState('');
@@ -86,8 +94,8 @@ export default function BugReportScreen() {
     void submit({ description, screen, screenshotUri });
   }
 
-  // ── Not a designer (deep link) — dead end, no form ───────────────────────
-  if (!isDesigner) {
+  // ── Signed out (deep link) — dead end, no form ───────────────────────────
+  if (!canReport) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Header onBack={() => router.back()} />
