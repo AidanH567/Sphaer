@@ -6,19 +6,26 @@ import type { EventWithRelations } from '@/types/event.types';
 
 interface UseProfileActivitiesResult {
   tabs: ActivityTab[];
+  /**
+   * Ids the profile owner holds a LOCAL registration for — the set that has a
+   * real ticket row, and therefore a QR at /ticket/[id]. Only meaningful on
+   * your own profile; on someone else's this is their registrations, which
+   * are not your tickets, so the badge is suppressed there.
+   */
+  registeredIds: Set<string>;
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
 }
 
 /**
- * The activities behind a profile's tab strip.
+ * The activities behind the Activities sheet's segmented control.
  *
- * Two queries, not four: "All" and "Tickets" are derived client-side from
- * Going and Saved (see utils/profile-activities), because Tickets is a strict
- * subset of Going and All is their union. Deriving rather than re-querying is
- * what makes the tabs instant to switch — the whole point of replacing the
- * sheets, which re-fetched on every open.
+ * Two queries, not four: All / Going / Saved / Past are all derived
+ * client-side from the registered and saved lists (see
+ * utils/profile-activities), because they are subsets and unions of the same
+ * two sets. Deriving rather than re-querying is what makes switching tabs
+ * instant — the old per-button sheets each re-fetched on every open.
  *
  * `saved` is only fetched for your own profile. `saved_events` RLS is
  * `USING (auth.uid() = user_id)`, so asking for someone else's saved list
@@ -48,10 +55,11 @@ export function useProfileActivities(
     setIsLoading(true);
     setError(null);
     // Each query degrades independently — one failure must not blank the
-    // whole panel (same posture as the old fetchRealProfile's per-query catch).
+    // whole list (same posture as fetchRealProfile's per-query catch).
     //
-    // Exactly one of `saved` / `hosting` is fetched, never both: they back the
-    // tabs of two mutually exclusive layouts (own profile vs someone else's).
+    // Exactly one of `saved` / `hosting` is fetched, never both: Saved is
+    // own-profile-only, and hosting only earns its round trip on someone
+    // else's page (own-profile Going already contains what you host).
     const [goingResult, savedResult, hostingResult] = await Promise.all([
       getMyRegisteredEvents(userId).catch(() => null),
       isOwnProfile ? getSavedEvents(userId).catch(() => null) : Promise.resolve([]),
@@ -77,5 +85,7 @@ export function useProfileActivities(
     [going, saved, hosting, isOwnProfile, displayName],
   );
 
-  return { tabs, isLoading, error, refetch };
+  const registeredIds = useMemo(() => new Set(going.map((e) => e.id)), [going]);
+
+  return { tabs, registeredIds, isLoading, error, refetch };
 }

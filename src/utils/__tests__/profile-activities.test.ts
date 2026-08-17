@@ -1,5 +1,7 @@
 import {
   isTicketed,
+  ticketBadgeTarget,
+  hasFinished,
   dedupeActivities,
   sortActivities,
   buildActivityTabs,
@@ -17,6 +19,7 @@ function makeEvent(
     id,
     title: `Event ${id}`,
     starts_at: startsAt,
+    ends_at: null,
     is_free: true,
     price: null,
     ticket_url: null,
@@ -58,6 +61,58 @@ describe('isTicketed', () => {
   });
 });
 
+describe('ticketBadgeTarget', () => {
+  it('routes a registered, ticketed activity to the local QR', () => {
+    const event = makeEvent('e1', soon(2), { is_free: false });
+    expect(ticketBadgeTarget(event, true)).toEqual({ kind: 'local', eventId: 'e1' });
+  });
+
+  it('routes an unregistered activity with only a ticket_url to that external page', () => {
+    // There is no local registration row, so /ticket/e2 would render
+    // "No ticket found" — sending the user there would be a lie.
+    const event = makeEvent('e2', soon(2), { ticket_url: 'https://tickets.example/e2' });
+    expect(ticketBadgeTarget(event, false)).toEqual({
+      kind: 'external',
+      url: 'https://tickets.example/e2',
+    });
+  });
+
+  it('prefers the local QR over the external link when the user is registered', () => {
+    const event = makeEvent('e3', soon(2), {
+      is_free: false,
+      ticket_url: 'https://tickets.example/e3',
+    });
+    expect(ticketBadgeTarget(event, true)).toEqual({ kind: 'local', eventId: 'e3' });
+  });
+
+  it('shows nothing for a paid activity the user neither registered for nor can buy here', () => {
+    // Saved-but-not-registered, no link: the user holds nothing.
+    const event = makeEvent('e4', soon(2), { is_free: false });
+    expect(ticketBadgeTarget(event, false)).toBeNull();
+  });
+
+  it('shows nothing for a free activity', () => {
+    expect(ticketBadgeTarget(makeEvent('e5', soon(2)), true)).toBeNull();
+  });
+});
+
+describe('hasFinished', () => {
+  it('uses ends_at when the creator set one', () => {
+    // Started three hours ago, runs until midnight — you are AT this, not
+    // done with it.
+    const nightOut = makeEvent('n', ago(3), { ends_at: soon(4) });
+    expect(hasFinished(nightOut)).toBe(false);
+  });
+
+  it('falls back to starts_at when there is no end time', () => {
+    expect(hasFinished(makeEvent('n', ago(3)))).toBe(true);
+  });
+
+  it('treats a fully elapsed activity as finished', () => {
+    expect(hasFinished(makeEvent('n', ago(30), { ends_at: ago(26) }))).toBe(true);
+  });
+});
+
 describe('dedupeActivities', () => {
   it('keeps one row per id across lists', () => {
     const shared = makeEvent('shared', soon(1));
@@ -93,55 +148,71 @@ describe('sortActivities', () => {
 });
 
 describe('buildActivityTabs', () => {
+  // Deliberately lopsided toward the past, because Aidan's real account is:
+  // 56 activities, 6 upcoming. Past being the fullest tab is the normal case.
   const going = [
-    makeEvent('g1', soon(1), { is_free: false }), // ticketed
-    makeEvent('g2', soon(2)), // free
-    makeEvent('g3', soon(3), { price: 15 }), // ticketed
+    makeEvent('g1', soon(1), { is_free: false }), // upcoming, ticketed
+    makeEvent('g2', soon(2)), // upcoming, free
+    makeEvent('gp1', ago(24)), // finished
+    makeEvent('gp2', ago(72)), // finished
   ];
   const saved = [
     makeEvent('g2', soon(2)), // also in going — the overlap
-    makeEvent('s1', soon(4)),
+    makeEvent('s1', soon(4)), // upcoming save
+    makeEvent('sp1', ago(48)), // a save whose date passed
   ];
 
   describe('own profile', () => {
     const tabs = buildActivityTabs({ going, saved, isOwnProfile: true });
     const byKey = (k: string) => tabs.find((t) => t.key === k)!;
 
-    it('exposes all four tabs', () => {
-      expect(tabs.map((t) => t.key)).toEqual(['all', 'going', 'saved', 'tickets']);
+    it('exposes All, Going, Saved and Past — and no Tickets tab', () => {
+      expect(tabs.map((t) => t.key)).toEqual(['all', 'going', 'saved', 'past']);
+    });
+
+    it('makes All the first tab, so the default lands on the full list', () => {
+      expect(tabs[0].key).toBe('all');
     });
 
     it('does not double-count the activity present in both going and saved', () => {
-      // 3 going + 2 saved with 1 shared = 4 distinct, not 5.
-      expect(byKey('all').count).toBe(4);
+      // 4 going + 3 saved with 1 shared = 6 distinct, not 7.
+      expect(byKey('all').count).toBe(6);
     });
 
-    it('counts Going as every registration', () => {
-      expect(byKey('going').count).toBe(3);
+    it('limits Going to what is still upcoming', () => {
+      expect(byKey('going').events.map((e) => e.id)).toEqual(['g1', 'g2']);
     });
 
-    it('counts Tickets as only the ticketed subset of Going', () => {
-      expect(byKey('tickets').count).toBe(2);
-      expect(byKey('tickets').events.map((e) => e.id).sort()).toEqual(['g1', 'g3']);
+    it('limits Saved to what is still upcoming', () => {
+      expect(byKey('saved').events.map((e) => e.id)).toEqual(['g2', 's1']);
     });
 
-    it('keeps Tickets a strict subset of Going', () => {
-      const goingIds = new Set(byKey('going').events.map((e) => e.id));
-      expect(byKey('tickets').events.every((e) => goingIds.has(e.id))).toBe(true);
+    it('sweeps everything finished into Past, saves included', () => {
+      // A save whose date passed must live SOMEWHERE other than All —
+      // otherwise it is reachable from one tab only.
+      expect(byKey('past').events.map((e) => e.id).sort()).toEqual(['gp1', 'gp2', 'sp1']);
     });
 
-    it('never lets a subset tab exceed its parent', () => {
-      expect(byKey('tickets').count).toBeLessThanOrEqual(byKey('going').count);
-      expect(byKey('going').count).toBeLessThanOrEqual(byKey('all').count);
+    it('partitions All exactly — every activity is upcoming or finished, never neither', () => {
+      const visible = new Set([
+        ...byKey('going').events.map((e) => e.id),
+        ...byKey('saved').events.map((e) => e.id),
+        ...byKey('past').events.map((e) => e.id),
+      ]);
+      const all = byKey('all').events.map((e) => e.id);
+      expect(all.every((id) => visible.has(id))).toBe(true);
+      expect(visible.size).toBe(byKey('all').count);
     });
 
-    it('does not draw Saved from the Going list', () => {
-      expect(byKey('saved').events.map((e) => e.id).sort()).toEqual(['g2', 's1']);
+    it('never lets a subset tab exceed All', () => {
+      for (const tab of tabs.slice(1)) {
+        expect(tab.count).toBeLessThanOrEqual(byKey('all').count);
+      }
     });
   });
 
-  describe('someone else\'s profile', () => {
-    const hosting = [going[0]];
+  describe("someone else's profile", () => {
+    const hosting = [makeEvent('h1', ago(96))];
     const tabs = buildActivityTabs({
       going,
       saved: [],
@@ -150,22 +221,24 @@ describe('buildActivityTabs', () => {
       displayName: 'Lara',
     });
 
-    it('hides the private tabs — their saved list is unknowable under RLS', () => {
-      expect(tabs.map((t) => t.key)).toEqual(['all', 'hosting']);
+    it('shows All, Going and Past — never Saved', () => {
+      expect(tabs.map((t) => t.key)).toEqual(['all', 'going', 'past']);
+      expect(tabs.map((t) => t.key)).not.toContain('saved');
     });
 
-    it('does NOT ship All and Going side by side', () => {
-      // Without their saved list, All and Going are the same query. Two tabs
-      // over one list is the exact redundancy this change removed — it must
-      // not reappear on the public profile.
-      expect(tabs.map((t) => t.key)).not.toContain('going');
+    it('folds what they hosted into the set even if a registration row is missing', () => {
+      expect(tabs.find((t) => t.key === 'past')!.events.map((e) => e.id)).toContain('h1');
     });
 
-    it('offers Hosting as a genuinely different second tab', () => {
-      const all = tabs.find((t) => t.key === 'all')!;
-      const host = tabs.find((t) => t.key === 'hosting')!;
-      expect(host.count).toBe(1);
-      expect(host.count).toBeLessThan(all.count);
+    it('cannot leak a saved list even if one is handed in by mistake', () => {
+      const leaky = buildActivityTabs({
+        going: [],
+        saved: [makeEvent('secret', soon(1))],
+        isOwnProfile: false,
+      });
+      // buildActivityTabs is not the privacy boundary (the hook and RLS are),
+      // but it must not become a second way for a saved row to surface.
+      expect(leaky.every((t) => t.events.every((e) => e.id !== 'secret'))).toBe(true);
     });
 
     it('names the person in the empty copy rather than addressing the viewer', () => {
@@ -188,21 +261,42 @@ describe('buildActivityTabs', () => {
   describe('a brand-new user with nothing', () => {
     const tabs = buildActivityTabs({ going: [], saved: [], isOwnProfile: true });
 
-    it('still renders every tab, so the structure is visible from day one', () => {
-      expect(tabs.map((t) => t.key)).toEqual(['all', 'going', 'saved', 'tickets']);
+    it('still renders every category, so the structure is visible from day one', () => {
+      expect(tabs.map((t) => t.key)).toEqual(['all', 'going', 'saved', 'past']);
     });
 
     it('reports honest zero counts rather than hiding', () => {
       expect(tabs.every((t) => t.count === 0)).toBe(true);
     });
 
-    it('gives every tab its own considered empty copy', () => {
+    it('gives every category its own considered empty copy', () => {
       for (const tab of tabs) {
         expect(tab.emptyBody.length).toBeGreaterThan(20);
       }
-      // The copy must differ per tab — a generic "nothing here" four times
-      // would tell the user nothing about what each tab is for.
+      // Generic "nothing here" four times would tell the user nothing about
+      // what each category is for.
       expect(new Set(tabs.map((t) => t.emptyBody)).size).toBe(4);
+    });
+
+    it('spells out the upcoming/finished rule in the copy, so it is not a guess', () => {
+      const byKey = (k: string) => tabs.find((t) => t.key === k)!;
+      expect(byKey('going').emptyBody).toMatch(/Past/);
+      expect(byKey('past').emptyBody).toMatch(/over|finished/i);
+    });
+  });
+
+  describe('an account like Aidan\'s — almost everything already happened', () => {
+    const many = [
+      ...Array.from({ length: 50 }, (_, i) => makeEvent(`p${i}`, ago(24 * (i + 1)))),
+      ...Array.from({ length: 6 }, (_, i) => makeEvent(`u${i}`, soon(i + 1))),
+    ];
+    const tabs = buildActivityTabs({ going: many, saved: [], isOwnProfile: true });
+    const byKey = (k: string) => tabs.find((t) => t.key === k)!;
+
+    it('puts the bulk in Past and leaves Going small without either looking broken', () => {
+      expect(byKey('all').count).toBe(56);
+      expect(byKey('past').count).toBe(50);
+      expect(byKey('going').count).toBe(6);
     });
   });
 });

@@ -39,7 +39,7 @@ import {
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount } from '@/services/registrations.service';
 import { shareProfile } from '@/services/share.service';
-import { ProfileActivityPanel } from '@/components/profile/ProfileActivityPanel';
+import { ActivitiesSheet } from '@/components/profile/ActivitiesSheet';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { type MockProfile } from '@/data/mockProfiles';
 import { colors, typography, spacing } from '@/constants/theme';
@@ -64,16 +64,25 @@ export default function UserProfileScreen() {
   const isOwnProfile = Boolean(user?.id && id && user.id === id);
   const isBlockedUser = Boolean(id && blockedIds.has(id));
 
-  // Same tab strip as /profile. On someone else's page the private tabs
-  // (Saved, Tickets) are omitted by buildActivityTabs — `saved_events` RLS is
-  // `USING (auth.uid() = user_id)`, so their saved list is unknowable, and a
-  // tab reading "Saved 0" would be a claim we cannot support.
+  // Same Activities sheet as /profile, minus Saved: All · Going · Past.
+  //
+  // Saved is excluded at BOTH layers, not merely hidden. useProfileActivities
+  // never issues the saved query for someone else's id, and `saved_events`
+  // carries `saved_events_own ... FOR ALL USING (auth.uid() = user_id)`
+  // (supabase/migrations/20240101000000_initial_schema.sql:153), so the rows
+  // are unreadable even if a client asked. What someone attended is fair
+  // social proof; what they bookmarked is nobody else's business.
+  //
+  // Consequence, and it is correct: "All" means Going ∪ Saved ∪ Past on your
+  // own profile and Going ∪ Past here, so the public count for a person can
+  // be lower than the count they see. Do not "fix" that by leaking Saved.
   const [activityDisplayName, setActivityDisplayName] = useState<string | undefined>();
   const {
     tabs: activityTabs,
     isLoading: activitiesLoading,
     error: activitiesError,
   } = useProfileActivities(id, isOwnProfile, activityDisplayName);
+  const allActivitiesCount = activityTabs.find((t) => t.key === 'all')?.count ?? 0;
 
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found' | 'error'>('loading');
@@ -184,9 +193,7 @@ export default function UserProfileScreen() {
   }
 
   // Stats popup state — same model as /profile
-  // 'activities' left this union when the tab strip landed — the list is
-  // inline in ProfileActivityPanel now (Lara's redundancy complaint).
-  type OpenSheet = 'followers' | 'following' | 'circles' | null;
+  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
@@ -228,7 +235,9 @@ export default function UserProfileScreen() {
 
   // ── Lazy fetch for the three stats popups (same pattern as /profile)
   useEffect(() => {
-    if (!id || !openSheet || status !== 'found') return;
+    // 'activities' is excluded — useProfileActivities already owns that data,
+    // so the sheet opens without a round trip.
+    if (!id || !openSheet || openSheet === 'activities' || status !== 'found') return;
     let active = true;
     setSheetLoading(true);
 
@@ -351,7 +360,13 @@ export default function UserProfileScreen() {
         !isBlockedUser && (
         <>
           <ProfileView
-            profile={displayProfile}
+            // The Activities stat shows the "All" union the sheet opens on,
+            // so the number tapped is the number of rows that appear.
+            profile={
+              activitiesLoading
+                ? displayProfile
+                : { ...displayProfile, activitiesCount: allActivitiesCount }
+            }
             isOwnProfile={isOwnProfile}
             isFollowing={isOwnProfile ? undefined : isFollowingUser}
             onToggleFollow={isOwnProfile ? undefined : handleToggleFollow}
@@ -362,13 +377,7 @@ export default function UserProfileScreen() {
             onFollowersPress={() => setOpenSheet('followers')}
             onFollowingPress={() => setOpenSheet('following')}
             onCirclesPress={() => setOpenSheet('circles')}
-            activityPanel={
-              <ProfileActivityPanel
-                tabs={activityTabs}
-                isLoading={activitiesLoading}
-                error={activitiesError}
-              />
-            }
+            onActivitiesPress={() => setOpenSheet('activities')}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -406,6 +415,15 @@ export default function UserProfileScreen() {
             items={userCircles}
             isLoading={sheetLoading && openSheet === 'circles'}
             emptyMessage="Not in any circles yet."
+            onClose={() => setOpenSheet(null)}
+          />
+          {/* No Saved category and no ticket badges: their saved list is
+              private, and their registrations are not tickets you hold. */}
+          <ActivitiesSheet
+            visible={openSheet === 'activities'}
+            tabs={activityTabs}
+            isLoading={activitiesLoading}
+            error={activitiesError}
             onClose={() => setOpenSheet(null)}
           />
         </>

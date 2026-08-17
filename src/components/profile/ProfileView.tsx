@@ -4,6 +4,7 @@ import type { RefreshControlProps } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/constants/theme';
+import { ProfileActivityCard } from './ProfileActivityCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { MockProfile } from '@/data/mockProfiles';
 
@@ -36,14 +37,17 @@ interface ProfileViewProps {
   /** Tappable stat callbacks. Each stat becomes pressable when its handler
    * is provided; otherwise it renders as plain text.
    *
-   * There is deliberately no `onActivitiesPress`. The Activities number is
-   * social proof like the other three, but its CONTENT now lives in the
-   * inline tab panel below — so it reads as a count and nothing more. That
-   * removed one of the seven overlapping entry points Lara flagged.
+   * Followers / Following / Circles are people-and-circle lists and stay
+   * exactly as they always were. `onActivitiesPress` opens the Activities
+   * sheet, which is now the ONLY door to a user's activities — the separate
+   * Saved and Tickets buttons that used to sit below the stats were Lara's
+   * "multiple buttons that do the same thing" and are gone. Saved is a
+   * category inside the sheet; a ticket is a badge on its row.
    */
   onFollowersPress?: () => void;
   onFollowingPress?: () => void;
   onCirclesPress?: () => void;
+  onActivitiesPress?: () => void;
   /**
    * Real follow state for non-own profiles. When provided alongside
    * onToggleFollow, the Follow button reflects + persists this value
@@ -55,18 +59,6 @@ interface ProfileViewProps {
   onToggleFollow?: () => void;
   /** Disables the Follow button (in-flight network call). */
   followBusy?: boolean;
-  /**
-   * Shares this profile. Sits beside Edit Profile on your own profile, so the
-   * action row has two peers rather than one lonely full-width button.
-   */
-  onSharePress?: () => void;
-  /**
-   * The activity tab strip + inline list (ProfileActivityPanel), injected by
-   * the screen so this shared component stays free of data fetching. Rendered
-   * directly under the identity block — the "start of content" that has to be
-   * visible without scrolling.
-   */
-  activityPanel?: React.ReactNode;
   /**
    * Trailing slot rendered after the Images section. Used to inject the
    * "Available for work" placeholder bar on the own-profile tab without
@@ -95,8 +87,7 @@ export function ProfileView({
   onFollowersPress,
   onFollowingPress,
   onCirclesPress,
-  onSharePress,
-  activityPanel,
+  onActivitiesPress,
   isFollowing,
   onToggleFollow,
   followBusy,
@@ -114,6 +105,7 @@ export function ProfileView({
   // empty. We hide whole sections when there's nothing to render rather than
   // leaving lonely section headers floating in space.
   const hasAbout = Boolean(profile.about && profile.about.trim().length > 0);
+  const hasActivities = profile.activities.length > 0;
   const hasExperience = profile.experience.length > 0;
   const hasImages = profile.images.length > 0;
 
@@ -124,23 +116,9 @@ export function ProfileView({
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
-      {/* ── Identity block ───────────────────────────────────
-          Instagram's own-profile shape: avatar and stats share ONE row, then
-          name / bio / actions stack left-aligned beneath. The old layout
-          centred everything in a tall column, which pushed the stats — and
-          every route into the user's own content — below the fold. */}
+      {/* ── Hero ─────────────────────────────────────────── */}
       <View style={styles.hero}>
-        <View style={styles.identityRow}>
-          <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-          <View style={styles.stats}>
-            <Stat label="Followers" value={profile.followersCount} onPress={onFollowersPress} />
-            <Stat label="Following" value={profile.followingCount} onPress={onFollowingPress} />
-            <Stat label="Circles" value={profile.circlesCount} onPress={onCirclesPress} />
-            {/* Not tappable — the activities themselves are in the tab panel
-                below, so this is a number, not a door. */}
-            <Stat label="Activities" value={profile.activitiesCount} />
-          </View>
-        </View>
+        <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
 
         <View style={styles.nameRow}>
           <Text style={styles.name}>{profile.displayName}</Text>
@@ -159,29 +137,8 @@ export function ProfileView({
           )}
         </View>
 
-        {!!profile.role && <Text style={styles.metaText}>{profile.role}</Text>}
-        {!!profile.location && <Text style={styles.metaText}>{profile.location}</Text>}
-
-        {/* Bio sits in the identity block now (Instagram again) rather than in
-            its own "About" section further down — it is who you are, and it
-            costs two lines. */}
-        {hasAbout && (
-          <>
-            <Text style={styles.bioText} numberOfLines={aboutExpanded ? undefined : 2}>
-              {profile.about}
-            </Text>
-            {profile.about.length > 120 && (
-              <TouchableOpacity
-                onPress={() => setAboutExpanded((v) => !v)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={aboutExpanded ? 'Read less' : 'Read more'}
-              >
-                <Text style={styles.readMore}>{aboutExpanded ? 'less' : 'more'}</Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
+        <Text style={styles.metaText}>{profile.role}</Text>
+        <Text style={styles.metaText}>{profile.location}</Text>
 
         {!!profile.website && (
           <TouchableOpacity
@@ -223,33 +180,30 @@ export function ProfileView({
           </TouchableOpacity>
         )}
 
+        {/* Stats */}
+        <View style={styles.stats}>
+          <Stat label="Followers" value={profile.followersCount} onPress={onFollowersPress} />
+          <View style={styles.statDivider} />
+          <Stat label="Following" value={profile.followingCount} onPress={onFollowingPress} />
+          <View style={styles.statDivider} />
+          <Stat label="Circles" value={profile.circlesCount} onPress={onCirclesPress} />
+          <View style={styles.statDivider} />
+          <Stat label="Activities" value={profile.activitiesCount} onPress={onActivitiesPress} />
+        </View>
+
         {isOwnProfile ? (
-          // Edit + Share, side by side — the two peers Instagram puts here.
-          // Saved and Tickets used to live in this row as buttons; they are
-          // tabs now, so the row is down to genuine profile-level actions.
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.followButton, styles.actionButton, styles.editButton]}
-              onPress={onEditPress}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-            >
-              <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
-              <Text style={[styles.followText, styles.editText]}>Edit profile</Text>
-            </TouchableOpacity>
-            {onSharePress && (
-              <TouchableOpacity
-                style={[styles.followButton, styles.actionButton, styles.editButton]}
-                onPress={onSharePress}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Share profile"
-              >
-                <Ionicons name="share-outline" size={16} color={CHOCOLATE} />
-                <Text style={[styles.followText, styles.editText]}>Share profile</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          // One button. The Saved / Tickets pair that used to sit above it
+          // was the redundancy Lara flagged — both opened a filtered view of
+          // the same list the Activities stat already opens.
+          <TouchableOpacity
+            style={[styles.followButton, styles.editButton]}
+            onPress={onEditPress}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+          >
+            <Ionicons name="pencil-outline" size={16} color={CHOCOLATE} />
+            <Text style={[styles.followText, styles.editText]}>Edit Profile</Text>
+          </TouchableOpacity>
         ) : (
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -290,28 +244,74 @@ export function ProfileView({
         )}
       </View>
 
-      {/* ── Prompt to write a bio (own profile, nothing written) ──
-          The bio itself renders up in the identity block; this is the only
-          case that still needs its own row, because there is nothing to show
-          up there and the user should be nudged to fix that. */}
-      {!hasAbout && isOwnProfile && (
-        <View style={styles.bioPrompt}>
-          <EmptyState
-            body="Tell people about your work — tap Edit profile to add a bio."
-            onPress={onEditPress}
-          />
-        </View>
-      )}
+      {/* ── About ────────────────────────────────────────── */}
+      {hasAbout ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="About" />
+            <Text style={styles.bodyText} numberOfLines={aboutExpanded ? undefined : 5}>
+              {profile.about}
+            </Text>
+            {profile.about.length > 200 && (
+              <TouchableOpacity
+                onPress={() => setAboutExpanded((v) => !v)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={aboutExpanded ? 'Read less' : 'Read more'}
+              >
+                <Text style={styles.readMore}>
+                  {aboutExpanded ? 'Read less' : 'Read more >'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Divider />
+        </>
+      ) : isOwnProfile ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="About" />
+            <EmptyState
+              body="Tell people about your work — tap Edit Profile to add an About section."
+              onPress={onEditPress}
+            />
+          </View>
+          <Divider />
+        </>
+      ) : null}
 
-      <Divider />
-
-      {/* ── Activities: tab strip + inline list ──────────────
-          This replaced the Saved / Activities / Tickets buttons and the two
-          bottom sheets behind them. Injected by the screen (see
-          ProfileActivityPanel) so this component does no fetching. */}
-      {activityPanel}
-
-      {activityPanel ? <Divider /> : null}
+      {/* ── Activity ─────────────────────────────────────── */}
+      {/*
+        The list is only populated for the own-profile path (we don't fetch
+        timeline events on /user/[id]); the stats row shows the count
+        instead, and tapping "Activities" opens the full list in a sheet.
+        Show the empty placeholder only when the COUNT is also zero —
+        otherwise we'd be lying ("Anke Peters hasn't shared any activities
+        yet" when stats says Activities: 1).
+      */}
+      {hasActivities ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Activity" />
+            <View style={styles.activityList}>
+              {profile.activities.map((activity) => (
+                <ProfileActivityCard key={activity.id} activity={activity} />
+              ))}
+            </View>
+          </View>
+          <Divider />
+        </>
+      ) : !isOwnProfile && profile.activitiesCount === 0 ? (
+        <>
+          <View style={styles.section}>
+            <SectionHeader title="Activity" />
+            <EmptyState
+              body={`${profile.displayName} hasn't shared any activities yet.`}
+            />
+          </View>
+          <Divider />
+        </>
+      ) : null}
 
       {/* ── Experience ───────────────────────────────────── */}
       {hasExperience ? (
@@ -423,12 +423,10 @@ function Stat({
   value: number;
   onPress?: () => void;
 }) {
-  // Number first, label under it — the value is what the eye scans for, and
-  // it keeps all four stats optically aligned regardless of label length.
   const body = (
     <View style={styles.stat}>
-      <Text style={styles.statValue}>{value.toLocaleString('en-US')}</Text>
       <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value.toLocaleString('en-US')}</Text>
     </View>
   );
   if (!onPress) return body;
@@ -468,39 +466,23 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
-  // Identity block — left-aligned column; the avatar + stats share one row.
+  // Hero
   hero: {
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  identityRow: {
-    flexDirection: 'row',
     alignItems: 'center',
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.base,
     gap: spacing.base,
   },
   avatar: {
-    // 72 rather than the old 90: the avatar now shares its row with four
-    // stats, and 90 crowded them at 390px.
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     backgroundColor: colors.surface,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  bioText: {
-    fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
-    color: BODY,
-    lineHeight: 19,
-  },
-  bioPrompt: {
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.base,
   },
   name: {
     fontFamily: typography.fontFamily.display,
@@ -513,14 +495,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: typography.fontWeight.medium,
     color: META,
-    // Left-aligned now, and the negative top margin is gone: the identity
-    // block uses a real `gap`, so pulling rows upward is no longer needed.
-    marginTop: -spacing.xs,
+    textAlign: 'center',
+    marginTop: -spacing.sm,
   },
   websiteRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    marginTop: -spacing.sm,
   },
   website: {
     fontFamily: typography.fontFamily.ui,
@@ -529,29 +511,37 @@ const styles = StyleSheet.create({
     color: LINK,
   },
 
-  // Stats — share the avatar's row, spread across the remaining width.
+  // Stats
   stats: {
-    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    // Smaller gap (was spacing.lg / 24) so 4 stats + 3 dividers fit
+    // comfortably in the content width without crowding.
+    gap: spacing.md,
+    marginTop: spacing.xs,
   },
   stat: {
     alignItems: 'center',
-    gap: 2,
+    gap: 5,
+    minWidth: 54,
   },
   statLabel: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: typography.fontWeight.medium,
     color: META,
   },
-  // Value above label, Instagram-style — the number is what you scan for.
   statValue: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 17,
-    fontWeight: typography.fontWeight.bold,
+    fontWeight: typography.fontWeight.semibold,
     color: CHOCOLATE,
+  },
+  statDivider: {
+    width: 1,
+    height: 38,
+    backgroundColor: DIVIDER,
   },
 
   // Action row (Follow + Message side-by-side on other people's profiles)
@@ -646,6 +636,10 @@ const styles = StyleSheet.create({
     color: CHOCOLATE,
   },
 
+  // Activity
+  activityList: {
+    gap: spacing.base,
+  },
 
   // Experience
   experienceList: {

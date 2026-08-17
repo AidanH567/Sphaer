@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCard';
-import { ProfileActivityPanel } from '@/components/profile/ProfileActivityPanel';
+import { ActivitiesSheet } from '@/components/profile/ActivitiesSheet';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { BlockedAccountsSheet } from '@/components/moderation/BlockedAccountsSheet';
 import { BugReportRow } from '@/components/bug-report/BugReportRow';
@@ -28,7 +28,6 @@ import {
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount } from '@/services/registrations.service';
-import { shareProfile } from '@/services/share.service';
 import { signOut } from '@/services/auth.service';
 import { deleteAccount } from '@/services/account.service';
 import { useAuthContext } from '@/context/AuthContext';
@@ -46,19 +45,23 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 // NOTE: real authed users come from Supabase. In __DEV__ with no session
 // we still fall back to mockProfiles for UI iteration without auth.
 
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile, isLoading: authLoading } = useAuthContext();
   const { unreadCount: notifUnread } = useNotifications(user?.id);
 
-  // Activities behind the tab strip. Two queries (registered + saved); "All"
-  // and "Tickets" are derived, so switching tabs costs nothing.
+  // Activities behind the Activities stat. Two queries (registered + saved);
+  // All / Going / Saved / Past are derived, so switching category inside the
+  // sheet costs nothing.
   const {
     tabs: activityTabs,
+    registeredIds,
     isLoading: activitiesLoading,
     error: activitiesError,
     refetch: refetchActivities,
   } = useProfileActivities(user?.id, true, profile?.display_name ?? undefined);
+  const allActivitiesCount = activityTabs.find((t) => t.key === 'all')?.count ?? 0;
 
   function handleNotificationsPress() {
     router.push('/notifications' as never);
@@ -111,15 +114,13 @@ export default function ProfileScreen() {
   // Blocked-accounts list (App Store 1.2 — unblocking happens here).
   const [blockedSheetVisible, setBlockedSheetVisible] = useState(false);
 
-  // People/circle popups — exactly one open at a time via a single
-  // discriminator.
+  // Stats popups — exactly one open at a time via a single discriminator.
   //
-  // 'activities' | 'saved' | 'tickets' USED to be members of this union, each
-  // opening its own sheet over near-identical data (Lara: "multiple buttons
-  // that do the same thing"). They are now tabs in ProfileActivityPanel, which
-  // renders inline — so this union is back to the three genuinely distinct
-  // people/circle lists.
-  type OpenSheet = 'followers' | 'following' | 'circles' | null;
+  // 'saved' and 'tickets' USED to be members of this union, each opening its
+  // own sheet over near-identical data (Lara: "multiple buttons that do the
+  // same thing"). They are categories inside the Activities sheet now, so the
+  // union is back to the four real stats.
+  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
@@ -129,7 +130,10 @@ export default function ProfileScreen() {
   // Fetch data lazily when a stats popup opens. Re-runs each open so the
   // list reflects any in-between changes (new follower, joined a circle, etc).
   useEffect(() => {
-    if (!user || !openSheet) return;
+    // 'activities' is excluded on purpose — useProfileActivities already owns
+    // that data and re-pulls it on focus, so opening the sheet costs no round
+    // trip and the categories are instant.
+    if (!user || !openSheet || openSheet === 'activities') return;
     let active = true;
     setSheetLoading(true);
 
@@ -364,6 +368,18 @@ export default function ProfileScreen() {
         emptyMessage="You haven't joined any circles yet — browse the Circles tab to find your community."
         onClose={() => setOpenSheet(null)}
       />
+      {/* The single door to your activities. Ticket badges are drawn here and
+          only here — these are YOUR registrations, so a badge tap has a real
+          QR to route to. */}
+      <ActivitiesSheet
+        visible={openSheet === 'activities'}
+        tabs={activityTabs}
+        isLoading={activitiesLoading}
+        error={activitiesError}
+        registeredIds={registeredIds}
+        showTickets
+        onClose={() => setOpenSheet(null)}
+      />
     </>
   ) : null;
 
@@ -380,18 +396,6 @@ export default function ProfileScreen() {
         <ProfileView
           profile={mock}
           isOwnProfile
-          // The dev fallback renders the SAME structure as the authed screen,
-          // including the tab strip — otherwise UI iteration without a session
-          // (and the QA screenshots) would be looking at a different, lesser
-          // page than the one that ships. With no user the tabs are all zero,
-          // which is exactly the brand-new-account state worth checking.
-          activityPanel={
-            <ProfileActivityPanel
-              tabs={activityTabs}
-              isLoading={activitiesLoading}
-              error={activitiesError}
-            />
-          }
           trailingSlot={
             <SettingsSection
               onBlockedPress={() => setBlockedSheetVisible(true)}
@@ -408,7 +412,16 @@ export default function ProfileScreen() {
   }
 
   // ── Real authed user ─────────────────────────────────────────────────────
-  const displayProfile = adaptProfileToDisplay(user.id, profile, counts, gallery);
+  // The Activities stat shows the "All" union — registered ∪ saved — so the
+  // number you tap is the number of rows you land on. getRegistrationCount
+  // (registrations only, one cheap COUNT) stands in while the lists load, so
+  // the stat never flashes 0; it settles upward once saved arrives.
+  const displayProfile = adaptProfileToDisplay(
+    user.id,
+    profile,
+    { ...counts, activities: activitiesLoading ? counts.activities : allActivitiesCount },
+    gallery,
+  );
   const completion = computeProfileCompletion(profile);
 
   return (
@@ -435,16 +448,7 @@ export default function ProfileScreen() {
           onFollowersPress={() => setOpenSheet('followers')}
           onFollowingPress={() => setOpenSheet('following')}
           onCirclesPress={() => setOpenSheet('circles')}
-          onSharePress={() =>
-            shareProfile({ id: user.id, displayName: displayProfile.displayName }).catch(() => {})
-          }
-          activityPanel={
-            <ProfileActivityPanel
-              tabs={activityTabs}
-              isLoading={activitiesLoading}
-              error={activitiesError}
-            />
-          }
+          onActivitiesPress={() => setOpenSheet('activities')}
           trailingSlot={
             <SettingsSection
               onBlockedPress={() => setBlockedSheetVisible(true)}
