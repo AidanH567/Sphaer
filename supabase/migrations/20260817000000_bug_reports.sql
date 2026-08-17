@@ -7,7 +7,14 @@
 -- the NEXT phase — `status` + `fix_prompt` exist now so that phase
 -- needs no further migration.
 --
--- AUTHORED ONLY — review, then apply with `npx supabase db push`.
+-- ⚠️ DO NOT APPLY THIS WITH `supabase db push`. Checked 2026-08-17: the
+-- local migration files and the live database have COMPLETELY diverged —
+-- 22 local files never applied remotely, 17 remote migrations with no local
+-- file, ZERO in sync. `db push` would replay five months of schema history
+-- against a database that already has that schema, on production data. This
+-- file is additive (new table, new column, new policies, new bucket), so it
+-- is applied BY HAND in the SQL editor instead. Reconciling that history is
+-- its own job — start from `supabase db pull`, not from here.
 -- The client ships ahead of this migration and degrades gracefully:
 -- bugReport.service.ts detects the missing table/column/bucket and
 -- hides the entry point (is_designer reads as false), while writes
@@ -76,13 +83,13 @@ CREATE TABLE IF NOT EXISTS public.bug_reports (
 
 ALTER TABLE public.bug_reports ENABLE ROW LEVEL SECURITY;
 
--- Fail closed:
---   INSERT — only as yourself, only if your profile is flagged
---            is_designer, and only in the initial 'new' status (a
---            client must not be able to file a pre-approved report).
+-- Policies:
+--   INSERT — any signed-in user, only as themselves, only in the initial
+--            'new' status (a client must not file a pre-approved report).
 --   SELECT — reporters see their own reports.
 --   UPDATE/DELETE — no policies at all; the triage tooling uses the
 --            service role, which bypasses RLS.
+--
 -- ANY SIGNED-IN USER MAY REPORT A BUG.
 --
 -- Changed before this migration was ever applied (2026-08-17, Aidan): "why
@@ -165,17 +172,22 @@ ON CONFLICT (id) DO UPDATE
       public             = EXCLUDED.public;
 
 -- Path scheme: <user_id>/<filename> (same convention as every other
--- bucket). Only flagged designers may write, only into their own
--- folder; reporters can read back their own screenshots. No client
+-- bucket). Any signed-in user may write into THEIR OWN folder;
+-- reporters can read back their own screenshots. No client
 -- UPDATE/DELETE — a filed screenshot is immutable, like the report.
+--
+-- ⚠️ Opened 2026-08-17 in the same change as the table policy above, and
+-- caught only on a final read-through: the table had been opened and this
+-- had NOT. The result would have been a report anyone can file and a
+-- screenshot nobody can attach — i.e. the photo feature silently dead for
+-- everyone except a flag that is no longer set on anyone. Exactly the
+-- "change one, forget the other" failure the service-layer comment warns
+-- about, made while writing that warning. THREE places move together:
+-- the table policy, THIS policy, and the client gate.
 DROP POLICY IF EXISTS "bug_screenshots_insert" ON storage.objects;
 CREATE POLICY "bug_screenshots_insert" ON storage.objects FOR INSERT WITH CHECK (
   bucket_id = 'bug-screenshots'
   AND auth.uid()::text = (storage.foldername(name))[1]
-  AND EXISTS (
-    SELECT 1 FROM public.profiles p
-    WHERE p.id = auth.uid() AND p.is_designer
-  )
 );
 
 DROP POLICY IF EXISTS "bug_screenshots_read_own" ON storage.objects;
@@ -184,9 +196,12 @@ CREATE POLICY "bug_screenshots_read_own" ON storage.objects FOR SELECT USING (
   AND auth.uid()::text = (storage.foldername(name))[1]
 );
 
--- AUTHORED 2026-08-17, NOT APPLIED. Aidan applies with
--- `npx supabase db push`, then regenerates src/types/supabase.ts
--- (which replaces the hand-written src/types/bug-reports.ts shims),
--- then flags the three designer accounts:
---   UPDATE public.profiles SET is_designer = TRUE
---   WHERE id IN ('<aidan-uuid>', '<lara-uuid>', '<rabon-uuid>');
+-- AUTHORED 2026-08-17. Apply by PASTING THIS FILE into the Supabase SQL
+-- editor — not with `db push`, for the divergence reason at the top.
+--
+-- No account flagging is needed: reporting is open to any signed-in user.
+-- `is_designer` stays unset on everyone until the admin/triage surface
+-- exists, which is when it starts meaning something.
+--
+-- Every statement is idempotent (IF NOT EXISTS / OR REPLACE / DROP ... IF
+-- EXISTS / ON CONFLICT), so re-running it is safe if a paste is interrupted.
