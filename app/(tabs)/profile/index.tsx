@@ -13,6 +13,7 @@ import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCar
 import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEventsSheet';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { BlockedAccountsSheet } from '@/components/moderation/BlockedAccountsSheet';
+import { BugReportRow } from '@/components/bug-report/BugReportRow';
 import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
 import { computeProfileCompletion } from '@/utils/profile-completion';
 import { getMockProfileById, CURRENT_USER_PROFILE_ID } from '@/data/mockProfiles';
@@ -554,6 +555,9 @@ function SettingsSection({
 }) {
   return (
     <View style={styles.settingsSection}>
+      {/* Hidden designer-only row — self-gating, renders null for everyone
+          else (see BugReportRow). */}
+      <BugReportRow />
       <TouchableOpacity
         style={styles.settingsRow}
         onPress={onBlockedPress}
