@@ -160,10 +160,17 @@ export async function getAdminCircles(userId: string): Promise<CircleWithCounts[
 }
 
 /**
- * IDs of every circle the user is connected to via either membership or
- * follow, deduped. Used by the profile circle count.
+ * The two ways a user is connected to a circle, kept apart.
+ *
+ * `getMyCircleIds` flattens these into one deduped list for the profile
+ * count, but the "My circles" section on the Circles screen needs the
+ * distinction: being a MEMBER of a circle is a different relationship from
+ * merely FOLLOWING it, and the UI would be lying if it showed both under one
+ * undifferentiated heading.
  */
-export async function getMyCircleIds(userId: string): Promise<string[]> {
+export async function getMyCircleMembership(
+  userId: string,
+): Promise<{ memberIds: Set<string>; followIds: Set<string> }> {
   const [membersRes, followsRes] = await Promise.all([
     supabase.from('circle_members').select('circle_id').eq('user_id', userId),
     supabase.from('circle_follows').select('circle_id').eq('user_id', userId),
@@ -171,10 +178,22 @@ export async function getMyCircleIds(userId: string): Promise<string[]> {
   if (membersRes.error) throw membersRes.error;
   if (followsRes.error) throw followsRes.error;
 
-  const ids = new Set<string>();
-  (membersRes.data ?? []).forEach((row) => ids.add((row as { circle_id: string }).circle_id));
-  (followsRes.data ?? []).forEach((row) => ids.add((row as { circle_id: string }).circle_id));
-  return Array.from(ids);
+  const toSet = (rows: unknown[]) =>
+    new Set((rows ?? []).map((row) => (row as { circle_id: string }).circle_id));
+
+  return {
+    memberIds: toSet(membersRes.data ?? []),
+    followIds: toSet(followsRes.data ?? []),
+  };
+}
+
+/**
+ * IDs of every circle the user is connected to via either membership or
+ * follow, deduped. Used by the profile circle count.
+ */
+export async function getMyCircleIds(userId: string): Promise<string[]> {
+  const { memberIds, followIds } = await getMyCircleMembership(userId);
+  return Array.from(new Set([...memberIds, ...followIds]));
 }
 
 /**
@@ -183,9 +202,14 @@ export async function getMyCircleIds(userId: string): Promise<string[]> {
  *
  * One round trip to gather circle ids, then a single `.in()` fetch with
  * the counts populated like getCircles().
+ *
+ * `is_member` / `is_following` are populated from the two source sets so
+ * callers can tell a joined circle from a merely-followed one without a
+ * second query. Both can be true at once.
  */
 export async function getMyCircles(userId: string): Promise<CircleWithCounts[]> {
-  const ids = await getMyCircleIds(userId);
+  const { memberIds, followIds } = await getMyCircleMembership(userId);
+  const ids = Array.from(new Set([...memberIds, ...followIds]));
   if (ids.length === 0) return [];
 
   const { data, error } = await supabase
@@ -204,13 +228,20 @@ export async function getMyCircles(userId: string): Promise<CircleWithCounts[]> 
         ...circle,
         members_count: membersRes.count ?? 0,
         activities_count: activitiesRes.count ?? 0,
+        is_member: memberIds.has(circle.id),
+        is_following: followIds.has(circle.id),
       } as CircleWithCounts;
     }),
   );
 
-  // Sort newest-first to roughly mirror "most recently joined" without
-  // schema changes (full join-time sort would need joined_at from members).
-  return enriched.sort((a, b) => +new Date(b.created_at ?? 0) - +new Date(a.created_at ?? 0));
+  // Members first, then followed-only — "circles you're in" is the stronger
+  // relationship and should lead. Within each group, newest-first to roughly
+  // mirror "most recently joined" without schema changes (a true join-time
+  // sort would need joined_at from circle_members).
+  return enriched.sort((a, b) => {
+    if (a.is_member !== b.is_member) return a.is_member ? -1 : 1;
+    return +new Date(b.created_at ?? 0) - +new Date(a.created_at ?? 0);
+  });
 }
 
 /**

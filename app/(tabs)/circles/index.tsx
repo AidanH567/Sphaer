@@ -10,11 +10,14 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CircleCard } from '@/components/circles/CircleCard';
 import { CircleJoinSheet } from '@/components/circles/CircleJoinSheet';
+import { MyCirclesSection } from '@/components/circles/MyCirclesSection';
 import { SearchFilterBar } from '@/components/feed/SearchFilterBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { CircleCardSkeleton } from '@/components/ui/skeletons/CircleCardSkeleton';
-import { useCircles } from '@/hooks/useCircles';
+import { useCircles, useMyCircles } from '@/hooks/useCircles';
+import { useAuthContext } from '@/context/AuthContext';
+import { filterCircles } from '@/utils/circle-filter';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { CircleWithCounts } from '@/types/circle.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -39,10 +42,20 @@ export default function CirclesScreen() {
 
   const { circles, isLoading, error, refetch } = useCircles();
 
+  // "My circles" (Lara #8) — the circles this user is actually in, pinned
+  // above discovery so a member doesn't have to hunt for them.
+  const { user } = useAuthContext();
+  const {
+    circles: myCircles,
+    isLoading: myCirclesLoading,
+    refetch: refetchMyCircles,
+  } = useMyCircles(user?.id);
+
   useFocusEffect(
     useCallback(() => {
       refetch();
-    }, [refetch])
+      refetchMyCircles();
+    }, [refetch, refetchMyCircles])
   );
 
   function toggleCategory(cat: string) {
@@ -51,24 +64,17 @@ export default function CirclesScreen() {
     );
   }
 
+  // My circles narrows by the SAME predicate as the browse rows below — see
+  // utils/circle-filter. Without this, searching would filter one list and
+  // not the other.
+  const filteredMyCircles = useMemo(
+    () => filterCircles(myCircles, searchText, selectedCategories),
+    [myCircles, searchText, selectedCategories]
+  );
+
   // 1. Search filter, 2. Category filter, 3. Group by tag.
   const groupedByTag = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-
-    const textFiltered = q
-      ? circles.filter((c) => {
-          const haystack = [c.name, c.description ?? '', (c.tags ?? []).join(' ')]
-            .join(' ')
-            .toLowerCase();
-          return haystack.includes(q);
-        })
-      : circles;
-
-    const categoryFiltered = selectedCategories.length === 0
-      ? textFiltered
-      : textFiltered.filter((c) =>
-          (c.tags ?? []).some((t) => selectedCategories.includes(t))
-        );
+    const categoryFiltered = filterCircles(circles, searchText, selectedCategories);
 
     // Bucket each circle into each of its tags. A circle with two tags
     // appears in two groups — fine for browsing.
@@ -111,53 +117,19 @@ export default function CirclesScreen() {
         style={styles.headerOverride}
       />
 
-      {isLoading && circles.length === 0 ? (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-        >
-          {[0, 1].map((sectionIdx) => (
-            <View key={sectionIdx} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionHeaderText}>
-                  <View style={styles.skeletonHeaderTitle} />
-                  <View style={styles.skeletonHeaderSub} />
-                </View>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.row}
-              >
-                {[0, 1, 2].map((cardIdx) => (
-                  <CircleCardSkeleton key={cardIdx} index={sectionIdx * 3 + cardIdx} />
-                ))}
-              </ScrollView>
-            </View>
-          ))}
-        </ScrollView>
-      ) : error && circles.length === 0 ? (
+      {error && circles.length === 0 ? (
         <ErrorState
           icon="cloud-offline-outline"
           title="Couldn't load circles"
           body={error}
           onRetry={refetch}
         />
-      ) : !hasResults ? (
-        <View style={styles.center}>
-          <EmptyState
-            icon="people-outline"
-            title={hasFilters ? 'No matches' : 'No circles yet'}
-            body={
-              hasFilters
-                ? 'Try clearing a filter or searching for a different name.'
-                : 'Circles are how artists and crews stay connected. Start one or follow an artist who runs one.'
-            }
-            centered
-            spaced
-          />
-        </View>
       ) : (
+        // One scroll container for the whole page so "My circles" always sits
+        // above discovery — including while discovery is still loading, and
+        // when discovery has no matches. Previously each of those states
+        // replaced the entire page, which would have hidden the user's own
+        // circles behind an unrelated empty state.
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
@@ -165,7 +137,50 @@ export default function CirclesScreen() {
             <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.black} />
           }
         >
-          {groupedByTag.map(([tag, tagCircles]) => (
+          <MyCirclesSection
+            circles={filteredMyCircles}
+            isLoading={myCirclesLoading}
+            hasSession={Boolean(user)}
+            isFiltered={hasFilters}
+            onSelect={setSelectedCircle}
+          />
+
+          {isLoading && circles.length === 0 ? (
+            [0, 1].map((sectionIdx) => (
+              <View key={sectionIdx} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionHeaderText}>
+                    <View style={styles.skeletonHeaderTitle} />
+                    <View style={styles.skeletonHeaderSub} />
+                  </View>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.row}
+                >
+                  {[0, 1, 2].map((cardIdx) => (
+                    <CircleCardSkeleton key={cardIdx} index={sectionIdx * 3 + cardIdx} />
+                  ))}
+                </ScrollView>
+              </View>
+            ))
+          ) : !hasResults ? (
+            <View style={styles.center}>
+              <EmptyState
+                icon="people-outline"
+                title={hasFilters ? 'No matches' : 'No circles yet'}
+                body={
+                  hasFilters
+                    ? 'Try clearing a filter or searching for a different name.'
+                    : 'Circles are how artists and crews stay connected. Start one or follow an artist who runs one.'
+                }
+                centered
+                spaced
+              />
+            </View>
+          ) : (
+            groupedByTag.map(([tag, tagCircles]) => (
             <View key={tag} style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionHeaderText}>
@@ -194,7 +209,8 @@ export default function CirclesScreen() {
                 ))}
               </ScrollView>
             </View>
-          ))}
+            ))
+          )}
         </ScrollView>
       )}
 
@@ -203,6 +219,10 @@ export default function CirclesScreen() {
         onClose={() => setSelectedCircle(null)}
         onJoined={() => {
           refetch();
+          // Joining is the one action that changes "My circles" from this
+          // screen — refresh it too, or the new circle wouldn't appear up top
+          // until the tab was left and re-entered.
+          refetchMyCircles();
         }}
       />
     </View>
@@ -247,7 +267,10 @@ const styles = StyleSheet.create({
   },
 
   center: {
-    flex: 1,
+    // Now lives inside the page ScrollView (so "My circles" can sit above it),
+    // where flex:1 would collapse to nothing — a minHeight keeps the empty
+    // state visually centred in the remaining space instead.
+    minHeight: 320,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
