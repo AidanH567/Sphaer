@@ -1,0 +1,16 @@
+{
+  "fixture-mycircles-populated": {
+    "documentScrollWidth": 390,
+    "documentScrollsHorizontally": false,
+    "hasMyCirclesHeading": true,
+    "brokenImageCount": 0,
+    "visibleTextHead": " Find your scene, find your thing! My circles 2 you're in · 1 you follow  Test 0 Activities 1 Member Creative Writing Circle 0 Activities 14 Members Poetry Slam Berlin 0 Activities 10 Members Film Join 7 Film circles across Berlin  Experimental Film Lab 0 Activities 16 Members Berlin Cinephiles 0 Activities 14 Members LGBTQIA+ in Film 0 Activities 12 Members SceneLab 0 Activities 11 Members Doc"
+  },
+  "fixture-mycircles-empty": {
+    "documentScrollWidth": 390,
+    "documentScrollsHorizontally": false,
+    "hasMyCirclesHeading": true,
+    "brokenImageCount": 0,
+    "visibleTextHead": " Find your scene, find your thing! My circles Circles you join or follow show up here You haven't joined a circle yet — browse below and tap one to join. Film Join 7 Film circles across Berlin  Experimental Film Lab 0 Activities 16 Members Berlin Cinephiles 0 Activities 14 Members LGBTQIA+ in Film 0 Activities 12 Members SceneLab 0 Activities 11 Members Documentary Lovers 0 Activities 12 Members"
+  }
+}

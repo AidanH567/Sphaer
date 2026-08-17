@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
 import { ProfileCompletionCard } from '@/components/profile/ProfileCompletionCard';
-import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEventsSheet';
+import { ProfileActivityPanel } from '@/components/profile/ProfileActivityPanel';
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { BlockedAccountsSheet } from '@/components/moderation/BlockedAccountsSheet';
 import { BugReportRow } from '@/components/bug-report/BugReportRow';
@@ -27,16 +27,15 @@ import {
   unfollowUser,
 } from '@/services/profile.service';
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
-import { getRegistrationCount, getMyRegisteredEvents } from '@/services/registrations.service';
-import { getSavedEvents } from '@/services/events.service';
-import { addEventsToCalendar } from '@/services/calendar.service';
+import { getRegistrationCount } from '@/services/registrations.service';
+import { shareProfile } from '@/services/share.service';
 import { signOut } from '@/services/auth.service';
 import { deleteAccount } from '@/services/account.service';
 import { useAuthContext } from '@/context/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useProfileActivities } from '@/hooks/useProfileActivities';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
-import type { EventWithRelations } from '@/types/event.types';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { colors, typography, spacing } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -51,6 +50,15 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile, isLoading: authLoading } = useAuthContext();
   const { unreadCount: notifUnread } = useNotifications(user?.id);
+
+  // Activities behind the tab strip. Two queries (registered + saved); "All"
+  // and "Tickets" are derived, so switching tabs costs nothing.
+  const {
+    tabs: activityTabs,
+    isLoading: activitiesLoading,
+    error: activitiesError,
+    refetch: refetchActivities,
+  } = useProfileActivities(user?.id, true, profile?.display_name ?? undefined);
 
   function handleNotificationsPress() {
     router.push('/notifications' as never);
@@ -103,23 +111,19 @@ export default function ProfileScreen() {
   // Blocked-accounts list (App Store 1.2 — unblocking happens here).
   const [blockedSheetVisible, setBlockedSheetVisible] = useState(false);
 
-  // Stats popups — exactly one open at a time via a single discriminator.
-  // 'saved' and 'tickets' aren't public stats but use the same sheet machinery.
-  type OpenSheet =
-    | 'followers'
-    | 'following'
-    | 'circles'
-    | 'activities'
-    | 'saved'
-    | 'tickets'
-    | null;
+  // People/circle popups — exactly one open at a time via a single
+  // discriminator.
+  //
+  // 'activities' | 'saved' | 'tickets' USED to be members of this union, each
+  // opening its own sheet over near-identical data (Lara: "multiple buttons
+  // that do the same thing"). They are now tabs in ProfileActivityPanel, which
+  // renders inline — so this union is back to the three genuinely distinct
+  // people/circle lists.
+  type OpenSheet = 'followers' | 'following' | 'circles' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
   const [myCircles, setMyCircles] = useState<CircleWithCounts[]>([]);
-  const [myActivities, setMyActivities] = useState<EventWithRelations[]>([]);
-  const [mySaved, setMySaved] = useState<EventWithRelations[]>([]);
-  const [myTickets, setMyTickets] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
 
   // Fetch data lazily when a stats popup opens. Re-runs each open so the
@@ -134,24 +138,14 @@ export default function ProfileScreen() {
         ? getFollowers(user.id).then((data) => active && setFollowers(data))
         : openSheet === 'following'
         ? getFollowing(user.id).then((data) => active && setFollowing(data))
-        : openSheet === 'circles'
-        ? getMyCircles(user.id).then((data) => active && setMyCircles(data))
-        : openSheet === 'saved'
-        ? getSavedEvents(user.id).then((data) => active && setMySaved(data))
-        : openSheet === 'tickets'
-        ? getMyRegisteredEvents(user.id).then((data) => active && setMyTickets(data))
-        : // activities — created ∪ registered, deduped (Activities v2 #15)
-          loadUserActivities(user.id).then((data) => active && setMyActivities(data));
+        : getMyCircles(user.id).then((data) => active && setMyCircles(data));
 
     fetcher
       .catch(() => {
         if (active) {
           if (openSheet === 'followers') setFollowers([]);
           else if (openSheet === 'following') setFollowing([]);
-          else if (openSheet === 'circles') setMyCircles([]);
-          else if (openSheet === 'saved') setMySaved([]);
-          else if (openSheet === 'tickets') setMyTickets([]);
-          else setMyActivities([]);
+          else setMyCircles([]);
         }
       })
       .finally(() => {
@@ -174,6 +168,10 @@ export default function ProfileScreen() {
       }
       let active = true;
       setExtrasLoading(true);
+      // The tab lists are re-pulled on focus too — registering for or saving
+      // an activity elsewhere in the app must be reflected when the user
+      // comes back to their profile.
+      refetchActivities();
       Promise.all([
         getProfile(user.id),
         getProfileImages(user.id),
@@ -199,7 +197,7 @@ export default function ProfileScreen() {
       return () => {
         active = false;
       };
-    }, [user])
+    }, [user, refetchActivities])
   );
 
   function handleSignOut() {
@@ -366,49 +364,6 @@ export default function ProfileScreen() {
         emptyMessage="You haven't joined any circles yet — browse the Circles tab to find your community."
         onClose={() => setOpenSheet(null)}
       />
-      {/* Activities drill-down (Activities v2 #15) — compact event rows,
-          created ∪ registered. Zero-count taps still open it and land on
-          the empty state. */}
-      <UserEventsSheet
-        visible={openSheet === 'activities'}
-        subtitle={`${counts.activities.toLocaleString('en-US')} total — created or registered`}
-        events={myActivities}
-        isLoading={sheetLoading && openSheet === 'activities'}
-        emptyMessage="No activities yet"
-        onClose={() => setOpenSheet(null)}
-      />
-      <EntityListSheet
-        visible={openSheet === 'saved'}
-        title="Saved"
-        subtitle={`${mySaved.length.toLocaleString('en-US')} activities saved`}
-        type="activity"
-        items={mySaved}
-        withTimeTabs
-        isLoading={sheetLoading && openSheet === 'saved'}
-        emptyMessage="No saved activities yet — tap the bookmark on any activity to save it for later."
-        onClose={() => setOpenSheet(null)}
-        headerAction={
-          mySaved.length > 0
-            ? {
-                label: `Export ${mySaved.length} to calendar`,
-                icon: 'calendar-outline',
-                onPress: () => addEventsToCalendar(mySaved).catch(() => {}),
-              }
-            : undefined
-        }
-      />
-      <EntityListSheet
-        visible={openSheet === 'tickets'}
-        title="Tickets"
-        subtitle={`${myTickets.length.toLocaleString('en-US')} active`}
-        type="activity"
-        items={myTickets}
-        withTimeTabs
-        routeAsTicket
-        isLoading={sheetLoading && openSheet === 'tickets'}
-        emptyMessage="No tickets yet — register for an activity from the feed."
-        onClose={() => setOpenSheet(null)}
-      />
     </>
   ) : null;
 
@@ -425,6 +380,18 @@ export default function ProfileScreen() {
         <ProfileView
           profile={mock}
           isOwnProfile
+          // The dev fallback renders the SAME structure as the authed screen,
+          // including the tab strip — otherwise UI iteration without a session
+          // (and the QA screenshots) would be looking at a different, lesser
+          // page than the one that ships. With no user the tabs are all zero,
+          // which is exactly the brand-new-account state worth checking.
+          activityPanel={
+            <ProfileActivityPanel
+              tabs={activityTabs}
+              isLoading={activitiesLoading}
+              error={activitiesError}
+            />
+          }
           trailingSlot={
             <SettingsSection
               onBlockedPress={() => setBlockedSheetVisible(true)}
@@ -468,9 +435,16 @@ export default function ProfileScreen() {
           onFollowersPress={() => setOpenSheet('followers')}
           onFollowingPress={() => setOpenSheet('following')}
           onCirclesPress={() => setOpenSheet('circles')}
-          onActivitiesPress={() => setOpenSheet('activities')}
-          onSavedPress={() => setOpenSheet('saved')}
-          onTicketsPress={() => setOpenSheet('tickets')}
+          onSharePress={() =>
+            shareProfile({ id: user.id, displayName: displayProfile.displayName }).catch(() => {})
+          }
+          activityPanel={
+            <ProfileActivityPanel
+              tabs={activityTabs}
+              isLoading={activitiesLoading}
+              error={activitiesError}
+            />
+          }
           trailingSlot={
             <SettingsSection
               onBlockedPress={() => setBlockedSheetVisible(true)}

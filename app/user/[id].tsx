@@ -20,6 +20,7 @@ import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { OverflowMenuSheet } from '@/components/ui/OverflowMenuSheet';
 import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { useAuthContext } from '@/context/AuthContext';
+import { useProfileActivities } from '@/hooks/useProfileActivities';
 import { useAppContext } from '@/context/AppContext';
 import {
   blockUser,
@@ -38,13 +39,12 @@ import {
 import { getMyCircleIds, getMyCircles } from '@/services/circles.service';
 import { getRegistrationCount } from '@/services/registrations.service';
 import { shareProfile } from '@/services/share.service';
-import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEventsSheet';
+import { ProfileActivityPanel } from '@/components/profile/ProfileActivityPanel';
 import { EntityListSheet } from '@/components/ui/EntityListSheet';
 import { type MockProfile } from '@/data/mockProfiles';
 import { colors, typography, spacing } from '@/constants/theme';
 import type { Profile, ProfileImage } from '@/types/user.types';
 import type { CircleWithCounts } from '@/types/circle.types';
-import type { EventWithRelations } from '@/types/event.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
@@ -63,6 +63,17 @@ export default function UserProfileScreen() {
   const { blockedIds, refreshBlocked } = useAppContext();
   const isOwnProfile = Boolean(user?.id && id && user.id === id);
   const isBlockedUser = Boolean(id && blockedIds.has(id));
+
+  // Same tab strip as /profile. On someone else's page the private tabs
+  // (Saved, Tickets) are omitted by buildActivityTabs — `saved_events` RLS is
+  // `USING (auth.uid() = user_id)`, so their saved list is unknowable, and a
+  // tab reading "Saved 0" would be a claim we cannot support.
+  const [activityDisplayName, setActivityDisplayName] = useState<string | undefined>();
+  const {
+    tabs: activityTabs,
+    isLoading: activitiesLoading,
+    error: activitiesError,
+  } = useProfileActivities(id, isOwnProfile, activityDisplayName);
 
   const [displayProfile, setDisplayProfile] = useState<MockProfile | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found' | 'error'>('loading');
@@ -173,12 +184,13 @@ export default function UserProfileScreen() {
   }
 
   // Stats popup state — same model as /profile
-  type OpenSheet = 'followers' | 'following' | 'circles' | 'activities' | null;
+  // 'activities' left this union when the tab strip landed — the list is
+  // inline in ProfileActivityPanel now (Lara's redundancy complaint).
+  type OpenSheet = 'followers' | 'following' | 'circles' | null;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [followers, setFollowers] = useState<Profile[]>([]);
   const [following, setFollowing] = useState<Profile[]>([]);
   const [userCircles, setUserCircles] = useState<CircleWithCounts[]>([]);
-  const [userActivities, setUserActivities] = useState<EventWithRelations[]>([]);
   const [sheetLoading, setSheetLoading] = useState(false);
 
   // ── Initial fetch: Supabase only. The previous mock-profile fallback was
@@ -198,6 +210,7 @@ export default function UserProfileScreen() {
         if (!active) return;
         if (real) {
           setDisplayProfile(real);
+          setActivityDisplayName(real.displayName);
           setStatus('found');
         } else {
           setDisplayProfile(null);
@@ -224,20 +237,14 @@ export default function UserProfileScreen() {
         ? getFollowers(id).then((data) => active && setFollowers(data))
         : openSheet === 'following'
         ? getFollowing(id).then((data) => active && setFollowing(data))
-        : openSheet === 'circles'
-        ? getMyCircles(id).then((data) => active && setUserCircles(data))
-        : // activities — created ∪ registered, deduped (Activities v2 #15).
-          // Registrations are readable for OTHER users too:
-          // event_registrations_read_all is SELECT USING (TRUE).
-          loadUserActivities(id).then((data) => active && setUserActivities(data));
+        : getMyCircles(id).then((data) => active && setUserCircles(data));
 
     fetcher
       .catch(() => {
         if (active) {
           if (openSheet === 'followers') setFollowers([]);
           else if (openSheet === 'following') setFollowing([]);
-          else if (openSheet === 'circles') setUserCircles([]);
-          else setUserActivities([]);
+          else setUserCircles([]);
         }
       })
       .finally(() => {
@@ -355,7 +362,13 @@ export default function UserProfileScreen() {
             onFollowersPress={() => setOpenSheet('followers')}
             onFollowingPress={() => setOpenSheet('following')}
             onCirclesPress={() => setOpenSheet('circles')}
-            onActivitiesPress={() => setOpenSheet('activities')}
+            activityPanel={
+              <ProfileActivityPanel
+                tabs={activityTabs}
+                isLoading={activitiesLoading}
+                error={activitiesError}
+              />
+            }
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -393,17 +406,6 @@ export default function UserProfileScreen() {
             items={userCircles}
             isLoading={sheetLoading && openSheet === 'circles'}
             emptyMessage="Not in any circles yet."
-            onClose={() => setOpenSheet(null)}
-          />
-          {/* Activities drill-down (Activities v2 #15) — compact event rows,
-              created ∪ registered. Zero-count taps still open it and land on
-              the empty state. */}
-          <UserEventsSheet
-            visible={openSheet === 'activities'}
-            subtitle={`${displayProfile.activitiesCount.toLocaleString('en-US')} total — created or registered`}
-            events={userActivities}
-            isLoading={sheetLoading && openSheet === 'activities'}
-            emptyMessage="No activities yet"
             onClose={() => setOpenSheet(null)}
           />
         </>
