@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,47 +16,50 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from '@/context/AuthContext';
 import { useBugReportSubmit, useCanReportBug } from '@/hooks/useBugReport';
+import { KindPicker } from '@/components/bug-report/KindPicker';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import {
+  SCREEN_OPTIONS,
+  SEVERITY_OPTIONS,
+  buildReportDetails,
+  fieldsForKind,
+  primaryAnswer,
+  showsScreen,
+  showsSeverity,
+  type ReportAnswers,
+  type ReportFieldKey,
+  type ReportKind,
+  type ReportSeverity,
+} from '@/constants/report-kinds';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 /**
- * Bug-report screen (design doc "Sphaer Bug System — 2026-08-17", inlet 2).
- * Reached via the "Report a bug" row in profile settings.
+ * Report screen — bugs, feature ideas and changes (design doc "Sphaer Bug
+ * System — 2026-08-17", inlet 2, extended the same day: "not everything we
+ * want to add is a bug… I want it to be ultra specific so we can fix bugs
+ * and suggest features easily").
  *
- * Open to ANY signed-in user since 2026-08-17. The check is repeated here
- * rather than trusted from the entry row, so a deep link from a signed-OUT
- * visitor still lands on a dead end instead of a form that cannot submit.
+ * KIND FIRST, then only the questions that kind actually needs. The previous
+ * version opened with "What went wrong?" and a box labelled "Describe the
+ * bug", which told anyone arriving with an idea that they were on the wrong
+ * screen. Reached via the settings row on Profile.
  *
- * ⚠️ This guard is the FOURTH place the permission lives — table policy,
- * storage policy, entry row, and here. Opening the first three and missing
- * this one shipped a screen that rendered "Nothing here." to its own author
- * (2026-08-17). If the rule changes again, grep `useCanReportBug` AND both
- * RLS policies; a permission expressed in four places will be changed in
- * three.
+ * Open to ANY signed-in user. The check is repeated here rather than trusted
+ * from the entry row, so a deep link from a signed-OUT visitor lands on a
+ * dead end instead of a form that cannot submit.
  *
- * Fields: description (required), screen picker (fixed list of app
- * surfaces — the entry point lives on Profile, so auto-capturing the
- * current route would always say "Profile"; an explicit picker is more
- * honest), optional screenshot via the standard expo-image-picker flow.
- * Submit files a `bug_reports` row with status 'new'.
+ * ⚠️ This guard is one of several places the reporting permission lives —
+ * table policy, storage policy, entry row, and here. Opening the first three
+ * and missing this one shipped a screen that rendered "Nothing here." to its
+ * own author (2026-08-17). If the rule changes, grep `useCanReportBug` AND
+ * both RLS policies.
+ *
+ * The field spec (which questions per kind, which are required) is NOT in
+ * this file — it lives in src/constants/report-kinds.ts so the triage screen
+ * reads the answers back under exactly the labels they were asked under.
  */
-
-// Fixed list of app surfaces. Deliberately human names, not route paths —
-// these end up in triage and in auto-drafted fix prompts.
-const SCREEN_OPTIONS = [
-  'Feed',
-  'Map',
-  'Mural',
-  'Circles',
-  'Create',
-  'Messages',
-  'Profile',
-  'Event detail',
-  'Onboarding',
-  'Other',
-] as const;
 
 export default function BugReportScreen() {
   const router = useRouter();
@@ -64,10 +67,21 @@ export default function BugReportScreen() {
   const canReport = useCanReportBug(user?.id);
   const { state, errorMessage, submit } = useBugReportSubmit(user?.id);
 
-  const [description, setDescription] = useState('');
-  const [descriptionError, setDescriptionError] = useState<string | null>(null);
+  const [kind, setKind] = useState<ReportKind>('bug');
+  // ONE answers map across every kind. Switching bug → feature → bug keeps
+  // what you typed; `buildReportDetails` is what stops a kind's leftovers
+  // riding along on a report of a different kind.
+  const [answers, setAnswers] = useState<ReportAnswers>({});
+  const [primaryError, setPrimaryError] = useState<string | null>(null);
+  const [severity, setSeverity] = useState<ReportSeverity | null>(null);
   const [screen, setScreen] = useState<string | null>(null);
   const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
+
+  const fields = useMemo(() => fieldsForKind(kind), [kind]);
+
+  const setAnswer = useCallback((key: ReportFieldKey, text: string) => {
+    setAnswers((prev) => ({ ...prev, [key]: text }));
+  }, []);
 
   async function pickScreenshot() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -86,12 +100,20 @@ export default function BugReportScreen() {
   }
 
   function handleSubmit() {
-    if (!description.trim()) {
-      setDescriptionError('Please describe the bug.');
+    const description = primaryAnswer(kind, answers);
+    if (!description) {
+      setPrimaryError(`Please answer "${fields[0].label}".`);
       return;
     }
-    setDescriptionError(null);
-    void submit({ description, screen, screenshotUri });
+    setPrimaryError(null);
+    void submit({
+      description,
+      kind,
+      severity: showsSeverity(kind) ? severity : null,
+      details: buildReportDetails(kind, answers),
+      screen: showsScreen(kind) ? screen : null,
+      screenshotUri,
+    });
   }
 
   // ── Signed out (deep link) — dead end, no form ───────────────────────────
@@ -116,7 +138,7 @@ export default function BugReportScreen() {
           <Ionicons name="checkmark-circle" size={48} color={colors.black} />
           <Text style={styles.successTitle}>Filed.</Text>
           <Text style={styles.successBody}>
-            Thanks — the report is in the queue. You can file another anytime.
+            Thanks — it&apos;s in the queue. You can send another anytime.
           </Text>
           <Button label="Done" onPress={() => router.back()} style={styles.doneButton} />
         </View>
@@ -136,42 +158,87 @@ export default function BugReportScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <Input
-            label="What went wrong?"
-            placeholder="Describe the bug — what you did, what you expected, what happened."
-            value={description}
-            onChangeText={(text) => {
-              setDescription(text);
-              if (descriptionError && text.trim()) setDescriptionError(null);
+          <KindPicker
+            value={kind}
+            onChange={(next) => {
+              setKind(next);
+              setPrimaryError(null);
             }}
-            error={descriptionError ?? undefined}
-            multiline
-            numberOfLines={5}
-            textAlignVertical="top"
           />
 
-          <Text style={styles.sectionLabel}>Which screen?</Text>
-          <View style={styles.chipWrap}>
-            {SCREEN_OPTIONS.map((option) => {
-              const selected = screen === option;
-              return (
-                <TouchableOpacity
-                  key={option}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  onPress={() => setScreen(selected ? null : option)}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`Screen: ${option}`}
-                >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                    {option}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {fields.map((field, index) => (
+            <View key={field.key} style={styles.field}>
+              <Input
+                label={field.required ? field.label : `${field.label} (optional)`}
+                placeholder={field.placeholder}
+                value={answers[field.key] ?? ''}
+                onChangeText={(text) => {
+                  setAnswer(field.key, text);
+                  if (index === 0 && primaryError && text.trim()) setPrimaryError(null);
+                }}
+                error={index === 0 ? (primaryError ?? undefined) : undefined}
+                multiline
+                numberOfLines={field.lines}
+                textAlignVertical="top"
+              />
+            </View>
+          ))}
 
+          {showsSeverity(kind) && (
+            <>
+              <Text style={styles.sectionLabel}>How bad is it?</Text>
+              <View style={styles.chipWrap}>
+                {SEVERITY_OPTIONS.map((option) => {
+                  const selected = severity === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      onPress={() => setSeverity(selected ? null : option.value)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Severity: ${option.label}`}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {showsScreen(kind) && (
+            <>
+              <Text style={styles.sectionLabel}>Which screen?</Text>
+              <View style={styles.chipWrap}>
+                {SCREEN_OPTIONS.map((option) => {
+                  const selected = screen === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      onPress={() => setScreen(selected ? null : option)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Screen: ${option}`}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {/* Screenshots stay available for all three kinds — a mockup or a
+              reference from another app is as useful on a feature request as
+              a broken screen is on a bug. */}
           <Text style={styles.sectionLabel}>Screenshot</Text>
           {screenshotUri ? (
             <View style={styles.screenshotWrap}>
@@ -231,7 +298,7 @@ function Header({ onBack }: { onBack: () => void }) {
       >
         <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>Report a bug</Text>
+      <Text style={styles.headerTitle}>Report or suggest</Text>
       <View style={styles.backButton} />
     </View>
   );
@@ -258,7 +325,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 17,
+    fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
@@ -268,9 +335,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
 
+  field: { marginTop: spacing.base },
+
   sectionLabel: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.secondary,
     marginTop: spacing.base,
@@ -295,7 +364,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
+    fontSize: typography.fontSize.sm,
     color: colors.text.primary,
   },
   chipTextSelected: {
@@ -316,7 +385,7 @@ const styles = StyleSheet.create({
   },
   attachButtonText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     color: colors.text.secondary,
   },
   screenshotWrap: {
@@ -353,7 +422,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontFamily: typography.fontFamily.ui,
-    fontSize: 13,
+    fontSize: typography.fontSize.sm,
     color: colors.badge.red,
   },
 
@@ -370,18 +439,18 @@ const styles = StyleSheet.create({
   },
   deadEndText: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 15,
+    fontSize: typography.fontSize.base,
     color: colors.text.tertiary,
   },
   successTitle: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 20,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
   successBody: {
     fontFamily: typography.fontFamily.ui,
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     color: colors.text.secondary,
     textAlign: 'center',
   },

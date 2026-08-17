@@ -14,6 +14,7 @@ import { UserEventsSheet, loadUserActivities } from '@/components/profile/UserEv
 import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { BlockedAccountsSheet } from '@/components/moderation/BlockedAccountsSheet';
 import { BugReportRow } from '@/components/bug-report/BugReportRow';
+import { TriageRow } from '@/components/bug-report/TriageRow';
 import { ProfileSkeleton } from '@/components/ui/skeletons/ProfileSkeleton';
 import { computeProfileCompletion } from '@/utils/profile-completion';
 import { getMockProfileById, CURRENT_USER_PROFILE_ID } from '@/data/mockProfiles';
@@ -555,9 +556,10 @@ function SettingsSection({
 }) {
   return (
     <View style={styles.settingsSection}>
-      {/* Hidden designer-only row — self-gating, renders null for everyone
-          else (see BugReportRow). */}
+      {/* Both rows are self-gating and render null when they don't apply:
+          BugReportRow for any signed-in user, TriageRow for designers only. */}
       <BugReportRow />
+      <TriageRow />
       <TouchableOpacity
         style={styles.settingsRow}
         onPress={onBlockedPress}

@@ -7,17 +7,19 @@ import { useCanReportBug } from '@/hooks/useBugReport';
 import { colors, typography, spacing } from '@/constants/theme';
 
 /**
- * "Report a bug" settings row (design doc "Sphaer Bug System — 2026-08-17").
- * Self-contained on purpose: it decides its own visibility, so the host
- * settings section needs exactly one JSX line and no state.
+ * "Report a problem or suggest a feature" settings row (design doc "Sphaer
+ * Bug System — 2026-08-17"). Self-contained on purpose: it decides its own
+ * visibility, so the host settings section needs exactly one JSX line and no
+ * state.
  *
- * Visible to ANY signed-in user as of 2026-08-17 (Aidan: "right now let's
- * just open it for everyone" — we are testing with three people, and a
- * per-account flag is friction on the people whose feedback we want).
- * Signed out, it still renders nothing.
+ * ⚠️ THE WORDING IS THE FEATURE. This row said "Report a bug" and the screen
+ * behind it asked "What went wrong?", which is a closed door to anyone
+ * arriving with an idea — Aidan, 2026-08-17: "not everything we want to add
+ * is a bug". Renaming it is half of what makes the kind picker reachable;
+ * don't quietly shorten it back to "Report a bug".
  *
- * Planned: this becomes the light USER-facing report, with a separate fuller
- * ADMIN screen for triage — see `useCanReportBug` / `useIsDesigner`.
+ * Visible to ANY signed-in user. Signed out, it renders nothing. The ADMIN
+ * counterpart is TriageRow, gated on `is_designer`.
  */
 export function BugReportRow() {
   const router = useRouter();
@@ -32,10 +34,10 @@ export function BugReportRow() {
       onPress={() => router.push('/bug-report' as never)}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel="Report a bug"
+      accessibilityLabel="Report a problem or suggest a feature"
     >
-      <Ionicons name="bug-outline" size={20} color={colors.text.secondary} />
-      <Text style={styles.rowText}>Report a bug</Text>
+      <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.text.secondary} />
+      <Text style={styles.rowText}>Report a problem or suggest a feature</Text>
       <Ionicons
         name="chevron-forward"
         size={18}

@@ -135,6 +135,7 @@ export default function RootLayout() {
               <Stack.Screen name="legal/terms" options={{ presentation: 'card' }} />
               <Stack.Screen name="notifications" options={{ presentation: 'card' }} />
               <Stack.Screen name="bug-report" options={{ presentation: 'card' }} />
+              <Stack.Screen name="bug-triage" options={{ presentation: 'card' }} />
               <Stack.Screen
                 name="location"
                 options={{
