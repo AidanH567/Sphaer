@@ -13,6 +13,10 @@ module.exports = defineConfig([
     ignores: [
       'dist/*',
       '.expo/*',
+      // Claude Code's scratch worktrees. Abandoned copies of the app live here,
+      // and linting them produced 26 problems in code nobody ships — which read
+      // as "the repo fails lint" and hid the fact that app/ and src/ are clean.
+      '.claude/*',
       'android/*',
       'ios/*',
       'coverage/*',
