@@ -16,6 +16,7 @@ import { MuralCanvas } from '@/components/mural/MuralCanvas';
 import { useEvents } from '@/hooks/useEvents';
 import { useMuralDimensions } from '@/hooks/useMuralDimensions';
 import { useMuralLayout } from '@/hooks/useMuralLayout';
+import { getSeedPosterSize } from '@/data/posterDimensions';
 import { eventMatchesLocationFilter } from '@/constants/berlinNeighborhoods';
 import { applyChipFilters } from '@/utils/event-filters';
 import { colors, spacing, typography } from '@/constants/theme';
@@ -119,22 +120,26 @@ export default function MuralScreen() {
         .filter((u): u is string => !!u),
     [visibleEvents]
   );
-  // Embedded dimensions (figma-seed events have these baked in). Lets
-  // useMuralDimensions skip the Image.getSize() round-trip — Mural mounts
-  // instantly for the demo set instead of waiting 10–15s for 32MB of PNGs
-  // to download just so we can read their width/height.
+  // Known poster dimensions, so useMuralDimensions can skip the
+  // Image.getSize() round-trip. Two sources, in order:
+  //   1. poster_width / poster_height on the row (MockEvent extensions — the
+  //      real `events` table has no such columns yet).
+  //   2. src/data/posterDimensions.ts — a build-time manifest of every seeded
+  //      poster, measured from the source assets.
+  // Without (2), a live Supabase row resolves through NOTHING and the whole
+  // wall blocks on ~50 sequential-ish network measures before first paint,
+  // then downloads every image again to draw it. User-uploaded posters aren't
+  // in the manifest and still measure at runtime — the wall just doesn't wait
+  // for the seeded majority any more.
   const presetDimensions = useMemo(() => {
     const map = new Map<string, { width: number; height: number }>();
     for (const e of visibleEvents) {
-      // poster_width / poster_height are MockEvent extensions — real
-      // EventWithRelations rows from Supabase don't have them yet, so the
-      // cast keeps both code paths typesafe.
+      if (!e.poster_url) continue;
       const me = e as typeof e & {
         poster_width?: number;
         poster_height?: number;
       };
       if (
-        e.poster_url &&
         typeof me.poster_width === 'number' &&
         typeof me.poster_height === 'number'
       ) {
@@ -142,7 +147,10 @@ export default function MuralScreen() {
           width: me.poster_width,
           height: me.poster_height,
         });
+        continue;
       }
+      const seeded = getSeedPosterSize(e.poster_url);
+      if (seeded) map.set(e.poster_url, seeded);
     }
     return map;
   }, [visibleEvents]);
@@ -359,7 +367,9 @@ function SkeletonWall({ viewportWidth, viewportHeight }: SkeletonWallProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
+  // Same ground as the header, so the margin around the framed wall reads as
+  // app chrome rather than as more empty wall.
+  container: { flex: 1, backgroundColor: colors.appleMail },
   // Header is a flex item, not an absolute overlay. The earlier overlay
   // design caused the canvas's top posters to render UNDER the search bar /
   // category chips because canvasSlot's flex:1 extended to y=0. With the
@@ -370,10 +380,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.appleMail,
   },
   // canvasSlot fills the remaining space below the (now flex) header.
-  // Small bottom margin so the wall doesn't sit flush against the
-  // BottomNav border — gives a "framed" feel instead of "clipped at the
-  // edge of the screen."
-  canvasSlot: { flex: 1, marginBottom: 8 },
+  // A small margin on three sides sits the wall inside the screen as a
+  // bounded panel (MuralCanvas draws the hairline frame), so hitting a pan
+  // limit reads as "the wall ends here" rather than "the content ran out".
+  canvasSlot: {
+    flex: 1,
+    marginHorizontal: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   errorWrap: { flex: 1, backgroundColor: colors.appleMail },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
@@ -385,7 +399,9 @@ const styles = StyleSheet.create({
   },
   skeletonContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.white,
+    // Same wall surface the real canvas uses, so the skeleton → posters
+    // handover doesn't flash a different background colour.
+    backgroundColor: colors.surface,
   },
   skeletonPoster: {
     position: 'absolute',

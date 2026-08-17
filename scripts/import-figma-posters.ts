@@ -241,6 +241,39 @@ async function compressToWebP(bytes: Buffer): Promise<Buffer> {
   return sharp(bytes).webp({ quality: 80 }).toBuffer();
 }
 
+/**
+ * Refuse to upload a blank poster.
+ *
+ * The Figma asset endpoint can return a 200 with an empty (fully transparent)
+ * render. Compressed to WebP that is a valid ~1.5 KB image with a completely
+ * zeroed alpha channel — it downloads fine, decodes fine, and paints nothing.
+ * Seven of the seeded posters shipped in that state and showed up as invisible
+ * tiles on the Mural. Nothing downstream can detect it, so it has to fail here.
+ */
+async function assertNotBlank(eventId: string, bytes: Buffer): Promise<void> {
+  const image = sharp(bytes);
+  const meta = await image.metadata();
+  if (!meta.hasAlpha) return;
+  const { data, info } = await image
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let opaque = 0;
+  let total = 0;
+  for (let i = 0; i < data.length; i += info.channels * 53) {
+    total += 1;
+    if (data[i + 3] > 10) opaque += 1;
+  }
+  const fraction = total === 0 ? 1 : opaque / total;
+  if (fraction < 0.05) {
+    throw new Error(
+      `${eventId}: Figma returned a blank (fully transparent) asset — ` +
+        `${(fraction * 100).toFixed(1)}% visible pixels. Re-export the frame ` +
+        `from Figma and update its asset UUID before re-running.`
+    );
+  }
+}
+
 async function uploadPoster(eventId: string, bytes: Buffer): Promise<string> {
   // .webp extension matches the actual encoded format. Old .png paths from a
   // previous run stay in Storage but stop being referenced once mockEvents.ts
@@ -282,6 +315,7 @@ async function main() {
     }
 
     const webp = await compressToWebP(bytes);
+    await assertNotBlank(mapping.eventId, webp);
     const ratio = ((webp.length / bytes.length) * 100).toFixed(1);
     console.log(
       `  ${mapping.eventId} → webp ${webp.length} bytes (${ratio}% of source)`

@@ -6,12 +6,11 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDecay,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { MuralPoster } from './MuralPoster';
 import type { MuralLayout, PosterRect } from '@/hooks/useMuralLayout';
-import { colors } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 
 interface MuralCanvasProps {
   layout: MuralLayout;
@@ -28,14 +27,6 @@ interface MuralCanvasProps {
 // interaction is free 2D panning. Pinch-zoom is intentionally absent: the
 // brief is a "fixed-zoom wall plane that can be freely panned."
 const FIXED_SCALE = 1;
-// Progressive (iOS-style) overscroll. Near the edge the rubber band gives at
-// slope RUBBER_BAND_COEFF (0.35 — firmer than the old linear 0.4), then
-// stiffens the further you pull, asymptotically capping the pull at
-// RUBBER_BAND_MAX_FRACTION of the viewport. So however hard or fast the drag,
-// the wall can never be dragged more than ~8% of the screen past its edge —
-// tuned deliberately firm so a normal pull visibly resists. See progressiveGive().
-const RUBBER_BAND_COEFF = 0.35;
-const RUBBER_BAND_MAX_FRACTION = 0.08;
 const TAP_MAX_DISTANCE = 10;
 
 // On web we intentionally skip the Reanimated Babel plugin (see
@@ -44,18 +35,6 @@ const TAP_MAX_DISTANCE = 10;
 // explicit acknowledgement gesture-handler wants. On native, we keep the
 // default (UI-thread worklets) so jitter-free panning keeps working.
 const RUN_GESTURE_ON_JS = Platform.OS === 'web';
-
-// Edge snap-back tuning. SNAP_SPRING is a firm, quick spring used when the wall
-// is released while overscrolled — a decisive "lock back into place". Its
-// overshoot resolves the OVERSCROLLED axis back toward the clamped edge, i.e.
-// into the wall, never out into empty space. SNAP_RUBBER_FACTOR is the firmer
-// overshoot return for a momentum flick that carries past an edge.
-const SNAP_SPRING = {
-  damping: 24,
-  stiffness: 280,
-  mass: 0.6,
-};
-const SNAP_RUBBER_FACTOR = 0.1;
 
 // Repositioning animations use withTiming (monotonic — never overshoots its
 // target), so a relayout clamp or a refresh shuffle can NEVER momentarily
@@ -67,11 +46,22 @@ const SHUFFLE_DURATION = 480; // ms — glide to a random spot on refresh
  * Free-pan canvas for the mural — a large fixed-zoom poster wall.
  *
  * Interaction: pan (drag) in any direction + tap. A flick keeps gliding
- * (momentum) and rubber-stops at the wall edges, so the plane reads as a
- * space you roam rather than a carousel you swipe. There is no zoom: the wall
- * sits at a fixed scale where posters are Figma-sized, and the canvas (from
- * useMuralLayout) is naturally bigger than the viewport in BOTH axes — that's
+ * (momentum) and STOPS DEAD at the wall edges, so the plane reads as a space
+ * you roam rather than a carousel you swipe. There is no zoom: the wall sits
+ * at a fixed scale where posters are Figma-sized, and the canvas (from
+ * useMuralLayout) is guaranteed bigger than the viewport in BOTH axes — that's
  * what makes the 2D exploration work.
+ *
+ * ## Hard edges (no overscroll)
+ *
+ * The wall does NOT rubber-band. Drag, flick and wheel are all hard-clamped to
+ * [viewport − canvas, 0] on each axis, so the canvas can never be pulled past
+ * its own edge and there is never a frame where empty backdrop is visible.
+ * The previous progressive rubber band let a drag pull the wall up to 8% of
+ * the viewport off-screen and then snapped it back — which is what read as
+ * "you go past the edge and it snaps back" and flashed a full-width white
+ * band. A wall you cannot pull off its mounting is what makes the edge feel
+ * definite; the layout's FRAME margin is what makes it *look* definite.
  *
  * Bounds are a SINGLE SOURCE OF TRUTH held in shared values (canvasW/H, vpW/H)
  * that the pan gesture reads LIVE at event time. The gesture is built ONCE with
@@ -80,9 +70,8 @@ const SHUFFLE_DURATION = 480; // ms — glide to a random spot on refresh
  * bounds settled) was the "first drag drifts, second drag locks in" bug. When
  * the canvas exceeds the viewport, translate is clamped so the canvas edges
  * align with the viewport edges (max = 0, min = viewport − canvas). When it
- * fits inside the viewport (a tiny filtered set), translate locks to centre.
- * During an active drag, exceeding bounds applies progressive rubber-band
- * resistance; on release the wall springs/decays back into bounds.
+ * fits inside the viewport (only reachable with a degenerate viewport — the
+ * layout guarantees a wall bigger than the screen), translate locks to centre.
  *
  * Initial framing: the wall is centred the instant real bounds exist (the
  * bounds-sync effect), not via useSharedValue's one-shot initialiser — that
@@ -292,52 +281,26 @@ export function MuralCanvas({
           const newY = savedTranslateY.value + e.translationY;
           const xBounds = boundsForWorklet(vpW.value, canvasW.value, scale.value);
           const yBounds = boundsForWorklet(vpH.value, canvasH.value, scale.value);
-          // Pull past the wall edges with progressive rubber-band resistance —
-          // the further you drag the stiffer it gets, hard-capped at ~8% of the
-          // viewport so you can't wander far out. A brief peek of the white
-          // backdrop at the edge is the intended "you've hit a limit" cue.
-          translateX.value = rubberBand(newX, xBounds.min, xBounds.max, vpW.value);
-          translateY.value = rubberBand(newY, yBounds.min, yBounds.max, vpH.value);
+          // Hard clamp — the wall stops at its edge, full stop. No rubber
+          // band, so no white peek and nothing to snap back from.
+          translateX.value = clampWorklet(newX, xBounds.min, xBounds.max);
+          translateY.value = clampWorklet(newY, yBounds.min, yBounds.max);
         })
         .onEnd((e) => {
           if (vpW.value <= 0 || canvasW.value <= 0) return;
           const xBounds = boundsForWorklet(vpW.value, canvasW.value, scale.value);
           const yBounds = boundsForWorklet(vpH.value, canvasH.value, scale.value);
-          const xClamped = Math.max(
-            xBounds.min,
-            Math.min(xBounds.max, translateX.value)
-          );
-          const yClamped = Math.max(
-            yBounds.min,
-            Math.min(yBounds.max, translateY.value)
-          );
-          // Snap-back has two regimes, chosen per axis:
-          //  • Released while overscrolled past an edge → spring straight home
-          //    with a firm, quick spring (SNAP_SPRING). Its overshoot resolves
-          //    back toward the edge, i.e. into the wall — never out to white.
-          //  • Released in-bounds → withDecay glides with momentum and clamps;
-          //    a flick reaching an edge overshoots a touch then springs back,
-          //    firm (rubberBandFactor SNAP_RUBBER_FACTOR).
-          if (translateX.value !== xClamped) {
-            translateX.value = withSpring(xClamped, SNAP_SPRING);
-          } else {
-            translateX.value = withDecay({
-              velocity: e.velocityX,
-              clamp: [xBounds.min, xBounds.max],
-              rubberBandEffect: true,
-              rubberBandFactor: SNAP_RUBBER_FACTOR,
-            });
-          }
-          if (translateY.value !== yClamped) {
-            translateY.value = withSpring(yClamped, SNAP_SPRING);
-          } else {
-            translateY.value = withDecay({
-              velocity: e.velocityY,
-              clamp: [yBounds.min, yBounds.max],
-              rubberBandEffect: true,
-              rubberBandFactor: SNAP_RUBBER_FACTOR,
-            });
-          }
+          // Momentum glide that stops at the bounds. `rubberBandEffect` is
+          // deliberately off: a flick into an edge decelerates to rest ON the
+          // edge instead of overshooting into empty space and springing back.
+          translateX.value = withDecay({
+            velocity: e.velocityX,
+            clamp: [xBounds.min, xBounds.max],
+          });
+          translateY.value = withDecay({
+            velocity: e.velocityY,
+            clamp: [yBounds.min, yBounds.max],
+          });
         })
         .runOnJS(RUN_GESTURE_ON_JS),
     // Stable identity: bounds come from shared values read live, so no geometry
@@ -398,7 +361,10 @@ export function MuralCanvas({
             ]}
           >
             {posters.map((rect) => (
-              <MuralPoster key={rect.event.id} rect={rect} />
+              // rect.key, not rect.event.id — a sparse filtered set can show
+              // the same event in more than one slot (see useMuralLayout's
+              // recycling rule) and duplicate keys would drop siblings.
+              <MuralPoster key={rect.key} rect={rect} />
             ))}
           </Animated.View>
         </View>
@@ -441,27 +407,25 @@ function boundsForWorklet(viewport: number, canvas: number, s: number) {
   return { min: viewport - scaled, max: 0 };
 }
 
-// iOS-style progressive overscroll. `offset` is the distance dragged past an
-// edge; the returned give starts at slope RUBBER_BAND_COEFF and asymptotes to
-// `limit` (= RUBBER_BAND_MAX_FRACTION × viewport) as offset → ∞, so the wall can
-// never be pulled more than `limit` past its edge however hard you drag.
-function progressiveGive(offset: number, limit: number) {
+function clampWorklet(v: number, lo: number, hi: number) {
   'worklet';
-  return (1 - 1 / ((offset * RUBBER_BAND_COEFF) / limit + 1)) * limit;
-}
-
-function rubberBand(v: number, lo: number, hi: number, dim: number) {
-  'worklet';
-  const limit = dim * RUBBER_BAND_MAX_FRACTION;
-  if (v < lo) return lo - progressiveGive(lo - v, limit);
-  if (v > hi) return hi + progressiveGive(v - hi, limit);
-  return v;
+  return Math.max(lo, Math.min(hi, v));
 }
 
 const styles = StyleSheet.create({
   viewport: {
     flex: 1,
-    backgroundColor: colors.white,
+    // The wall's own surface. Everything that isn't a poster — the gutters
+    // between posters and the FRAME margin around the block — is this colour,
+    // so the wall reads as a paste-up surface rather than as "nothing here".
+    // Pure white was indistinguishable from an unloaded poster or a hole.
+    backgroundColor: colors.surface,
+    // A hairline round-cornered frame makes the wall a bounded object on the
+    // screen: when a pan hits its limit you can see the wall *ends*, instead
+    // of the canvas seeming to trail off past the screen edge.
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.neutral.divider,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
   gestureLayer: {

@@ -1,0 +1,140 @@
+{
+  "label": "before",
+  "firstPosterMs": 2564,
+  "allPostersMs": 6467,
+  "pageErrors": [],
+  "states": {
+    "landed": {
+      "posterCount": 50,
+      "imagesLoaded": 50,
+      "translate": {
+        "x": -335.68,
+        "y": -494.5,
+        "scale": 1
+      },
+      "canvasSize": {
+        "w": 1061,
+        "h": 1600
+      },
+      "slot": {
+        "w": 390,
+        "h": 611
+      },
+      "coverage": 1,
+      "biggestEmptyRect": {
+        "widthPx": 0,
+        "heightPx": 0,
+        "thinnestSidePx": 0,
+        "areaPx2": 0
+      }
+    },
+    "topLeftCorner": {
+      "posterCount": 50,
+      "imagesLoaded": 50,
+      "translate": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      },
+      "canvasSize": {
+        "w": 1061,
+        "h": 1600
+      },
+      "slot": {
+        "w": 390,
+        "h": 611
+      },
+      "coverage": 1,
+      "biggestEmptyRect": {
+        "widthPx": 0,
+        "heightPx": 0,
+        "thinnestSidePx": 0,
+        "areaPx2": 0
+      }
+    },
+    "bottomRightCorner": {
+      "posterCount": 50,
+      "imagesLoaded": 50,
+      "translate": {
+        "x": -671.36,
+        "y": -989,
+        "scale": 1
+      },
+      "canvasSize": {
+        "w": 1061,
+        "h": 1600
+      },
+      "slot": {
+        "w": 390,
+        "h": 611
+      },
+      "coverage": 0.9248,
+      "biggestEmptyRect": {
+        "widthPx": 80,
+        "heightPx": 200,
+        "thinnestSidePx": 80,
+        "areaPx2": 16000
+      }
+    },
+    "overscrollHeld": {
+      "posterCount": 50,
+      "imagesLoaded": 50,
+      "translate": {
+        "x": -695.81,
+        "y": -1023.13,
+        "scale": 1
+      },
+      "canvasSize": {
+        "w": 1061,
+        "h": 1600
+      },
+      "slot": {
+        "w": 390,
+        "h": 611
+      },
+      "coverage": 0.8197,
+      "biggestEmptyRect": {
+        "widthPx": 105,
+        "heightPx": 200,
+        "thinnestSidePx": 105,
+        "areaPx2": 21000
+      }
+    },
+    "afterRelease": {
+      "posterCount": 50,
+      "imagesLoaded": 50,
+      "translate": {
+        "x": -671.36,
+        "y": -989,
+        "scale": 1
+      },
+      "canvasSize": {
+        "w": 1061,
+        "h": 1600
+      },
+      "slot": {
+        "w": 390,
+        "h": 611
+      },
+      "coverage": 0.9248,
+      "biggestEmptyRect": {
+        "widthPx": 80,
+        "heightPx": 200,
+        "thinnestSidePx": 80,
+        "areaPx2": 16000
+      }
+    }
+  },
+  "gutters": {
+    "rowCount": 8,
+    "gapValues": [
+      0
+    ],
+    "rowRightEdgeSpreadPx": 138.8,
+    "rowLeftEdgeSpreadPx": 0
+  },
+  "snapBackPx": {
+    "x": 24.45,
+    "y": 34.13
+  }
+}

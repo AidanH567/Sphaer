@@ -12,6 +12,10 @@ module.exports = defineConfig([
   {
     ignores: [
       'dist/*',
+      // Gitignored scratch space — script caches (import-figma-posters) and
+      // throwaway `expo export` output for QA live here. Same reasoning as
+      // dist/*: linting bundler output is noise.
+      '.tmp/*',
       '.expo/*',
       // Claude Code's scratch worktrees. Abandoned copies of the app live here,
       // and linting them produced 26 problems in code nobody ships — which read
