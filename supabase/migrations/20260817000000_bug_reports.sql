@@ -54,9 +54,14 @@ CREATE TRIGGER protect_is_designer
 --    Pipeline: new → awaiting_ok → approved → fixed (rejected keeps
 --    its reason in status_reason). fix_prompt is drafted by the next
 --    phase; both columns exist now so triage ships without a migration.
+--    reporter is NULLABLE on purpose: inlet 1 is Tina writing through the
+--    service role from Telegram, where there is no app user — NULL means
+--    "filed by Tina/Aidan from outside the app". Client inserts can never
+--    be NULL: the RLS WITH CHECK requires auth.uid() = reporter, and
+--    auth.uid() = NULL is never true.
 CREATE TABLE IF NOT EXISTS public.bug_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  reporter UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  reporter UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   screen TEXT,
   app_version TEXT,

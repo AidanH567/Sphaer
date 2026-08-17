@@ -23,7 +23,8 @@ export type BugReportStatus =
 // GenericTable constraint (see moderation.service.ts for the war story).
 export type BugReportRow = {
   id: string;
-  reporter: string;
+  /** NULL = filed by Tina via the service role (Telegram inlet). */
+  reporter: string | null;
   description: string;
   screen: string | null;
   app_version: string | null;
