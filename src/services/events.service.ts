@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase';
-import { validateImageUpload } from '@/utils/upload-validation';
+import {
+  MAX_UPLOAD_BYTES,
+  UploadValidationError,
+  validateImageUpload,
+} from '@/utils/upload-validation';
+import { assertPngIsPlausible, base64ToBytes } from '@/utils/poster-guard';
+import { POSTER_HEIGHT, POSTER_WIDTH } from '@/utils/poster-template';
 import type { Event, EventInsert, EventUpdate, EventWithRelations, EventFilters } from '@/types/event.types';
 
 export async function getEvents(filters?: EventFilters): Promise<EventWithRelations[]> {
@@ -334,6 +340,63 @@ async function uploadEventImage(
   const { error } = await supabase.storage
     .from('event-posters')
     .upload(path, blob, { upsert: true, contentType: blob.type || `image/${ext}` });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from('event-posters').getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
+/**
+ * Upload a poster the app GENERATED (src/utils/poster-template.ts) rather than
+ * one the user picked from their photo library.
+ *
+ * Same bucket and same owner-folder RLS scheme as `uploadEventPoster`, with a
+ * `-poster` suffix so a generated poster and a later hand-picked one never
+ * overwrite each other. PNG is inside the bucket's `allowed_mime_types`
+ * allowlist (20260612050000_storage_image_mime_limits.sql), so no schema
+ * change was needed for this path.
+ *
+ * ── Why the bytes are decoded here instead of `fetch`ing a data: URI ─────────
+ * Every other upload in the app goes `fetch(uri) → blob → upload(blob)`. That
+ * cannot be reused: React Native's `fetch` does not reliably resolve `data:`
+ * URIs, and `Blob` on RN cannot be constructed from a typed array. The path
+ * that does work on iOS, Android and web alike is base64 → ArrayBuffer →
+ * `upload(arrayBuffer, { contentType })`, which is also what Supabase's own
+ * React Native storage docs recommend.
+ *
+ * Decoding here rather than in the caller is deliberate: it means the guard
+ * below runs on the EXACT bytes that go over the wire, not on a copy that was
+ * checked earlier and re-encoded since.
+ *
+ * Throws `PosterGenerationError` if the render is not a plausible poster, and
+ * `UploadValidationError` if it is somehow over the bucket's size cap. Both
+ * carry user-facing messages the screen can put straight into an Alert.
+ */
+export async function uploadGeneratedEventPoster(
+  userId: string,
+  eventId: string,
+  base64Png: string
+): Promise<string> {
+  const bytes = base64ToBytes(base64Png);
+  assertPngIsPlausible(bytes, POSTER_WIDTH, POSTER_HEIGHT);
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    const mb = (bytes.byteLength / 1024 / 1024).toFixed(1);
+    throw new UploadValidationError(
+      `The generated poster came out at ${mb} MB, over the ${
+        MAX_UPLOAD_BYTES / 1024 / 1024
+      } MB limit. Please try again.`
+    );
+  }
+
+  const path = `${userId}/${eventId}-poster.png`;
+  const { error } = await supabase.storage
+    .from('event-posters')
+    // `bytes.buffer` is exact-length — base64ToBytes slices rather than
+    // subarrays for precisely this reason.
+    .upload(path, bytes.buffer as ArrayBuffer, {
+      upsert: true,
+      contentType: 'image/png',
+    });
   if (error) throw error;
 
   const { data } = supabase.storage.from('event-posters').getPublicUrl(path);

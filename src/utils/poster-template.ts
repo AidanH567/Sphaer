@@ -30,7 +30,11 @@
  * one word early — not one that overflows the poster.
  */
 
-import { posterPalette, type PosterPalette } from '@/constants/theme';
+// Straight from the token module rather than through `@/constants/theme`,
+// which imports `react-native` — this file has to be importable by
+// scripts/qa-generate-poster.ts under plain Node. theme.ts re-exports these
+// same tokens for every component that needs them.
+import { posterPalette, type PosterPalette } from '@/constants/poster-palette';
 
 // ─── Canvas ──────────────────────────────────────────────────────────────────
 // 1080 × 1528 ≈ 0.707, the ISO/A-series ratio. Matches FALLBACK_ASPECT in
@@ -73,6 +77,19 @@ const TITLE_SIZE_LADDER = [104, 88, 76, 64, 54] as const;
 const TITLE_LINE_HEIGHT_RATIO = 1.06;
 /** Baseline offset within a line box — roughly the cap-height of the serif. */
 const TITLE_ASCENT_RATIO = 0.78;
+
+/**
+ * The accent mark drawn in the upper field when the event has no photo.
+ * Bars descend and narrow, ending well clear of BAND_TOP so the staircase and
+ * the type band never touch.
+ */
+const MARK_BAR_HEIGHT = 26;
+const MARK_BARS = [
+  { y: 232, widthRatio: 1 },
+  { y: 396, widthRatio: 0.72 },
+  { y: 560, widthRatio: 0.44 },
+  { y: 724, widthRatio: 0.22 },
+] as const;
 
 const DATE_SIZE = 40;
 const VENUE_SIZE = 34;
@@ -355,11 +372,25 @@ export function buildPosterLayout(input: PosterInput): PosterLayout {
   ];
   if (!hasPhoto) {
     // No photo means the top 56% would otherwise be an empty field of colour.
-    // Two heavy accent bars turn that into deliberate composition rather than
-    // dead space — and give the eye something at mural thumbnail size, where
-    // the title is barely legible anyway.
-    accents.push({ x: MARGIN, y: 220, width: COLUMN, height: 26, fill: accent });
-    accents.push({ x: MARGIN, y: 300, width: Math.round(COLUMN * 0.45), height: 26, fill: accent });
+    // A descending staircase of bars turns that into deliberate composition
+    // rather than dead space — and gives the eye something at mural thumbnail
+    // size, where the title is barely legible anyway.
+    //
+    // Two bars clustered at the top was the first attempt and it looked wrong:
+    // it left ~600px of nothing between them and the type band, so the poster
+    // read as an accident rather than a layout. The bars are spread down the
+    // field instead, narrowing as they go, so the weight leads the eye into
+    // the title. Deterministic — no per-event variation, because template
+    // choice is explicitly out of scope for v1.
+    MARK_BARS.forEach(({ y, widthRatio }) => {
+      accents.push({
+        x: MARGIN,
+        y,
+        width: Math.round(COLUMN * widthRatio),
+        height: MARK_BAR_HEIGHT,
+        fill: accent,
+      });
+    });
   }
 
   const texts: TextRun[] = [];

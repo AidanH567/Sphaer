@@ -20,8 +20,14 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { AddressAutocompleteInput, type SelectedAddress } from '@/components/ui/AddressAutocompleteInput';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
+import { Image } from 'expo-image';
 import { useEvent } from '@/hooks/useEvents';
-import { updateEvent } from '@/services/events.service';
+import { updateEvent, uploadGeneratedEventPoster } from '@/services/events.service';
+import { useGeneratedPoster, type GeneratedPoster } from '@/hooks/useGeneratedPoster';
+import {
+  GeneratedPosterCanvas,
+  posterCanvasHostStyle,
+} from '@/components/events/GeneratedPosterCanvas';
 import { geocodeAddress } from '@/lib/geocoding';
 import { EVENT_CATEGORIES } from '@/constants/categories';
 import type { EventUpdate } from '@/types/event.types';
@@ -42,6 +48,9 @@ export default function EditEventScreen() {
   const [price, setPrice] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  // Poster generated in this session, not yet uploaded. Held until Save so
+  // one tap on "Generate" does not mutate the activity behind the user's back.
+  const [generatedPoster, setGeneratedPoster] = useState<GeneratedPoster | null>(null);
   // Per-field validation errors — same pattern as create/index.tsx.
   const [errors, setErrors] = useState<{
     title?: string;
@@ -72,6 +81,34 @@ export default function EditEventScreen() {
     setCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
     );
+  }
+
+  // Reads the live form values, so a poster generated after fixing a typo in
+  // the title carries the corrected one.
+  const poster = useGeneratedPoster({
+    title,
+    startsAt: startsAt ? startsAt.toISOString() : undefined,
+    endsAt: endsAt ? endsAt.toISOString() : null,
+    locationName: selectedPlace?.name ?? event?.location_name ?? null,
+    address: address.trim() || null,
+  });
+
+  async function handleGeneratePoster() {
+    try {
+      const generated = await poster.generate();
+      setGeneratedPoster(generated);
+      if (generated.titleTruncated) {
+        Alert.alert(
+          'Poster made',
+          'Your title was a little long for the poster, so it was shortened there. The activity keeps its full title.'
+        );
+      }
+    } catch (e: unknown) {
+      Alert.alert(
+        "Couldn't make a poster",
+        e instanceof Error ? e.message : 'Please try again.'
+      );
+    }
   }
 
   async function handleSave() {
@@ -124,6 +161,16 @@ export default function EditEventScreen() {
           updates.lat = null;
           updates.lng = null;
         }
+      }
+
+      // Upload before the row update so a failed upload leaves the activity
+      // exactly as it was, rather than pointing poster_url at nothing.
+      if (generatedPoster) {
+        updates.poster_url = await uploadGeneratedEventPoster(
+          event.creator_id,
+          event.id,
+          generatedPoster.base64
+        );
       }
 
       await updateEvent(event.id, updates);
@@ -314,8 +361,71 @@ export default function EditEventScreen() {
           )}
         </View>
 
+        {/* Cover image. Read-only here except for one action: an activity with
+            no poster is a hole in the Mural, and this is where its creator can
+            fill it without leaving the app to make artwork. Swapping an
+            existing poster for a different photo still belongs to Create. */}
+        <View style={styles.posterSection}>
+          <Text style={styles.sectionLabel}>Cover image</Text>
+          {generatedPoster ? (
+            <>
+              <Image
+                source={{ uri: generatedPoster.dataUri }}
+                style={styles.posterPreview}
+                contentFit="cover"
+              />
+              <Text style={styles.posterHint}>
+                Made from your title, date and location. Save to attach it.
+              </Text>
+            </>
+          ) : event.poster_url ? (
+            <Image
+              source={{ uri: event.poster_url }}
+              style={styles.posterPreview}
+              contentFit="cover"
+            />
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
+                onPress={handleGeneratePoster}
+                disabled={!poster.canGenerate || poster.isGenerating}
+                accessibilityRole="button"
+                accessibilityLabel="Generate a poster"
+                accessibilityState={{ disabled: !poster.canGenerate || poster.isGenerating }}
+              >
+                <Ionicons
+                  name="sparkles-outline"
+                  size={18}
+                  color={
+                    poster.canGenerate ? colors.neutral.chocolate : colors.neutral.neutral400
+                  }
+                />
+                <Text
+                  style={[
+                    styles.generateLabel,
+                    !poster.canGenerate && styles.generateLabelDisabled,
+                  ]}
+                >
+                  {poster.isGenerating ? 'Making your poster…' : 'Generate a poster'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.posterHint}>
+                This activity has no cover image, so it shows as a blank tile on the Mural.
+              </Text>
+            </>
+          )}
+        </View>
+
         <Button label="Save changes" onPress={handleSave} isLoading={isSaving} />
       </ScrollView>
+
+      {/* Offscreen, at full 1080×1528 — see GeneratedPosterCanvas. */}
+      {poster.layout && !event.poster_url && !generatedPoster && (
+        <View style={posterCanvasHostStyle} pointerEvents="none">
+          <GeneratedPosterCanvas ref={poster.canvasRef} layout={poster.layout} />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -348,6 +458,34 @@ const styles = StyleSheet.create({
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: -spacing.sm },
   form: { gap: spacing.base },
+  posterSection: { gap: spacing.sm },
+  posterPreview: { width: '100%', height: 240, borderRadius: radius.md },
+  posterHint: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 12,
+    color: colors.neutral.meta,
+  },
+  // Mirrors the same control on the Create screen: outlined, secondary,
+  // never competing with the primary Save button.
+  generateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral.hiddenLines,
+    borderRadius: radius.sm,
+  },
+  generateRowDisabled: { opacity: 0.6 },
+  generateLabel: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral.chocolate,
+  },
+  generateLabelDisabled: { color: colors.neutral.neutral400 },
   // Error caption rendered under DateTimeFields (Input ships its own).
   fieldError: {
     fontFamily: typography.fontFamily.ui,

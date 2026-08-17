@@ -105,7 +105,10 @@ export function base64ToBytes(input: string): Uint8Array {
       bytes[out++] = (buffer >> bits) & 0xff;
     }
   }
-  return out === byteLength ? bytes : bytes.subarray(0, out);
+  // `slice`, not `subarray`: the result is handed to Supabase Storage as an
+  // ArrayBuffer, and a subarray's `.buffer` is the *whole* over-allocated
+  // buffer — which would upload trailing zero bytes and corrupt the PNG.
+  return out === byteLength ? bytes : bytes.slice(0, out);
 }
 
 export interface PngHeader {
@@ -189,9 +192,33 @@ export function isOpaqueColor(fill: string): boolean {
 }
 
 /**
+ * How far the rendered aspect ratio may drift from the layout's before we call
+ * it a failed render. 2% absorbs one pixel of integer rounding at poster size
+ * and nothing else — a squashed or cropped snapshot lands far outside it.
+ */
+export const MAX_ASPECT_DRIFT = 0.02;
+
+/**
  * Output check on the rasterised PNG. `expectedWidth`/`expectedHeight` are the
- * canvas dimensions the layout asked for; a mismatch means the offscreen SVG
- * had not laid out when we snapshotted it.
+ * canvas dimensions the layout asked for.
+ *
+ * ── Why this is not an equality check ────────────────────────────────────────
+ * It was, and that was wrong. The three renderers do not agree on units:
+ *
+ *   * Android — `SvgView.toDataURL(w, h)` allocates a Bitmap of exactly w×h
+ *     and fits the viewBox to the bitmap, so the PNG is 1080×1528 on the nose.
+ *   * Web — the `elements.web` shim sizes its canvas from `options.width` /
+ *     `options.height`, so also exact.
+ *   * iOS — `getDataURLWithBounds:` renders through a `UIGraphicsImageRenderer`
+ *     whose format defaults to the *screen scale*. On a @3x iPhone the very
+ *     same request comes back 3240×4584. That is a correct, higher-resolution
+ *     poster, and an equality check would have rejected every one of them.
+ *
+ * So the invariants worth asserting are: it is a PNG, it is at least the
+ * resolution we asked for, its proportions are the ones the layout solved, and
+ * it is too big to be an empty canvas. Those still catch the whole failure
+ * class this guard exists for — a 0×0 or 1×1 snapshot taken before the
+ * offscreen SVG laid out, or a byte-empty render.
  */
 export function assertPngIsPlausible(
   bytes: Uint8Array,
@@ -204,10 +231,18 @@ export function assertPngIsPlausible(
       "The poster didn't render properly on this device. Please try again."
     );
   }
-  if (header.width !== expectedWidth || header.height !== expectedHeight) {
+  if (header.width < expectedWidth || header.height < expectedHeight) {
     throw new PosterGenerationError(
-      `The poster rendered at ${header.width}×${header.height} instead of ` +
-        `${expectedWidth}×${expectedHeight}. Please try again.`
+      `The poster rendered at ${header.width}×${header.height}, smaller than the ` +
+        `${expectedWidth}×${expectedHeight} it was drawn at. Please try again.`
+    );
+  }
+  const expectedAspect = expectedWidth / expectedHeight;
+  const actualAspect = header.width / header.height;
+  if (Math.abs(actualAspect - expectedAspect) / expectedAspect > MAX_ASPECT_DRIFT) {
+    throw new PosterGenerationError(
+      `The poster rendered at the wrong shape (${header.width}×${header.height}). ` +
+        'Please try again.'
     );
   }
   if (bytes.length < MIN_POSTER_BYTES) {

@@ -16,3 +16,6 @@ android/
 
 expo-env.d.ts
 # @end expo-cli
+# Poster QA renders regenerate from scripts/qa-generate-poster.ts.
+# The PNGs are committed as evidence; the intermediate SVGs are not.
+docs/poster-qa/*.svg
