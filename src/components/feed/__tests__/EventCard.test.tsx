@@ -125,4 +125,25 @@ describe('EventCard', () => {
     expect(mockPush).toHaveBeenCalledWith('/event/evt-test');
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  it('renders an event whose categories were retired from the vocabulary', () => {
+    // The category list went from 14 to 36 on 2026-08-18 and nine of the old
+    // names did not survive. `events.categories` is `text[]` with no CHECK, so
+    // production rows keep the old values until the rename migration is
+    // applied by hand — 63 rows on the day this was written.
+    //
+    // Nothing on the card is gated on a category being a known one, and this
+    // is what says so: the card still renders in full, and it still opens.
+    // What such an event loses is not display, it is reachability — no
+    // combination of filter chips can produce it, because the feed query
+    // matches categories by exact string.
+    const event = makeEvent({ categories: ['Wellness', 'Concert', 'Service'] });
+    const { getByText, getByLabelText } = render(<EventCard event={event} />);
+
+    expect(getByText('Synth Jam at Görli')).toBeTruthy();
+    expect(getByText('Görlitzer Park')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Open Synth Jam at Görli'));
+    expect(mockPush).toHaveBeenCalledWith('/event/evt-test');
+  });
 });

@@ -72,20 +72,75 @@ export function posterFamilyById(id: string): PosterFamily | undefined {
  * where the title genuinely is the poster.
  */
 const CATEGORY_FAMILIES: Record<string, readonly string[]> = {
-  music: ['spine', 'panel'],
-  concert: ['spine', 'block'],
-  film: ['panel', 'spine'],
+  // ── Lara's vocabulary (2026-08-18) ──
   art: ['panel', 'block'],
+  film: ['panel', 'spine'],
+  music: ['spine', 'panel'],
+  wellbeing: ['block', 'panel'],
+  'performing arts': ['spine', 'panel'],
+  craft: ['block', 'panel'],
+  'design, illustration, animation': ['panel', 'block'],
+  photography: ['panel', 'classic'],
+  festivals: ['spine', 'block'],
+  'street art': ['panel', 'spine'],
+  fashion: ['panel', 'spine'],
+  exhibitions: ['panel', 'block'],
+  academic: ['classic', 'block'],
+  tech: ['classic', 'block'],
+  tattoo: ['panel', 'block'],
+  gaming: ['block', 'spine'],
+  'jam session': ['spine', 'panel'],
+  spiritual: ['block', 'classic'],
+  talk: ['classic', 'spine'],
+  workshops: ['block', 'classic'],
+  'social movements': ['spine', 'classic'],
+  coaching: ['block', 'classic'],
+  learning: ['classic', 'block'],
+  'meet ups': ['classic', 'panel'],
+  'food & drinks': ['panel', 'block'],
+  markets: ['panel', 'classic'],
+  'pop-ups': ['block', 'spine'],
+  literature: ['classic', 'spine'],
+  language: ['classic', 'block'],
+  sports: ['spine', 'block'],
+  outdoors: ['panel', 'spine'],
+  volunteering: ['classic', 'block'],
+  neighbourhood: ['classic', 'panel'],
+  'family & kids': ['block', 'panel'],
+  clubbing: ['spine', 'block'],
+  'queer life': ['spine', 'panel'],
+
+  // ── Retired names, kept on purpose ──
+  // `events.categories` is unvalidated `text[]`, so an old value survives in
+  // the database until the rename migration is applied — and posters are
+  // regenerated on demand, so dropping these keys would send those events to
+  // the full family set and change their composition for no reason.
+  //
+  // Every key here mirrors the shortlist of the name it maps to in
+  // `LEGACY_CATEGORY_ALIASES`, which buys one invariant worth having: applying
+  // the migration cannot change a single poster. `poster-families.test.ts`
+  // asserts it holds for every alias.
+  //
+  // Two keys therefore moved to honour that: `therapy` (was `block, classic`)
+  // now follows Wellbeing, and `concert` (was `spine, block`) now follows
+  // Music. A regenerated poster for those events — 1 and 9 rows in production
+  // — can land on a different composition than it would have yesterday. That
+  // is a one-time cost paid here rather than an unexplained shift later.
   workshop: ['block', 'classic'],
   wellness: ['block', 'panel'],
-  therapy: ['block', 'classic'],
+  therapy: ['block', 'panel'],
   coach: ['block', 'classic'],
-  talk: ['classic', 'spine'],
   education: ['classic', 'block'],
   meet: ['classic', 'panel'],
+  concert: ['spine', 'panel'],
   job: ['classic', 'block'],
   service: ['classic', 'block'],
-  'social movements': ['spine', 'classic'],
+  // Aggregator-written values that were never in `EVENT_CATEGORIES`.
+  community: ['classic', 'panel'],
+  technology: ['classic', 'block'],
+  nightlife: ['spine', 'block'],
+  dance: ['spine', 'panel'],
+  exhibition: ['panel', 'block'],
 };
 
 const ALL_IDS = POSTER_FAMILIES.map((f) => f.id);
