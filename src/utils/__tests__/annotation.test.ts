@@ -18,6 +18,10 @@
 import {
   ANNOTATION_STROKE_RATIO,
   AnnotationError,
+  CAPTURE_FIDELITY_MIN,
+  FIDELITY_TRANSPARENT_ALPHA,
+  assertCaptureFidelity,
+  compareAlphaGrids,
   appendPoint,
   assertAnnotationBoxIsUntransformed,
   dropLastStroke,
@@ -328,5 +332,114 @@ describe('assertAnnotationBoxIsUntransformed', () => {
   it('does nothing when the ref carries no measurable box', () => {
     expect(() => assertAnnotationBoxIsUntransformed(null, 1170, 2532, true)).not.toThrow();
     expect(() => assertAnnotationBoxIsUntransformed({}, 1170, 2532, true)).not.toThrow();
+  });
+});
+
+/**
+ * The capture-fidelity guard.
+ *
+ * This is the check that exists because "the file is valid" kept being
+ * mistaken for "the file is right". Report 97398534 shipped a PNG of the
+ * correct dimensions containing a circle round nothing, and every structural
+ * assertion in this codebase passed it. The property asserted below is that a
+ * capture which LOST its background is refused, and a capture that kept it is
+ * not — measured on sampled pixels, not inferred from bytes.
+ */
+describe('compareAlphaGrids', () => {
+  /** RGBA buffer of `n` cells with the given alphas. */
+  function grid(alphas: number[]): Uint8ClampedArray {
+    const out = new Uint8ClampedArray(alphas.length * 4);
+    alphas.forEach((a, i) => {
+      out[i * 4 + 3] = a;
+    });
+    return out;
+  }
+
+  it('counts a cell only where the SOURCE has something to lose', () => {
+    // Cells the source left empty cannot be "kept" or "lost" — counting them
+    // would let a mostly-transparent screenshot inflate its own score.
+    const source = grid([255, 0, 255, 0]);
+    const capture = grid([255, 255, 255, 255]);
+    expect(compareAlphaGrids(source, capture)).toEqual({
+      sourceOpaqueCells: 2,
+      matchedCells: 2,
+    });
+  });
+
+  it('scores a capture that kept everything at 1', () => {
+    const g = grid([255, 255, 255, 255]);
+    const { sourceOpaqueCells, matchedCells } = compareAlphaGrids(g, g);
+    expect(matchedCells / sourceOpaqueCells).toBe(1);
+  });
+
+  it('scores the blank-background failure near 0', () => {
+    // What shipped: the strokes made it, the screenshot did not.
+    const source = grid([255, 255, 255, 255, 255, 255, 255, 255]);
+    const strokesOnly = grid([0, 255, 0, 0, 0, 0, 0, 0]);
+    const { sourceOpaqueCells, matchedCells } = compareAlphaGrids(source, strokesOnly);
+    expect(matchedCells / sourceOpaqueCells).toBeLessThan(0.2);
+  });
+
+  it('treats barely-there alpha as absent', () => {
+    // Anti-aliasing leaves a whisper of alpha behind. Counting it as content
+    // would score a blank capture as a full one.
+    const source = grid([255, 255]);
+    const ghost = grid([FIDELITY_TRANSPARENT_ALPHA, FIDELITY_TRANSPARENT_ALPHA]);
+    expect(compareAlphaGrids(source, ghost).matchedCells).toBe(0);
+  });
+});
+
+describe('assertCaptureFidelity', () => {
+  it('refuses a capture that lost its screenshot', () => {
+    expect(() =>
+      assertCaptureFidelity({ sourceOpaqueCells: 1000, matchedCells: 60 })
+    ).toThrow(AnnotationError);
+  });
+
+  it('explains the refusal in the reporter’s terms, not the renderer’s', () => {
+    // The person reading this drew a circle on a screenshot. "Fidelity ratio
+    // below threshold" tells them nothing they can act on.
+    expect(() =>
+      assertCaptureFidelity({ sourceOpaqueCells: 1000, matchedCells: 0 })
+    ).toThrow(/screenshot/i);
+    expect(() =>
+      assertCaptureFidelity({ sourceOpaqueCells: 1000, matchedCells: 0 })
+    ).toThrow(/nothing was sent/i);
+  });
+
+  it('accepts a capture that kept the screenshot under its marks', () => {
+    // A marker circle covers a percent or two — well inside the allowance.
+    expect(() =>
+      assertCaptureFidelity({ sourceOpaqueCells: 1000, matchedCells: 985 })
+    ).not.toThrow();
+  });
+
+  it('holds the line exactly at CAPTURE_FIDELITY_MIN', () => {
+    const cells = 1000;
+    expect(() =>
+      assertCaptureFidelity({
+        sourceOpaqueCells: cells,
+        matchedCells: Math.ceil(cells * CAPTURE_FIDELITY_MIN),
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertCaptureFidelity({
+        sourceOpaqueCells: cells,
+        matchedCells: Math.floor(cells * CAPTURE_FIDELITY_MIN) - 1,
+      })
+    ).toThrow(AnnotationError);
+  });
+
+  it('passes when the platform could not sample pixels', () => {
+    // Native returns null. The readiness invariant covers that path; failing
+    // closed here would refuse every annotation made on a phone.
+    expect(() => assertCaptureFidelity(null)).not.toThrow();
+  });
+
+  it('passes vacuously on a fully transparent source', () => {
+    // Nothing to lose, so nothing to prove. The user picked that image.
+    expect(() =>
+      assertCaptureFidelity({ sourceOpaqueCells: 0, matchedCells: 0 })
+    ).not.toThrow();
   });
 });
