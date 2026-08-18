@@ -1,4 +1,5 @@
 import React from 'react';
+import { ScrollView } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // Imports of the mocked services so assertions can reach the jest.fn()s.
@@ -13,12 +14,17 @@ import CreateScreen from '../index';
 
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
+// Route params are mutable per test: the screen reads `?poster=1` to decide
+// whether it opens focused on the poster generator, so a test needs to be able
+// to arrive both ways.
+let mockSearchParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     back: mockRouterBack,
     replace: mockRouterReplace,
     push: jest.fn(),
   }),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 // Auth: mock at the context-hook level so we don't need the real provider
@@ -144,6 +150,8 @@ jest.setTimeout(20000);
 describe('CreateScreen — Create Activity (Figma 6277:10002)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: arrived at the form normally, not via "+ → A poster".
+    mockSearchParams = {};
   });
 
   it('renders the nav chrome, pickers and CTAs with their a11y affordances', async () => {
@@ -237,5 +245,131 @@ describe('CreateScreen — Create Activity (Figma 6277:10002)', () => {
     fireEvent.press(closeButtons[closeButtons.length - 1]);
 
     await waitFor(() => expect(view.queryByText('Untitled activity')).toBeNull());
+  });
+
+  /**
+   * ── Arriving from "+ → A poster" ─────────────────────────────────────────
+   *
+   * The generator shipped and Aidan could not find it twice. It was invisible
+   * three ways at once: buried in section 5 of twelve, hidden outright once a
+   * cover existed, and greyed out with the reason stated nowhere the eye lands.
+   *
+   * These tests hold the fixes for all three, because every one of them is the
+   * kind of thing that regresses silently — a dead control looks identical to a
+   * working one until you press it.
+   */
+  describe('opened from the create menu as "A poster"', () => {
+    beforeEach(() => {
+      mockSearchParams = { poster: '1' };
+    });
+
+    it('says what the section is for instead of dropping the user in mid-form', async () => {
+      const view = await renderCreateScreen();
+
+      expect(
+        view.getByText(/Sphaer can make a poster from this activity/i)
+      ).toBeTruthy();
+    });
+
+    it('scrolls the poster section into view once it has been laid out', async () => {
+      const scrollTo = jest
+        .spyOn(ScrollView.prototype, 'scrollTo')
+        .mockImplementation(() => {});
+      try {
+        const view = await renderCreateScreen();
+        expect(scrollTo).not.toHaveBeenCalled();
+
+        // The screen scrolls from the section's own onLayout rather than from a
+        // mount effect, because on mount there is no measured y to scroll to.
+        fireEvent(view.getByTestId('poster-section'), 'layout', {
+          nativeEvent: { layout: { x: 0, y: 900, width: 360, height: 300 } },
+        });
+
+        expect(scrollTo).toHaveBeenCalledWith(
+          expect.objectContaining({ y: 884, animated: true })
+        );
+      } finally {
+        scrollTo.mockRestore();
+      }
+    });
+
+    it('does not yank the user back if the section is laid out again', async () => {
+      const scrollTo = jest
+        .spyOn(ScrollView.prototype, 'scrollTo')
+        .mockImplementation(() => {});
+      try {
+        const view = await renderCreateScreen();
+        const layout = {
+          nativeEvent: { layout: { x: 0, y: 900, width: 360, height: 300 } },
+        };
+        fireEvent(view.getByTestId('poster-section'), 'layout', layout);
+        fireEvent(view.getByTestId('poster-section'), 'layout', layout);
+        fireEvent(view.getByTestId('poster-section'), 'layout', layout);
+
+        expect(scrollTo).toHaveBeenCalledTimes(1);
+      } finally {
+        scrollTo.mockRestore();
+      }
+    });
+  });
+
+  describe('the poster generator, when it cannot run yet', () => {
+    /**
+     * The old UI greyed the button and left the reason to a caption that only
+     * rendered while no cover existed. A disabled control with no visible cause
+     * reads as broken — which is exactly how this feature got missed.
+     */
+    it('names the two fields it needs rather than only greying the button', async () => {
+      const view = await renderCreateScreen();
+
+      expect(
+        view.getByText(/A poster is made from your activity, so it needs two things first/i)
+      ).toBeTruthy();
+      expect(view.getByRole('button', { name: /A title — still needed/i })).toBeTruthy();
+      expect(
+        view.getByRole('button', { name: /A start date and time — still needed/i })
+      ).toBeTruthy();
+    });
+
+    it('ticks a requirement off as soon as it is satisfied', async () => {
+      const view = await renderCreateScreen();
+
+      fireEvent.changeText(view.getByLabelText('Title'), 'Nachtstrom');
+
+      expect(view.getByRole('button', { name: 'A title — done' })).toBeTruthy();
+      // The start time is still outstanding, so the list stays up.
+      expect(
+        view.getByRole('button', { name: /A start date and time — still needed/i })
+      ).toBeTruthy();
+    });
+
+    it('keeps the generate button disabled while anything is missing', async () => {
+      const view = await renderCreateScreen();
+
+      const generate = view.getByRole('button', { name: 'Generate a poster' });
+      expect(generate.props.accessibilityState.disabled).toBe(true);
+    });
+
+    it('takes the user to the field a missing requirement names', async () => {
+      const scrollTo = jest
+        .spyOn(ScrollView.prototype, 'scrollTo')
+        .mockImplementation(() => {});
+      try {
+        const view = await renderCreateScreen();
+
+        // Title is section 2 and Date is section 7 — on opposite sides of the
+        // cover block, so naming them without going there is not much help.
+        fireEvent(view.getByTestId('title-section'), 'layout', {
+          nativeEvent: { layout: { x: 0, y: 240, width: 360, height: 120 } },
+        });
+        scrollTo.mockClear();
+
+        fireEvent.press(view.getByRole('button', { name: /A title — still needed/i }));
+
+        expect(scrollTo).toHaveBeenCalled();
+      } finally {
+        scrollTo.mockRestore();
+      }
+    });
   });
 });
