@@ -213,9 +213,9 @@ One line each, phone-actionable. Nothing in here is a code problem.
 |---|---|---|
 | A1 | **Start Apple Developer enrolment ($99/yr)** — identity verification runs 24–48h, so start it before anything else. | Gates Sign in with Apple, signing certs, App Store Connect, TestFlight. The longest clock on the project. |
 | A2 | **Run `eas init`** in the repo once. | `app.config.js:41` deliberately leaves `extra.eas.projectId` unset with a comment explaining why — inventing one produces a config that looks complete and fails at the build server. EAS cannot build without it. |
-| A3 | **Put a real Google Maps key in `.env.local`** — the value there is literally `placeholder_maps_key`. | The map is one of the three headline feed modes and it cannot work until a real key exists. `app.config.js` will now correctly interpolate it; the key itself is the only missing piece. |
+| A3 | **Put a real Google Maps key in `.env.local`** — the value there is literally `placeholder_maps_key`. | The map is one of the three headline feed modes and it cannot work until a real key exists. `app.config.js` will now correctly interpolate it; the key itself is the only missing piece. | ✅ **DONE 2026-08-18** — key `AIza…MPc7Q` created in a dedicated `Sphaer` Google Cloud project, verified against Geocoding + Places(New) + Maps JS with real Berlin data, written to `.env.local`, and shipped in the deployed web build. Aidan confirmed tiles render. ⚠️ STILL OPEN: the key is UNRESTRICTED — restrict it to `com.sphaer.app` and the Vercel domain.
 | A4 | **Replace the blank seeded posters in Supabase Storage.** Run `npx tsx scripts/audit-posters.ts` to get the exact filenames — it measures visible pixels against production. | These files return HTTP 200, decode fine and paint nothing, so they reach the Mural as holes. Count is recorded as **7 in `scripts/audit-posters.ts`'s header and 8 in `docs/poster-qa/README.md`** — the repo contradicts itself; the script settles it. |
-| A5 | **Apply `supabase/migrations/20260817200000_events_aggregated_source.sql`** with `npx supabase db query --linked --file <path>`. | Its header says **NOT APPLIED**. It is the schema half of the event scraper (Lara #2) and it is already written — see the DECIDED BUT UNBUILT entry. One command unblocks the whole feature. |
+| A5 | **Apply `supabase/migrations/20260817200000_events_aggregated_source.sql`** with `npx supabase db query --linked --file <path>`. | Its header says **NOT APPLIED**. It is the schema half of the event scraper (Lara #2) and it is already written — see the DECIDED BUT UNBUILT entry. One command unblocks the whole feature. | ✅ **DONE 2026-08-18** — applied with `db query --linked --file`; `source`, `external_id`, `source_url` + 2 indexes verified live, both triggers intact, 56 events and 41 profiles unchanged. 96 aggregated events then imported (see SHIPPED).
 | A6 | **Verify the `delete-account` edge function is deployed** (needs an authorised Supabase session). | Apple hard-requires in-app account deletion. The UI and `supabase/functions/delete-account` both exist in the repo; if the function isn't deployed, tapping Delete Account errors — a guaranteed rejection. |
 | A7 | **Flip two Supabase dashboard toggles**: enable leaked-password protection; allowlist the password-reset redirect URLs. | Reset emails dead-end without the allowlist. |
 | A8 | **Restrict the Google Maps API key** in Google Cloud Console to bundle IDs `com.sphaer.app` (iOS + Android). | The key is bundled into the APK/IPA — unavoidable on Expo. Unrestricted, anyone can spend your quota. |
@@ -224,6 +224,33 @@ One line each, phone-actionable. Nothing in here is a code problem.
 | A11 | **Give Rabon's answers** — Master Flow node id (icons), developer-page component (inbox type), and calls on R6 / R7 / R9. | Four design items are stalled with nothing an agent can act on. See UNDECIDED. |
 | A12 | **Push `prep/2026-08-17-buildable`** (20 commits, still local). | `push: false`. Every push is yours. |
 | A13 | **Pin the Mural supply plan (Lara #1 + #10)** with Lara — poster swapping cadence, circle images, how the wall stays fed. | The one point on Lara's list that has never had specifics. Code cannot proceed without them. |
+
+---
+
+## ✅ SHIPPED 2026-08-18 (afternoon)
+
+- **The Google Maps key — the map has NEVER worked before today.** Two stacked
+  defects: `app.json` held the literal string `"$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"`
+  until 08-17 (static JSON does no substitution), and the value itself was
+  `placeholder_maps_key`. `git log -S "AIza" --all` is empty — no working key was
+  ever committed. Now fixed, deployed and confirmed by Aidan.
+- **96 aggregated Berlin events imported to production.** `tina events --feeds
+  config/berlin_event_feeds.yaml --days 60 --to-sphaer` → SQL → `db query --file`.
+  Measured before/after: 56 → 152 events, human rows unchanged at 56, and
+  **notifications stayed at 21 — none fired**, because every row has
+  `circle_id IS NULL`. All 96 are upcoming. Withdraw with
+  `delete from public.events where source like 'tina:%';` which cannot catch a
+  human-posted row.
+- **The dedicated importer profile exists.** `posters@sphaer.app`, display name
+  `Sphaer`, id `a5dfc2bd-f7c6-499b-8abf-55f51d142620`, username `sphaer`. Wired
+  into `~/.tina/data/.env` as `SPHAER_IMPORT_CREATOR_ID`. This satisfies the
+  08-17 rule that imported events never carry a real person's name.
+- **Web build redeployed** — deep links verified 200 (`/event/…`, `/messages`,
+  `/profile`), so the `vercel.json` rewrite landed.
+
+⚠️ **Empty circle chats are NOT fixed by the import.** The 96 events deliberately
+carry no `circle_id`, so circle chats still show an empty state. That was the
+trade for sending zero notifications, and it remains open work.
 
 ---
 
