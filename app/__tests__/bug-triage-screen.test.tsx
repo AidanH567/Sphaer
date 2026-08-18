@@ -140,7 +140,7 @@ describe('triage screen — reading a report back as fields', () => {
     render(<BugTriageScreen />);
     await waitFor(() => expect(screen.getByText('I lose my circles events')).toBeTruthy());
 
-    expect(screen.getByText('What problem does this solve?')).toBeTruthy();
+    expect(screen.getByText('Describe this feature')).toBeTruthy();
     expect(screen.getByText('Proposed solution')).toBeTruthy();
   });
 });

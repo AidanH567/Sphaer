@@ -33,9 +33,13 @@ describe('the kind → field map', () => {
     ]);
   });
 
-  it('asks a feature for the problem, the solution and the audience', () => {
+  it('asks a feature to describe itself first, then the problem, solution and audience', () => {
+    // `description` leads deliberately (2026-08-18): a person arrives wanting
+    // to say WHAT they want, and being asked the problem first is the harder
+    // question in the harder order.
     expect(fieldsForKind('feature').map((field) => field.key)).toEqual([
       'description',
+      'why',
       'solution',
       'audience',
     ]);
@@ -64,7 +68,7 @@ describe('the kind → field map', () => {
 
   it('gives each kind its own primary label, so the form never says "the bug"', () => {
     expect(primaryLabel('bug')).toBe('What happened?');
-    expect(primaryLabel('feature')).toBe('What problem does this solve?');
+    expect(primaryLabel('feature')).toBe('Describe this feature');
     expect(primaryLabel('change')).toBe('What should change?');
   });
 });
@@ -98,7 +102,11 @@ describe('buildReportDetails', () => {
       expected: 'the card slides up',
       steps: '1. tap a pin',
     });
+    // `why` belongs to BOTH feature and change since 2026-08-18 - a feature's
+    // "What problem does this solve?" and a change's "Why?" are the same
+    // question, so they share a key and the triage screen labels each by kind.
     expect(buildReportDetails('feature', answers)).toEqual({
+      why: 'it is the action I reach for most',
       solution: 'a chip on the feed',
       audience: 'circle followers',
     });

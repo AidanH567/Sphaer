@@ -96,7 +96,8 @@ describe('report screen — kind-conditional fields', () => {
     render(<BugReportScreen />);
     fireEvent.press(screen.getByLabelText('Feature report'));
 
-    expect(screen.getByText('What problem does this solve?')).toBeTruthy();
+    expect(screen.getByText('Describe this feature')).toBeTruthy();
+    expect(screen.getByText('What problem does this solve? (optional)')).toBeTruthy();
     expect(screen.getByText('Proposed solution (optional)')).toBeTruthy();
     expect(screen.getByText("Who's it for? (optional)")).toBeTruthy();
 
@@ -130,7 +131,7 @@ describe('report screen — kind-conditional fields', () => {
     fireEvent.press(screen.getByLabelText('Feature report'));
     fireEvent.press(screen.getByLabelText('Send report'));
 
-    expect(screen.getByText('Please answer "What problem does this solve?".')).toBeTruthy();
+    expect(screen.getByText('Please answer "Describe this feature".')).toBeTruthy();
     expect(submitBugReport).not.toHaveBeenCalled();
   });
 
@@ -174,7 +175,7 @@ describe('report screen — kind-conditional fields', () => {
     );
     fireEvent.press(screen.getByLabelText('Feature report'));
     fireEvent.changeText(
-      screen.getByPlaceholderText('I can never find the events my circles posted last week.'),
+      screen.getByPlaceholderText('A way to see only the events my circles posted.'),
       'I lose my circles events'
     );
     fireEvent.press(screen.getByLabelText('Send report'));

@@ -107,10 +107,26 @@ const BUG_FIELDS: readonly ReportField[] = [
 
 const FEATURE_FIELDS: readonly ReportField[] = [
   {
+    // Added 2026-08-18. The form previously opened with "What problem does
+    // this solve?", and Aidan's report from using it was that there was
+    // "no text box just stating to describe the feature" - which is true, and
+    // it is the harder question asked first. A person arrives wanting to say
+    // WHAT they want; the problem it solves is the follow-up, not the opener.
+    // Kept as the single REQUIRED field so REQUIRED_FIELD_RULE still holds.
     key: 'description',
+    label: 'Describe this feature',
+    placeholder: 'A way to see only the events my circles posted.',
+    required: true,
+    lines: 4,
+  },
+  {
+    // Demoted from required to optional rather than deleted: it is the question
+    // that makes a feature request actionable, and asking it still shapes the
+    // answer even when it is skipped.
+    key: 'why',
     label: 'What problem does this solve?',
     placeholder: 'I can never find the events my circles posted last week.',
-    required: true,
+    required: false,
     lines: 4,
   },
   {
