@@ -109,4 +109,78 @@ describe('applyChipFilters', () => {
       applyChipFilters(all, { thisWeekend: true, isFree: true }, WEDNESDAY),
     ).toEqual([]);
   });
+
+  // --- origin: community vs aggregated -----------------------------------
+  //
+  // The three states the feed chips can be in. "All" is `origin: undefined`
+  // and must keep behaving exactly as it did before the filter existed.
+  describe('origin', () => {
+    const posted = ev({ id: 'posted', source: null, starts_at: iso(2026, 5, 20, 21) });
+    const postedFree = ev({
+      id: 'posted-free',
+      source: null,
+      is_free: true,
+      starts_at: iso(2026, 5, 13, 22),
+    });
+    const importedJsonld = ev({
+      id: 'imported-jsonld',
+      source: 'tina:jsonld',
+      starts_at: iso(2026, 5, 20, 21),
+    });
+    const importedIcs = ev({
+      id: 'imported-ics',
+      source: 'tina:ics',
+      is_free: true,
+      starts_at: iso(2026, 5, 13, 22),
+    });
+    // A pre-migration row: the column simply isn't on the object.
+    const legacy = ev({ id: 'legacy', starts_at: iso(2026, 5, 20, 21) });
+    const mixed = [posted, postedFree, importedJsonld, importedIcs, legacy];
+
+    it('no origin → passthrough, same reference (All is untouched)', () => {
+      expect(applyChipFilters(mixed, {}, WEDNESDAY)).toBe(mixed);
+    });
+
+    it('community keeps only what people posted', () => {
+      expect(
+        applyChipFilters(mixed, { origin: 'community' }, WEDNESDAY).map((e) => e.id),
+      ).toEqual(['posted', 'posted-free', 'legacy']);
+    });
+
+    it('aggregated keeps only what the importer found', () => {
+      expect(
+        applyChipFilters(mixed, { origin: 'aggregated' }, WEDNESDAY).map((e) => e.id),
+      ).toEqual(['imported-jsonld', 'imported-ics']);
+    });
+
+    it('the two states partition the feed — together they are exactly All', () => {
+      const community = applyChipFilters(mixed, { origin: 'community' }, WEDNESDAY);
+      const aggregated = applyChipFilters(mixed, { origin: 'aggregated' }, WEDNESDAY);
+      expect(community.length + aggregated.length).toBe(mixed.length);
+      expect([...community, ...aggregated].map((e) => e.id).sort()).toEqual(
+        mixed.map((e) => e.id).sort(),
+      );
+    });
+
+    it('ANDs with the other chips rather than replacing them', () => {
+      expect(
+        applyChipFilters(mixed, { origin: 'aggregated', isFree: true }, WEDNESDAY).map(
+          (e) => e.id,
+        ),
+      ).toEqual(['imported-ics']);
+      expect(
+        applyChipFilters(mixed, { origin: 'community', isFree: true }, WEDNESDAY).map(
+          (e) => e.id,
+        ),
+      ).toEqual(['posted-free']);
+    });
+
+    it('a blank source is not treated as an import', () => {
+      const blank = ev({ id: 'blank', source: '', starts_at: iso(2026, 5, 20, 21) });
+      expect(
+        applyChipFilters([blank], { origin: 'community' }, WEDNESDAY).map((e) => e.id),
+      ).toEqual(['blank']);
+      expect(applyChipFilters([blank], { origin: 'aggregated' }, WEDNESDAY)).toEqual([]);
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import type { EventWithRelations } from '@/types/event.types';
+import { matchesOrigin, type EventOrigin } from './event-source';
 
 /**
  * Time-window predicates for the quick-filter chips.
@@ -77,20 +78,33 @@ export function currentWeekendWindow(now: Date = new Date()): { from: Date; to: 
 }
 
 /**
- * Apply the shared chip filters — tonight, thisWeekend, isFree — to a
- * list of events. The Feed/Map/Mural visibleEvents memos all delegate
+ * Apply the shared chip filters — tonight, thisWeekend, isFree, origin — to
+ * a list of events. The Feed/Map/Mural visibleEvents memos all delegate
  * here so the three views stay coherent when a chip toggles.
+ *
+ * `origin` narrows by provenance: 'community' keeps only events a person
+ * posted, 'aggregated' only the ones Tina's importer found. Undefined means
+ * "All" and is the default — see matchesOrigin. It ANDs with the others, so
+ * "Found around Berlin" + "Free" is free imported events.
  */
 export function applyChipFilters(
   events: EventWithRelations[],
-  filters: { tonight?: boolean; thisWeekend?: boolean; isFree?: boolean },
+  filters: {
+    tonight?: boolean;
+    thisWeekend?: boolean;
+    isFree?: boolean;
+    origin?: EventOrigin;
+  },
   now: Date = new Date(),
 ): EventWithRelations[] {
-  if (!filters.tonight && !filters.thisWeekend && !filters.isFree) return events;
+  if (!filters.tonight && !filters.thisWeekend && !filters.isFree && !filters.origin) {
+    return events;
+  }
   return events.filter((e) => {
     if (filters.tonight && !isTonight(e.starts_at ?? null, now)) return false;
     if (filters.thisWeekend && !isThisWeekend(e.starts_at ?? null, now)) return false;
     if (filters.isFree && !e.is_free) return false;
+    if (!matchesOrigin(e, filters.origin)) return false;
     return true;
   });
 }

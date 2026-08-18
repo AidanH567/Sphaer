@@ -64,6 +64,21 @@ export async function getEvents(filters?: EventFilters): Promise<EventWithRelati
   if (filters?.startDate) {
     query = query.gte('starts_at', filters.startDate);
   }
+  // Provenance filter — see EventFilters.origin. `source` is a live column
+  // (migration 20260817200000) that the generated types don't know about yet,
+  // but PostgREST filters take the column NAME as a plain string, so no cast
+  // is needed here — unlike the insert path, where the generated Insert type
+  // rejects unknown keys (see asGeneratedInsert below).
+  //
+  // `.not('source', 'is', null)` is PostgREST's `source=not.is.null`; there is
+  // no `.isNot()` in supabase-js. Using it rather than `like 'tina:%'` keeps
+  // the discriminator exactly as the migration documents it: anything
+  // non-NULL is machine-imported, whoever imported it.
+  if (filters?.origin === 'community') {
+    query = query.is('source', null);
+  } else if (filters?.origin === 'aggregated') {
+    query = query.not('source', 'is', null);
+  }
 
   const { data, error } = await query;
   if (error) throw error;

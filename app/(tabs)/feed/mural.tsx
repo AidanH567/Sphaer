@@ -100,6 +100,7 @@ export default function MuralScreen() {
       tonight: feedFilters.tonight,
       thisWeekend: feedFilters.thisWeekend,
       isFree: feedFilters.isFree,
+      origin: feedFilters.origin,
     });
     // Safety cap — see MURAL_MAX_EVENTS comment.
     return chipped.slice(0, MURAL_MAX_EVENTS);
@@ -110,6 +111,7 @@ export default function MuralScreen() {
     feedFilters.tonight,
     feedFilters.thisWeekend,
     feedFilters.isFree,
+    feedFilters.origin,
   ]);
 
   // Pre-fetch poster dimensions for everything we plan to render.

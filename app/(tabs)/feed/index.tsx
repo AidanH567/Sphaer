@@ -25,6 +25,7 @@ import { applyChipFilters } from '@/utils/event-filters';
 import { colors, spacing, typography, radius, shadow } from '@/constants/theme';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 import type { Profile } from '@/types/user.types';
+import type { EventFilters } from '@/types/event.types';
 
 /**
  * Activity feed. Pulls real `events` rows from Supabase via useEvents().
@@ -209,6 +210,7 @@ export default function FeedScreen() {
       tonight: feedFilters.tonight,
       thisWeekend: feedFilters.thisWeekend,
       isFree: feedFilters.isFree,
+      origin: feedFilters.origin,
     });
   }, [
     events,
@@ -218,6 +220,7 @@ export default function FeedScreen() {
     feedFilters.tonight,
     feedFilters.thisWeekend,
     feedFilters.isFree,
+    feedFilters.origin,
     userCoords,
     foregroundTick,
   ]);
@@ -243,6 +246,23 @@ export default function FeedScreen() {
     setFeedFilters({
       ...feedFilters,
       isFree: feedFilters.isFree ? undefined : true,
+    });
+  }
+
+  /**
+   * Where an event came from. Three states — All / From the community /
+   * Found around Berlin — built the same way Tonight ⇄ This weekend already
+   * are: two mutually-exclusive chips where "neither lit" IS the default
+   * "All". No new control type, and unlike a cycling chip you can see both
+   * options without tapping anything.
+   *
+   * Tapping the lit chip clears it back to All, which is what a user who
+   * wants everything back reaches for first.
+   */
+  function toggleOrigin(next: NonNullable<EventFilters['origin']>) {
+    setFeedFilters({
+      ...feedFilters,
+      origin: feedFilters.origin === next ? undefined : next,
     });
   }
 
@@ -435,6 +455,55 @@ export default function FeedScreen() {
             Free
           </Text>
         </TouchableOpacity>
+
+        {/* Where it came from. Appended rather than slotted in among the
+            others because it filters on a different axis: Near me / Tonight /
+            This weekend / Free are all "what's the event like", these two are
+            "who put it here". Neither lit = everything, which is the default
+            and what a user who has never touched these sees. */}
+        <TouchableOpacity
+          onPress={() => toggleOrigin('community')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityState={{ selected: feedFilters.origin === 'community' }}
+          style={[styles.chip, feedFilters.origin === 'community' && styles.chipActive]}
+        >
+          <Ionicons
+            name="people-outline"
+            size={12}
+            color={feedFilters.origin === 'community' ? colors.white : colors.text.primary}
+          />
+          <Text
+            style={[
+              styles.chipText,
+              feedFilters.origin === 'community' && styles.chipTextActive,
+            ]}
+          >
+            From the community
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => toggleOrigin('aggregated')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityState={{ selected: feedFilters.origin === 'aggregated' }}
+          style={[styles.chip, feedFilters.origin === 'aggregated' && styles.chipActive]}
+        >
+          <Ionicons
+            name="compass-outline"
+            size={12}
+            color={feedFilters.origin === 'aggregated' ? colors.white : colors.text.primary}
+          />
+          <Text
+            style={[
+              styles.chipText,
+              feedFilters.origin === 'aggregated' && styles.chipTextActive,
+            ]}
+          >
+            Found around Berlin
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {isLoading && events.length === 0 ? (
@@ -460,6 +529,10 @@ export default function FeedScreen() {
                 ? 'pricetag-outline'
                 : feedFilters.nearMe
                 ? 'navigate'
+                : feedFilters.origin === 'community'
+                ? 'people-outline'
+                : feedFilters.origin === 'aggregated'
+                ? 'compass-outline'
                 : 'calendar-outline'
             }
             title={
@@ -471,12 +544,19 @@ export default function FeedScreen() {
                 ? 'No free events match'
                 : feedFilters.nearMe
                 ? `Nothing within ${NEAR_ME_RADIUS_KM} km`
+                : feedFilters.origin === 'community'
+                ? 'Nothing posted yet'
+                : feedFilters.origin === 'aggregated'
+                ? 'Nothing found out there'
                 : searchText
                 ? `No matches for "${searchText}"`
                 : 'Nothing on right now'
             }
             body={
-              feedFilters.tonight || feedFilters.thisWeekend || feedFilters.isFree
+              feedFilters.tonight ||
+              feedFilters.thisWeekend ||
+              feedFilters.isFree ||
+              feedFilters.origin
                 ? 'Try clearing the chips above to see everything.'
                 : feedFilters.nearMe
                 ? 'Try expanding by tapping "Near me" off, or pan around the Map view.'
@@ -495,6 +575,7 @@ export default function FeedScreen() {
               !feedFilters.thisWeekend &&
               !feedFilters.isFree &&
               !feedFilters.nearMe &&
+              !feedFilters.origin &&
               !(feedFilters.categories?.length) &&
               !feedFilters.neighborhood
                 ? {
