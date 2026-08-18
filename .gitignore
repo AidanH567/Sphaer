@@ -22,3 +22,7 @@ docs/poster-qa/*.svg
 # The 16 full-size family renders (~9 MB). The two composed sheets ARE committed;
 # these regenerate with: npx tsx scripts/qa-generate-poster.ts --families
 docs/poster-qa/families/
+# Same rule for the 24 full-size circle-cover renders (~14 MB). The two composed
+# sheets ARE committed; these regenerate with:
+#   npx tsx scripts/qa-generate-cover.ts
+docs/poster-qa/covers/

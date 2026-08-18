@@ -1,7 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -58,6 +67,45 @@ function parseSpotsInput(raw: string): number | null {
   if (!trimmed) return null;
   const n = Number(trimmed);
   return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * One line of the "what a poster still needs" list.
+ *
+ * Deliberately a real button rather than a bullet: the two fields that unlock
+ * the generator sit on opposite sides of the cover section (Title is section 2,
+ * Date is section 7), so telling someone what is missing without taking them
+ * there leaves them scrolling a twelve-section form to find out where.
+ *
+ * `met` is announced through `accessibilityState.checked` as well as the tick,
+ * so the state is not carried by icon colour alone.
+ */
+function PosterRequirement({
+  met,
+  label,
+  onPress,
+}: {
+  met: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.posterNeedsRow}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={met ? `${label} — done` : `${label} — still needed. Go to the field.`}
+      accessibilityState={{ checked: met }}
+    >
+      <Ionicons
+        name={met ? 'checkmark-circle' : 'ellipse-outline'}
+        size={18}
+        color={met ? colors.neutral.chocolate : DASHED_TILE}
+      />
+      <Text style={[styles.posterNeedsLabel, met && styles.posterNeedsLabelMet]}>{label}</Text>
+      {!met && <Text style={styles.posterNeedsGo}>Add</Text>}
+    </TouchableOpacity>
+  );
 }
 
 export default function CreateScreen() {
@@ -128,6 +176,68 @@ export default function CreateScreen() {
     // club night and an exhibition should not reach for the same geometry.
     categories,
   });
+
+  // ── Arriving from "+ → A poster" ───────────────────────────────────────────
+  // The generator lives in section 5 of twelve, and it was invisible three ways
+  // at once: buried, hidden entirely once a cover existed, and greyed with no
+  // stated reason. Aidan failed to find it twice. `?poster=1` is the create
+  // menu's shortcut into it — the screen is the same screen, but it opens
+  // scrolled to the poster block with the block announcing itself.
+  const { poster: posterParam } = useLocalSearchParams<{ poster?: string }>();
+  const posterFocus = posterParam === '1';
+
+  const scrollRef = useRef<ScrollView>(null);
+  /** Section tops, captured on layout, so a requirement can scroll to its field. */
+  const sectionY = useRef<Record<string, number>>({});
+  /** Auto-scroll is a one-shot: re-layouts must not yank the user back. */
+  const didAutoScroll = useRef(false);
+
+  const captureSectionY = useCallback(
+    (key: string) => (e: LayoutChangeEvent) => {
+      sectionY.current[key] = e.nativeEvent.layout.y;
+    },
+    []
+  );
+
+  const scrollToSection = useCallback((key: string) => {
+    const y = sectionY.current[key];
+    if (y === undefined) return;
+    // A little headroom so the section label is not flush against the nav bar.
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+  }, []);
+
+  /**
+   * Scroll from the poster section's OWN layout rather than from an effect on
+   * mount: the effect would fire before `onLayout` has reported a y, and there
+   * is nothing to scroll to yet. Doing it here means the measurement and the
+   * scroll cannot race.
+   */
+  const handlePosterSectionLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      sectionY.current.poster = e.nativeEvent.layout.y;
+      if (!posterFocus || didAutoScroll.current) return;
+      didAutoScroll.current = true;
+      scrollToSection('poster');
+    },
+    [posterFocus, scrollToSection]
+  );
+
+  const hasTitle = title.trim().length > 0;
+  const hasStart = startsAt !== null;
+  /** A cover the user chose from their library, as opposed to a generated one. */
+  const hasPickedPhoto = !!posterUri && !generatedPoster;
+
+  /**
+   * The generate button says what pressing it will do FROM HERE, which differs
+   * in three states: nothing attached, a generated poster already showing (so
+   * this is another roll), or the user's own photo showing (so this replaces
+   * it). One label for all three read as a no-op in two of them.
+   */
+  const generateActionLabel = generatedPoster
+    ? 'Make another'
+    : hasPickedPhoto
+      ? 'Generate one instead'
+      : 'Generate a poster';
 
   function toggleCategory(cat: string) {
     setCategories((prev) =>
@@ -393,7 +503,11 @@ export default function CreateScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         {/* 1 — Topics */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Choose topics?</Text>
@@ -411,7 +525,11 @@ export default function CreateScreen() {
         </View>
 
         {/* 2 — Title */}
-        <View style={styles.section}>
+        <View
+          testID="title-section"
+          style={styles.section}
+          onLayout={captureSectionY('title')}
+        >
           <Text style={styles.sectionLabel}>Title</Text>
           <Input
             accessibilityLabel="Title"
@@ -455,9 +573,21 @@ export default function CreateScreen() {
           />
         </View>
 
-        {/* 5 — Cover image */}
-        <View style={styles.section}>
+        {/* 5 — Cover image, and the poster generator */}
+        <View
+          testID="poster-section"
+          style={[styles.section, posterFocus && styles.sectionSpotlight]}
+          onLayout={handlePosterSectionLayout}
+        >
           <Text style={styles.sectionLabel}>Cover image</Text>
+          {/* Arriving from "+ → A poster", the block has to say what it IS.
+              Landing silently on section 5 of a form is how this got missed. */}
+          {posterFocus && (
+            <Text style={styles.posterLead}>
+              Sphaer can make a poster from this activity — no photo needed. It uses your
+              title, date and location.
+            </Text>
+          )}
           <TouchableOpacity
             style={styles.posterPicker}
             onPress={pickPoster}
@@ -473,39 +603,73 @@ export default function CreateScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Generate a poster — offered only when no cover image is attached.
-              This is the durable fix for the Mural: an activity published
-              without a photo currently reaches the poster wall as a hole. */}
-          {!posterUri && (
-            <View style={styles.generateActions}>
-              <TouchableOpacity
-                style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
-                onPress={handleGeneratePoster}
-                disabled={!poster.canGenerate || poster.isGenerating}
-                accessibilityRole="button"
-                accessibilityLabel="Generate a poster"
-                accessibilityState={{ disabled: !poster.canGenerate || poster.isGenerating }}
-              >
-                <Ionicons
-                  name="sparkles-outline"
-                  size={18}
-                  color={poster.canGenerate ? colors.neutral.chocolate : DASHED_TILE}
-                />
-                <Text
-                  style={[
-                    styles.generateLabel,
-                    !poster.canGenerate && styles.generateLabelDisabled,
-                  ]}
-                >
-                  {poster.isGenerating ? 'Making your poster…' : 'Generate a poster'}
-                </Text>
-              </TouchableOpacity>
+          {/* ── Why the button is not tappable yet ──────────────────────────
+              A disabled control with no visible reason reads as broken, and
+              that is precisely how this feature got missed twice. So instead
+              of greying a button and leaving it at that, name the two fields
+              that unlock it and mark off the ones already done. Each row is
+              tappable and scrolls to its field — Title is above this section
+              and Date is below it, so "go and fill it in" is otherwise a hunt
+              in two directions. */}
+          {!poster.canGenerate && (
+            <View style={styles.posterNeeds}>
+              <Text style={styles.posterNeedsLead}>
+                A poster is made from your activity, so it needs two things first:
+              </Text>
+              <PosterRequirement
+                met={hasTitle}
+                label="A title"
+                onPress={() => scrollToSection('title')}
+              />
+              <PosterRequirement
+                met={hasStart}
+                label="A start date and time"
+                onPress={() => scrollToSection('when')}
+              />
+            </View>
+          )}
 
-              {/* Shuffle — steps to the next layout family and palette.
-                  Costs nothing to press: the layout is pure string maths in a
-                  memo, so this re-solves the offscreen canvas and captures
-                  nothing. The user shuffles until they like the preview, then
-                  presses Generate once. */}
+          {/* ── Why this is no longer hidden behind `!posterUri` ────────────
+              It used to be. That hid the generator the moment ANY cover
+              existed, which produced two dead ends: attach a photo you turn
+              out not to like and the generator is unreachable (the picker
+              only replaces, it cannot remove), and — worse — generate once
+              and Shuffle vanishes with it, because generating sets `posterUri`
+              too. One roll of the dice and the controls disappear.
+
+              So the actions stay. Shuffle is withheld in exactly one case: a
+              photo the user picked themselves is on screen, where shuffling
+              would silently re-solve a layout the preview is not showing. */}
+          <View style={styles.generateActions}>
+            <TouchableOpacity
+              style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
+              onPress={handleGeneratePoster}
+              disabled={!poster.canGenerate || poster.isGenerating}
+              accessibilityRole="button"
+              accessibilityLabel={generateActionLabel}
+              accessibilityState={{ disabled: !poster.canGenerate || poster.isGenerating }}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={18}
+                color={poster.canGenerate ? colors.neutral.chocolate : DASHED_TILE}
+              />
+              <Text
+                style={[
+                  styles.generateLabel,
+                  !poster.canGenerate && styles.generateLabelDisabled,
+                ]}
+              >
+                {poster.isGenerating ? 'Making your poster…' : generateActionLabel}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Shuffle — steps to the next layout family and palette.
+                Costs nothing to press: the layout is pure string maths in a
+                memo, so this re-solves the offscreen canvas and captures
+                nothing. The user shuffles until they like the preview, then
+                presses Generate once. */}
+            {!hasPickedPhoto && (
               <TouchableOpacity
                 style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
                 onPress={poster.shuffle}
@@ -529,16 +693,18 @@ export default function CreateScreen() {
                   Shuffle
                 </Text>
               </TouchableOpacity>
-            </View>
-          )}
-          {!posterUri && !poster.canGenerate && (
-            <Text style={styles.generateHint}>
-              Add a title and a start time and we can make one from them.
-            </Text>
-          )}
+            )}
+          </View>
+
           {generatedPoster && (
             <Text style={styles.generateHint}>
-              Made from your title, date and location. Tap the image to use a photo instead.
+              Made from your title, date and location. Shuffle for a different design, or tap
+              the image to use a photo instead.
+            </Text>
+          )}
+          {hasPickedPhoto && (
+            <Text style={styles.generateHint}>
+              Using your photo. You can generate a poster instead if you would rather.
             </Text>
           )}
         </View>
@@ -577,7 +743,7 @@ export default function CreateScreen() {
         {/* 7 — Date + Time (both write startsAt: date picker / time picker).
             Ends stays as a compact extra field — our data model needs an
             optional end, the frame only shows start Date + Time. */}
-        <View style={styles.section}>
+        <View style={styles.section} onLayout={captureSectionY('when')}>
           <View style={styles.fieldRow}>
             <View style={styles.fieldCol}>
               <Text style={styles.sectionLabel}>Date</Text>
@@ -809,7 +975,12 @@ export default function CreateScreen() {
           live native view, so this has to be really laid out at 1080×1528 —
           it is parked 10,000px to the left rather than hidden, because a
           display:none view is never laid out and snapshots to nothing. */}
-      {poster.layout && !posterUri && (
+      {/* Mounted whenever a layout solves, no longer only while the cover is
+          empty. Generating is now reachable with a cover already attached
+          (picked or generated), and the capture target has to exist at the
+          moment the button is pressed — gating this on `!posterUri` would make
+          the newly-reachable button throw instead of render. */}
+      {poster.layout && (
         <View style={posterCanvasHostStyle} pointerEvents="none">
           <GeneratedPosterCanvas ref={poster.canvasRef} layout={poster.layout} />
         </View>
@@ -912,6 +1083,58 @@ const styles = StyleSheet.create({
     color: colors.neutral.chocolate,
   },
   generateLabelDisabled: { color: DASHED_TILE },
+  // ── Poster entry point ─────────────────────────────────────────────────────
+  // Applied only when the screen was opened from "+ → A poster". The section is
+  // otherwise identical to its neighbours, and on a form this long that is
+  // exactly the problem: arriving at section 5 with no emphasis looks like
+  // having arrived nowhere.
+  sectionSpotlight: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.base,
+    marginHorizontal: -spacing.sm,
+  },
+  posterLead: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral.cardMeta,
+    marginBottom: spacing.xs,
+  },
+  // The requirements list that replaced a bare greyed button.
+  posterNeeds: {
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral.hiddenLines,
+    borderRadius: radius.sm,
+  },
+  posterNeedsLead: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 12,
+    color: colors.neutral.meta,
+    marginBottom: spacing.xs,
+  },
+  posterNeedsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  posterNeedsLabel: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral.chocolate,
+    flex: 1,
+  },
+  posterNeedsLabelMet: { color: colors.neutral.meta },
+  posterNeedsGo: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 12,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral.chocolate,
+  },
   generateHint: {
     fontFamily: typography.fontFamily.ui,
     fontSize: 12,

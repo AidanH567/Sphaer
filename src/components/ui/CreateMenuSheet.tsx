@@ -7,7 +7,6 @@ import {
   TouchableWithoutFeedback,
   Animated,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +22,6 @@ interface MenuOption {
   title: string;
   subtitle: string;
   onPress: () => void;
-  comingSoon?: boolean;
 }
 
 const SHEET_HEIGHT = 340;
@@ -88,8 +86,23 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
     setTimeout(() => router.push('/(tabs)/create/circle' as any), 300);
   }
 
+  /**
+   * "A poster" is a SHORTCUT into the activity form, not a screen of its own.
+   *
+   * The generator has shipped since the families landed, but it lives in
+   * section 5 of a twelve-section form and this row said "Coming Soon" — so
+   * the one place a person looks for it was the one place that denied it
+   * existed. Aidan failed to find the feature twice, and this alert is why.
+   *
+   * `poster=1` is read by the create screen, which opens with the poster block
+   * expanded, scrolled to, and explaining what it still needs. A poster is made
+   * FROM an activity's title and start time, so there is nothing to open
+   * without one — a standalone maker belongs to the editor phase, when posters
+   * become persisted documents rather than an event's cover.
+   */
   function handlePosterPress() {
-    Alert.alert('Coming Soon', 'Poster creation is on its way.');
+    onClose();
+    setTimeout(() => router.push('/(tabs)/create?poster=1'), 300);
   }
 
   const OPTIONS: MenuOption[] = [
@@ -105,9 +118,8 @@ export function CreateMenuSheet({ visible, onClose }: CreateMenuSheetProps) {
     },
     {
       title: 'A poster',
-      subtitle: "Create a cover for what you're sharing",
+      subtitle: 'Make a cover from your title and date',
       onPress: handlePosterPress,
-      comingSoon: true,
     },
   ];
 
