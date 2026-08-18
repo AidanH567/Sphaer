@@ -124,6 +124,9 @@ export default function CreateScreen() {
     endsAt: endsAt ? endsAt.toISOString() : null,
     locationName: selectedPlace?.name ?? null,
     address: address.trim() || null,
+    // The categories the user has already picked choose the layout family — a
+    // club night and an exhibition should not reach for the same geometry.
+    categories,
   });
 
   function toggleCategory(cat: string) {
@@ -474,28 +477,59 @@ export default function CreateScreen() {
               This is the durable fix for the Mural: an activity published
               without a photo currently reaches the poster wall as a hole. */}
           {!posterUri && (
-            <TouchableOpacity
-              style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
-              onPress={handleGeneratePoster}
-              disabled={!poster.canGenerate || poster.isGenerating}
-              accessibilityRole="button"
-              accessibilityLabel="Generate a poster"
-              accessibilityState={{ disabled: !poster.canGenerate || poster.isGenerating }}
-            >
-              <Ionicons
-                name="sparkles-outline"
-                size={18}
-                color={poster.canGenerate ? colors.neutral.chocolate : DASHED_TILE}
-              />
-              <Text
-                style={[
-                  styles.generateLabel,
-                  !poster.canGenerate && styles.generateLabelDisabled,
-                ]}
+            <View style={styles.generateActions}>
+              <TouchableOpacity
+                style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
+                onPress={handleGeneratePoster}
+                disabled={!poster.canGenerate || poster.isGenerating}
+                accessibilityRole="button"
+                accessibilityLabel="Generate a poster"
+                accessibilityState={{ disabled: !poster.canGenerate || poster.isGenerating }}
               >
-                {poster.isGenerating ? 'Making your poster…' : 'Generate a poster'}
-              </Text>
-            </TouchableOpacity>
+                <Ionicons
+                  name="sparkles-outline"
+                  size={18}
+                  color={poster.canGenerate ? colors.neutral.chocolate : DASHED_TILE}
+                />
+                <Text
+                  style={[
+                    styles.generateLabel,
+                    !poster.canGenerate && styles.generateLabelDisabled,
+                  ]}
+                >
+                  {poster.isGenerating ? 'Making your poster…' : 'Generate a poster'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Shuffle — steps to the next layout family and palette.
+                  Costs nothing to press: the layout is pure string maths in a
+                  memo, so this re-solves the offscreen canvas and captures
+                  nothing. The user shuffles until they like the preview, then
+                  presses Generate once. */}
+              <TouchableOpacity
+                style={[styles.generateRow, !poster.canGenerate && styles.generateRowDisabled]}
+                onPress={poster.shuffle}
+                disabled={!poster.canGenerate || poster.isGenerating}
+                accessibilityRole="button"
+                accessibilityLabel="Shuffle the poster design"
+                accessibilityHint="Tries a different layout and colour scheme"
+                accessibilityState={{ disabled: !poster.canGenerate || poster.isGenerating }}
+              >
+                <Ionicons
+                  name="shuffle"
+                  size={18}
+                  color={poster.canGenerate ? colors.neutral.chocolate : DASHED_TILE}
+                />
+                <Text
+                  style={[
+                    styles.generateLabel,
+                    !poster.canGenerate && styles.generateLabelDisabled,
+                  ]}
+                >
+                  Shuffle
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
           {!posterUri && !poster.canGenerate && (
             <Text style={styles.generateHint}>
@@ -852,6 +886,12 @@ const styles = StyleSheet.create({
   // Secondary action under the cover tile — outlined, not filled, so it never
   // competes with Publish. Matches the hairline-outline treatment the rest of
   // the form's secondary controls use.
+  generateActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   generateRow: {
     flexDirection: 'row',
     alignItems: 'center',

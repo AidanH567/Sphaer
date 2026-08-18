@@ -28,9 +28,14 @@ import {
   posterCanvasHostStyle,
   type PosterCanvasHandle,
 } from '@/components/events/GeneratedPosterCanvas';
-import { buildPosterLayout, POSTER_HEIGHT, POSTER_WIDTH } from '@/utils/poster-template';
+import {
+  buildPosterLayout,
+  POSTER_FAMILIES,
+  POSTER_HEIGHT,
+  POSTER_WIDTH,
+} from '@/utils/poster-template';
 import { PosterGenerationError } from '@/utils/poster-guard';
-import type { PosterInput } from '@/utils/poster-template';
+import type { PosterInput, PosterLayout } from '@/utils/poster-template';
 
 const layoutOf = (overrides: Partial<PosterInput> = {}) =>
   buildPosterLayout({
@@ -39,6 +44,22 @@ const layoutOf = (overrides: Partial<PosterInput> = {}) =>
     locationName: 'Sameheads',
     ...overrides,
   });
+
+/**
+ * A layout that is definitely the named family.
+ *
+ * Family choice is a pure function of the event, so the way to reach a specific
+ * one is to walk `variant` — the same counter Shuffle increments — until it
+ * lands. Asserting the renderer against only whichever family the default seed
+ * happens to hash to would leave three of the four untested.
+ */
+function layoutForFamily(id: string, overrides: Partial<PosterInput> = {}): PosterLayout {
+  for (let variant = 0; variant < 64; variant++) {
+    const layout = layoutOf({ ...overrides, variant });
+    if (layout.family === id) return layout;
+  }
+  throw new Error(`no variant produced the '${id}' family`);
+}
 
 type Props = Record<string, unknown>;
 
@@ -143,13 +164,74 @@ describe('GeneratedPosterCanvas', () => {
     expect(spans).toEqual(layout.texts.map((t) => t.text));
   });
 
-  it('sets the title in the display face and the metadata in the UI face', () => {
-    const layout = layoutOf();
-    const fonts = collect(tree(layout), 'RNSVGText').map((p) => p.font as Record<string, unknown>);
-    expect(fonts[0].fontWeight).toBe('400');
-    // The wordmark is the last run and is always bold.
-    expect(fonts[fonts.length - 1].fontWeight).toBe('700');
-    expect(new Set(fonts.map((f) => f.fontFamily)).size).toBeGreaterThan(1);
+  it('sets each run in the face its layout role asks for', () => {
+    // This used to assert that the FIRST run was the 400-weight serif, which
+    // was true only while there was one composition. Families choose their own
+    // face — `block` and `spine` set their titles in the grotesque, which is a
+    // large part of why they do not read as the same poster recoloured — so the
+    // check is now that the component honours whatever role the layout picked,
+    // which is the property that actually matters.
+    const weightForRole = { display: '400', uiBold: '700', ui: '400' } as const;
+    for (const family of POSTER_FAMILIES) {
+      const layout = layoutForFamily(family.id);
+      const fonts = collect(tree(layout), 'RNSVGText').map(
+        (p) => p.font as Record<string, unknown>
+      );
+      expect(fonts).toHaveLength(layout.texts.length);
+      layout.texts.forEach((run, i) => {
+        expect(fonts[i].fontWeight).toBe(weightForRole[run.role]);
+      });
+      // The wordmark is the last run and is always bold, in every family.
+      expect(layout.texts[layout.texts.length - 1].text).toBe('SPHAER');
+      expect(fonts[fonts.length - 1].fontWeight).toBe('700');
+    }
+  });
+
+  it('rotates a run about its own anchor point, as the SVG renderer does', () => {
+    // Rotation is the one primitive that cannot be checked by reading back a
+    // coordinate: react-native-svg folds `rotation` + `origin` into an affine
+    // `matrix`, so a component that dropped the props entirely would still emit
+    // every run at exactly the layout's x and y and still pass every other test
+    // in this file — while painting the spine's title flat across the poster
+    // and straight off the edge.
+    //
+    // Two things are asserted, because only the pair pins it down:
+    //   1. the matrix's rotation angle is the one the layout asked for, and
+    //   2. the run's own (x, y) is a FIXED POINT of that matrix.
+    // (2) is what makes this equivalent to the `rotate(deg x y)` the Node
+    // renderer emits. Rotating by the right angle about the wrong origin is the
+    // realistic way for the two renderers to drift.
+    const spine = layoutForFamily('spine');
+    expect(spine.texts.some((t) => t.rotate)).toBe(true);
+
+    const nodes = collect(tree(spine), 'RNSVGText');
+    spine.texts.forEach((run, i) => {
+      const m = nodes[i].matrix as number[];
+      const [a, b, c, d, e, f] = m;
+      const degrees = (Math.atan2(b, a) * 180) / Math.PI;
+      expect(degrees).toBeCloseTo(run.rotate ?? 0, 6);
+      // The anchor maps to itself.
+      expect(a * run.x + c * run.y + e).toBeCloseTo(run.x, 6);
+      expect(b * run.x + d * run.y + f).toBeCloseTo(run.y, 6);
+    });
+  });
+
+  it('sets the text anchor each family asked for', () => {
+    // `textAnchor` is folded into the `font` object rather than kept as a prop.
+    // `panel` is the only family that centres its type, and centring is most of
+    // what stops it reading as `classic` with the band moved up.
+    const panel = layoutForFamily('panel');
+    expect(panel.texts.some((t) => t.anchor === 'middle')).toBe(true);
+
+    for (const family of POSTER_FAMILIES) {
+      const layout = layoutForFamily(family.id);
+      const fonts = collect(tree(layout), 'RNSVGText').map(
+        (p) => p.font as Record<string, unknown>
+      );
+      layout.texts.forEach((run, i) => {
+        expect(fonts[i].textAnchor).toBe(run.anchor ?? 'start');
+      });
+    }
   });
 
   it('renders the photo only when the layout carries one', () => {

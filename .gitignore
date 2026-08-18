@@ -19,3 +19,6 @@ expo-env.d.ts
 # Poster QA renders regenerate from scripts/qa-generate-poster.ts.
 # The PNGs are committed as evidence; the intermediate SVGs are not.
 docs/poster-qa/*.svg
+# The 16 full-size family renders (~9 MB). The two composed sheets ARE committed;
+# these regenerate with: npx tsx scripts/qa-generate-poster.ts --families
+docs/poster-qa/families/

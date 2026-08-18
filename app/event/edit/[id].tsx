@@ -91,6 +91,9 @@ export default function EditEventScreen() {
     endsAt: endsAt ? endsAt.toISOString() : null,
     locationName: selectedPlace?.name ?? event?.location_name ?? null,
     address: address.trim() || null,
+    // Same categories the create screen passes, so editing an event does not
+    // silently move its poster to a different layout family.
+    categories,
   });
 
   async function handleGeneratePoster() {

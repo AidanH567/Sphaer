@@ -8,6 +8,7 @@
  *   npx tsx scripts/qa-generate-poster.ts --limit 6
  *   npx tsx scripts/qa-generate-poster.ts --with-photo # also exercise the photo branch
  *   npx tsx scripts/qa-generate-poster.ts --offline    # synthetic fixtures, no network
+ *   npx tsx scripts/qa-generate-poster.ts --families   # every family → contact sheet
  *
  * By default the real-event render is PHOTO-LESS, because that is the only
  * output the shipped feature produces: the app offers "Generate a poster" only
@@ -50,11 +51,15 @@ import sharp from 'sharp';
 import {
   buildPosterLayout,
   posterLayoutToSvgString,
+  familyShortlist,
+  POSTER_FAMILIES,
   POSTER_HEIGHT,
   POSTER_WIDTH,
   type PosterInput,
+  type PosterLayout,
 } from '../src/utils/poster-template';
 import { assertLayoutIsPaintable, assertPngIsPlausible } from '../src/utils/poster-guard';
+import { photoDataUri, QA_PHOTO_CROPS } from './poster-qa-photos';
 
 const projectRoot = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(projectRoot, '.env.local') });
@@ -221,6 +226,332 @@ const OFFLINE_FIXTURES: { label: string; input: PosterInput }[] = [
   },
 ];
 
+// ─── Family contact sheet ────────────────────────────────────────────────────
+/**
+ * `--families` renders every layout family, with and without a photograph,
+ * across several palettes and against realistic Berlin titles, then composes
+ * the lot into one contact sheet plus a thumbnail strip.
+ *
+ * This mode exists because a green suite is not evidence. Yesterday a poster
+ * passed every check in this repo and was blank; a mural test measured a wall
+ * that never moved. Every assertion here still runs — `assertLayoutIsPaintable`
+ * before rendering, `assertPngIsPlausible` on the bytes, opaque and ink
+ * fractions on the pixels — but the OUTPUT is a picture a human looks at, and
+ * that is the point of it.
+ *
+ * The thumbnail strip is not decoration either: these posters live on a mural
+ * wall at roughly 120px wide. A composition that only works full-screen has
+ * failed, and the strip is the only place that shows up.
+ */
+
+/** Titles chosen to break things: umlauts, ß, quotes, compounds, 66 characters. */
+const QA_EVENTS: { title: string; categories: string[]; venue: string; startsAt: string; endsAt?: string }[] = [
+  {
+    title: 'Nachtstrom',
+    categories: ['Music'],
+    venue: 'Sameheads',
+    startsAt: '2026-09-12T22:00:00.000Z',
+    endsAt: '2026-09-13T06:00:00.000Z',
+  },
+  {
+    title: 'SXTN — "Kann Sein, Dass Scheiße Wird" Tour',
+    categories: ['Concert'],
+    venue: 'Astra Kulturhaus',
+    startsAt: '2026-10-30T21:30:00.000Z',
+  },
+  {
+    title: 'Öffentliche Führung: Körper & Grenzen',
+    categories: ['Art'],
+    venue: 'Gropius Bau',
+    startsAt: '2026-11-07T18:00:00.000Z',
+    endsAt: '2026-11-07T20:00:00.000Z',
+  },
+  {
+    title: 'An Evening of Improvised Electroacoustic Music and Expanded Cinema',
+    categories: ['Film'],
+    venue: 'Acud Macht Neu',
+    startsAt: '2026-10-04T19:30:00.000Z',
+  },
+  {
+    title: 'Donaudampfschifffahrtsgesellschaftskapitänsabend',
+    categories: ['Talk'],
+    venue: 'Sonnenallee 123, Neukölln',
+    startsAt: '2026-11-21T20:00:00.000Z',
+  },
+  {
+    title: 'Shiatsu Grundkurs',
+    categories: ['Wellness'],
+    venue: 'Studio Am Fluss',
+    startsAt: '2026-03-22T10:00:00.000Z',
+    endsAt: '2026-03-22T18:00:00.000Z',
+  },
+  {
+    title: 'Klubnacht',
+    categories: ['Music'],
+    venue: 'Berghain',
+    startsAt: '2026-08-29T23:59:00.000Z',
+  },
+  {
+    title: 'Lines, Borders, Bodies — An Artist Talk',
+    categories: ['Talk'],
+    venue: 'ACUD Studio',
+    startsAt: '2027-02-09T19:00:00.000Z',
+    endsAt: '2027-02-09T21:30:00.000Z',
+  },
+];
+
+/**
+ * Solve a layout that is definitely `familyId`.
+ *
+ * Family choice is a pure function of the event, so the way to reach a specific
+ * one is to walk `variant` — the very counter the Shuffle button increments.
+ * Which means this helper is also an end-to-end exercise of Shuffle: if
+ * shuffling could not reach a family, the sheet would come up short.
+ */
+function layoutForFamily(input: PosterInput, familyId: string): PosterLayout | null {
+  for (let variant = 0; variant < 64; variant++) {
+    const layout = buildPosterLayout({ ...input, variant });
+    if (layout.family === familyId) return layout;
+  }
+  return null;
+}
+
+interface Tile {
+  slug: string;
+  label: string;
+  family: string;
+  palette: string;
+  png: Buffer;
+  measurement: Measurement;
+  ok: boolean;
+}
+
+async function renderTile(
+  input: PosterInput,
+  familyId: string,
+  slug: string
+): Promise<Tile | null> {
+  const layout = layoutForFamily(input, familyId);
+  if (!layout) {
+    console.log(`  ✗ ${slug}: no variant reached the '${familyId}' family`);
+    return null;
+  }
+  // The same structural guard the app runs before it renders anything. Every
+  // family has to clear it — that is the requirement, not a nice-to-have.
+  assertLayoutIsPaintable(layout);
+
+  const svg = posterLayoutToSvgString(layout);
+  const png = await sharp(Buffer.from(svg), { density: 96 })
+    .resize(POSTER_WIDTH, POSTER_HEIGHT)
+    .png()
+    .toBuffer();
+
+  const header = assertPngIsPlausible(new Uint8Array(png), POSTER_WIDTH, POSTER_HEIGHT);
+  const measurement: Measurement = {
+    width: header.width,
+    height: header.height,
+    bytes: png.length,
+    opaqueFraction: await opaqueFraction(png),
+    inkFraction: await inkFraction(png, layout.palette.bg),
+  };
+
+  const dir = path.join(OUT_DIR, 'families');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${slug}.png`), png);
+
+  const ok =
+    measurement.width === POSTER_WIDTH &&
+    measurement.height === POSTER_HEIGHT &&
+    measurement.opaqueFraction >= MIN_OPAQUE_FRACTION &&
+    measurement.inkFraction >= MIN_INK_FRACTION;
+
+  return {
+    slug,
+    label: `${layout.family} · ${layout.palette.id} · ${input.photoDataUri ? 'photo' : 'no photo'}`,
+    family: layout.family,
+    palette: layout.palette.id,
+    png,
+    measurement,
+    ok,
+  };
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Lay the tiles out on one sheet with a caption under each. */
+async function composeSheet(
+  tiles: Tile[],
+  opts: { tileWidth: number; columns: number; heading: string; captions: boolean }
+): Promise<Buffer> {
+  const { tileWidth, columns, heading, captions } = opts;
+  const tileHeight = Math.round((tileWidth * POSTER_HEIGHT) / POSTER_WIDTH);
+  const gap = 18;
+  const captionH = captions ? 44 : 12;
+  const headerH = 86;
+  const rows = Math.ceil(tiles.length / columns);
+
+  const sheetWidth = gap + columns * (tileWidth + gap);
+  const sheetHeight = headerH + rows * (tileHeight + captionH + gap) + gap;
+
+  const resized = await Promise.all(
+    tiles.map((t) => sharp(t.png).resize(tileWidth, tileHeight).png().toBuffer())
+  );
+
+  const positions = tiles.map((_, i) => ({
+    left: gap + (i % columns) * (tileWidth + gap),
+    top: headerH + Math.floor(i / columns) * (tileHeight + captionH + gap),
+  }));
+
+  const overlay: string[] = [];
+  overlay.push(
+    `<text x="${gap}" y="46" font-family="Helvetica, Arial, sans-serif" font-size="30" ` +
+      `font-weight="700" fill="#141414">${escapeXml(heading)}</text>`
+  );
+  overlay.push(
+    `<text x="${gap}" y="70" font-family="Helvetica, Arial, sans-serif" font-size="15" ` +
+      `fill="#5A5A5A">${escapeXml(
+        `${tiles.length} posters · ${new Set(tiles.map((t) => t.family)).size} families · ` +
+          `${new Set(tiles.map((t) => t.palette)).size} palettes · generated ${new Date()
+            .toISOString()
+            .slice(0, 10)}`
+      )}</text>`
+  );
+
+  tiles.forEach((t, i) => {
+    const { left, top } = positions[i];
+    // Hairline so a bone or paper poster does not bleed into the sheet ground.
+    overlay.push(
+      `<rect x="${left - 0.5}" y="${top - 0.5}" width="${tileWidth + 1}" height="${
+        tileHeight + 1
+      }" fill="none" stroke="#BFBFBF" stroke-width="1"/>`
+    );
+    if (captions) {
+      overlay.push(
+        `<text x="${left}" y="${top + tileHeight + 20}" font-family="Helvetica, Arial, sans-serif" ` +
+          `font-size="14" font-weight="700" fill="${t.ok ? '#141414' : '#C0392B'}">` +
+          `${escapeXml(t.label)}</text>`
+      );
+      overlay.push(
+        `<text x="${left}" y="${top + tileHeight + 38}" font-family="Helvetica, Arial, sans-serif" ` +
+          `font-size="12" fill="#6B6B6B">${escapeXml(
+            `${(t.measurement.inkFraction * 100).toFixed(1)}% ink · ${(
+              t.measurement.bytes / 1024
+            ).toFixed(0)} KB`
+          )}</text>`
+      );
+    }
+  });
+
+  const overlaySvg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${sheetWidth}" height="${sheetHeight}">` +
+    overlay.join('') +
+    `</svg>`;
+
+  return sharp({
+    create: {
+      width: sheetWidth,
+      height: sheetHeight,
+      channels: 4,
+      background: { r: 0xf2, g: 0xf1, b: 0xef, alpha: 1 },
+    },
+  })
+    .composite([
+      ...resized.map((buf, i) => ({ input: buf, left: positions[i].left, top: positions[i].top })),
+      { input: Buffer.from(overlaySvg), left: 0, top: 0 },
+    ])
+    .png()
+    .toBuffer();
+}
+
+async function runFamilySheet(): Promise<boolean> {
+  console.log(
+    `Rendering ${POSTER_FAMILIES.length} families × 4 scenarios → docs/poster-qa/families/\n`
+  );
+
+  const tiles: Tile[] = [];
+
+  for (let fi = 0; fi < POSTER_FAMILIES.length; fi++) {
+    const family = POSTER_FAMILIES[fi];
+
+    // A category shortlist is only two families wide, so `variant` cannot reach
+    // a family the event's category does not route to — which is the selection
+    // rule working, not a bug. So each family is shown on events whose CATEGORY
+    // actually sends them there, which is the truthful sample; where there are
+    // fewer than four such events, the rest are filled with uncategorised ones
+    // (an uncategorised event can reach any family).
+    const matching = QA_EVENTS.filter((ev) => familyShortlist(ev.categories).includes(family.id));
+    const fillers = QA_EVENTS.filter((ev) => !matching.includes(ev));
+
+    for (let k = 0; k < 4; k++) {
+      const useCategories = k < matching.length;
+      const ev = useCategories
+        ? matching[k]
+        : fillers[(k - matching.length) % Math.max(1, fillers.length)];
+      // Alternate so every family shows two photographic tiles and two without.
+      const wantsPhoto = k % 2 === 0;
+      const crop = QA_PHOTO_CROPS[(fi * 2 + k) % QA_PHOTO_CROPS.length];
+
+      const input: PosterInput = {
+        title: ev.title,
+        startsAt: ev.startsAt,
+        endsAt: ev.endsAt ?? null,
+        locationName: ev.venue,
+        categories: useCategories ? ev.categories : [],
+        photoDataUri: wantsPhoto
+          ? await photoDataUri(crop, POSTER_WIDTH, POSTER_HEIGHT)
+          : null,
+      };
+
+      const slug = `${family.id}-${k}-${slugify(ev.title)}${wantsPhoto ? '-photo' : ''}`;
+      const tile = await renderTile(input, family.id, slug);
+      if (!tile) continue;
+      tiles.push(tile);
+      console.log(
+        `  ${tile.ok ? '✓' : '✗'} ${tile.label.padEnd(34)} ${(
+          tile.measurement.inkFraction * 100
+        )
+          .toFixed(1)
+          .padStart(5)}% ink  ${(tile.measurement.bytes / 1024).toFixed(0).padStart(3)} KB  ${
+          ev.title.length > 40 ? `${ev.title.slice(0, 40)}…` : ev.title
+        }`
+      );
+    }
+  }
+
+  const sheet = await composeSheet(tiles, {
+    tileWidth: 300,
+    columns: 4,
+    heading: 'Sphaer poster families — QA contact sheet',
+    captions: true,
+  });
+  fs.writeFileSync(path.join(OUT_DIR, '_families-contact-sheet.png'), sheet);
+
+  // Mural scale. These sit on a wall at roughly this size, and a composition
+  // that only reads full-screen has failed.
+  const thumbs = await composeSheet(tiles, {
+    tileWidth: 118,
+    columns: 8,
+    heading: 'At mural thumbnail size (118px wide — actual wall scale)',
+    captions: false,
+  });
+  fs.writeFileSync(path.join(OUT_DIR, '_families-thumbnails.png'), thumbs);
+
+  const passed = tiles.filter((t) => t.ok).length;
+  console.log(`\n${passed}/${tiles.length} posters render with real, visible content.`);
+  console.log(
+    `Contact sheet  → docs/poster-qa/_families-contact-sheet.png\n` +
+      `Thumbnail strip → docs/poster-qa/_families-thumbnails.png\n` +
+      `LOOK at them.`
+  );
+  return passed === tiles.length && tiles.length >= 12;
+}
+
 async function loadRealEvents(limit: number): Promise<EventRow[]> {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -263,6 +594,15 @@ async function main() {
   const limit = limitArg !== -1 ? Number(args[limitArg + 1]) || 3 : 3;
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  // The family contact sheet is its own mode: it needs no network, renders
+  // every family rather than whatever the database happens to hold, and its
+  // real output is a picture rather than a line of numbers.
+  if (args.includes('--families')) {
+    const ok = await runFamilySheet();
+    if (!ok) process.exit(1);
+    return;
+  }
 
   const results: boolean[] = [];
 
