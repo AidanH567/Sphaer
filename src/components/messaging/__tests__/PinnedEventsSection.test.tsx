@@ -213,15 +213,27 @@ describe('PinnedEventsSection — mini-calendar filtering', () => {
   });
 
   it('marks a day with two events as such and leaves bare days untappable', async () => {
+    // Anchored to a FIXED HOUR of a future day, not to a raw offset from now.
+    // The old fixture used `3 * DAY + HOUR` and `3 * DAY + 5 * HOUR` and then
+    // asked for the day label of `now + 3 * DAY`. `dayKey` is a LOCAL CALENDAR
+    // day, so from 19:00 local onwards the +5h event rolls past midnight onto
+    // the following day and the cell reads "1 event" (and from 23:00, "0").
+    // Measured across all 24 hours: the assertion is false between 19:00 and
+    // 23:59 every single day. Two agents lost time reading it as a regression
+    // in the pinned-events feature, which it never was.
+    const busy = new Date();
+    busy.setDate(busy.getDate() + 3);
+    busy.setHours(10, 0, 0, 0);
+    const toBusyDay = busy.getTime() - Date.now();
+
     fetchMock.mockResolvedValue([
-      makeEvent('one', 3 * DAY + HOUR),
-      makeEvent('two', 3 * DAY + 5 * HOUR),
+      makeEvent('one', toBusyDay),
+      makeEvent('two', toBusyDay + 4 * HOUR),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
     fireEvent.press(await screen.findByText('Upcoming'));
 
-    const busy = new Date(Date.now() + 3 * DAY);
     const busyLabel = `${busy.toLocaleDateString('en-GB', { weekday: 'short' })} ${busy.getDate()}, 2 events`;
     expect(screen.getByLabelText(busyLabel)).toBeTruthy();
 
