@@ -28,6 +28,7 @@ import {
   posterLayoutToSvgString,
   POSTER_HEIGHT,
   POSTER_WIDTH,
+  textRunBounds,
   truncateToWidth,
   wrapText,
 } from '../poster-template';
@@ -264,16 +265,30 @@ describe('buildPosterLayout', () => {
   });
 
   it('keeps every text run inside the canvas', () => {
+    // MEASURED WITH `textRunBounds`, not `x + estimateTextWidth`.
+    //
+    // The naive form was here until 2026-08-19 and it was wrong in both
+    // directions for any run that is not left-anchored and unrotated. It
+    // survived only because no family had used `anchor: 'end'` yet; the first
+    // one that did (`technical`'s corner running heads) failed it at 1107px
+    // while being entirely on the canvas — its runs are anchored at their RIGHT
+    // edge and grow leftward. The same blind spot would have called a genuine
+    // overflow fine, which is the worse half.
+    //
+    // poster-families.test.ts already measures this properly per family;
+    // this check now agrees with it instead of contradicting it, and it also
+    // gained a left-edge and a bottom-edge assertion it never had.
     const layout = buildPosterLayout({
       ...base,
       title: 'Donaudampfschifffahrtsgesellschaftskapitänsabend',
       address: 'Sonnenallee 123, 12059 Berlin, Neukölln, Germany, Planet Earth',
     });
     for (const t of layout.texts) {
-      expect(t.x).toBeGreaterThanOrEqual(0);
-      expect(t.y).toBeGreaterThan(0);
-      expect(t.y).toBeLessThanOrEqual(POSTER_HEIGHT);
-      expect(t.x + estimateTextWidth(t.text, t.fontSize, t.role)).toBeLessThanOrEqual(POSTER_WIDTH);
+      const box = textRunBounds(t);
+      expect(box.x).toBeGreaterThanOrEqual(-1);
+      expect(box.y).toBeGreaterThanOrEqual(-1);
+      expect(box.x + box.width).toBeLessThanOrEqual(POSTER_WIDTH + 1);
+      expect(box.y + box.height).toBeLessThanOrEqual(POSTER_HEIGHT + 1);
     }
   });
 
@@ -287,12 +302,33 @@ describe('buildPosterLayout', () => {
     }
   });
 
-  it('draws the accent staircase only when there is no photo', () => {
+  it('fills the space a photo would have taken, rather than leaving a hole', () => {
+    // This was 'draws the accent staircase only when there is no photo', and
+    // it asserted `withoutPhoto.accents.length > withPhoto.accents.length`.
+    //
+    // That test was a FOSSIL. The "accent staircase" is the four-bar fallback
+    // the family work deliberately deleted — poster-families.test.ts has a
+    // whole describe block asserting it never comes back — so this was pinning
+    // the presence of the very thing another test forbids. It kept passing by
+    // accident, because the families that happened to be picked for `base` all
+    // spent their photo-less geometry on `accents`. `axial` spends its on the
+    // `band` (the window fills with colour) and on a 300px date, which is the
+    // same idea done better, and the count went equal.
+    //
+    // What it was really protecting is below: the photo-less variant must be
+    // its own composition, not the photographic one with a hole in it.
     const withoutPhoto = buildPosterLayout(base);
     const withPhoto = buildPosterLayout({ ...base, photoDataUri: 'data:image/png;base64,AAAA' });
-    expect(withoutPhoto.accents.length).toBeGreaterThan(withPhoto.accents.length);
+
     expect(withPhoto.photo).not.toBeNull();
     expect(withoutPhoto.photo).toBeNull();
+    // Same family, same geometry decisions — but something replaced the photo.
+    expect(withoutPhoto.family).toBe(withPhoto.family);
+    const filled =
+      JSON.stringify(withoutPhoto.accents) !== JSON.stringify(withPhoto.accents) ||
+      JSON.stringify(withoutPhoto.band) !== JSON.stringify(withPhoto.band) ||
+      withoutPhoto.texts.length > withPhoto.texts.length;
+    expect(filled).toBe(true);
   });
 
   it('never lets the accent marks collide with the type band', () => {

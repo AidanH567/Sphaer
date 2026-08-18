@@ -40,16 +40,20 @@
 
 import { posterPalette, posterPaletteById, type PosterPalette } from '@/constants/poster-palette';
 import { hashSeed, type PosterFamily, type PosterInput } from '@/utils/poster-metrics';
+import { axialFamily } from './axial';
 import { blockFamily } from './block';
 import { classicFamily } from './classic';
 import { panelFamily } from './panel';
 import { spineFamily } from './spine';
+import { technicalFamily } from './technical';
 
 export const POSTER_FAMILIES: readonly PosterFamily[] = [
   classicFamily,
   blockFamily,
   spineFamily,
   panelFamily,
+  axialFamily,
+  technicalFamily,
 ];
 
 export type PosterFamilyId = (typeof POSTER_FAMILIES)[number]['id'];
@@ -70,22 +74,43 @@ export function posterFamilyById(id: string): PosterFamily | undefined {
  * the reference for it, IS a workshop poster), `panel` goes wherever the event
  * most likely brought a photograph, and `classic` holds the talks and meetups
  * where the title genuinely is the poster.
+ *
+ * Added 2026-08-19: `axial` is symmetry-as-ceremony, so it leads the calm
+ * categories — wellness and therapy — and joins the making ones; `technical` is
+ * dark and instrumented, so it goes where an event is more likely to be about
+ * apparatus than atmosphere (jobs, talks, meetups) and leads `job`. Neither
+ * joins `music` or `concert`: a club night is atmosphere, and `spine` + `panel`
+ * already serve it well — diluting the loudest category was not the gap.
+ *
+ * ⚠️ SHORTLISTS ARE NOW THREE LONG, NOT TWO. That widening is the point — with
+ * two, a category's poster was a coin flip between two geometries — but it also
+ * means an event ALREADY on the wall can draw a different family than it did
+ * before, because the index is `hash % shortlist.length`. Pre-launch that is
+ * fine and it is the same churn phase 1 accepted going from one family to four.
+ * Once posters are captured and shared it stops being fine, and the fix at that
+ * point is to persist the chosen family with the event, not to freeze the list.
  */
 const CATEGORY_FAMILIES: Record<string, readonly string[]> = {
   music: ['spine', 'panel'],
   concert: ['spine', 'block'],
   film: ['panel', 'spine'],
-  art: ['panel', 'block'],
-  workshop: ['block', 'classic'],
-  wellness: ['block', 'panel'],
-  therapy: ['block', 'classic'],
-  coach: ['block', 'classic'],
-  talk: ['classic', 'spine'],
-  education: ['classic', 'block'],
-  meet: ['classic', 'panel'],
-  job: ['classic', 'block'],
-  service: ['classic', 'block'],
-  'social movements': ['spine', 'classic'],
+  art: ['panel', 'block', 'axial'],
+  workshop: ['block', 'classic', 'axial'],
+  wellness: ['axial', 'block', 'panel'],
+  therapy: ['axial', 'block', 'classic'],
+  coach: ['block', 'classic', 'axial'],
+  // ⚠️ `talk` must share NO family with `music`. A club night and a talk
+  // landing on the same geometry is the failure the shortlists exist to
+  // prevent, and it is not enough to check that today's hash separates them:
+  // the index is `hash % length`, so two lists that merely differ in ORDER
+  // still collide for some seeds. Disjoint is the only version of this that
+  // holds for every event. A test asserts it structurally.
+  talk: ['classic', 'technical', 'axial'],
+  education: ['classic', 'block', 'axial'],
+  meet: ['classic', 'panel', 'technical'],
+  job: ['technical', 'classic', 'block'],
+  service: ['classic', 'block', 'technical'],
+  'social movements': ['spine', 'classic', 'technical'],
 };
 
 const ALL_IDS = POSTER_FAMILIES.map((f) => f.id);
