@@ -70,7 +70,19 @@ export function useProfileActivities(
     setGoing(goingResult ?? []);
     setSaved(savedResult ?? []);
     setHosting(hostingResult ?? []);
-    if (goingResult === null) {
+    // A FAILED query and an EMPTY one must not look the same.
+    //
+    // Only `going` used to raise the error, so a network timeout on the saved
+    // query fell through to `savedResult ?? []` and the sheet said, calmly and
+    // with no error anywhere, that you have saved nothing. That is the worst
+    // possible reading of a failure — it is indistinguishable from the truth,
+    // and it lands on the exact feature Lara already reported as losing her
+    // saves.
+    //
+    // `null` unambiguously means "attempted and failed": the branches that are
+    // deliberately NOT fetched resolve to `[]`, never null. So checking all
+    // three cannot report an error for a query that was never run.
+    if (goingResult === null || savedResult === null || hostingResult === null) {
       setError('Could not load activities');
     }
     setIsLoading(false);
