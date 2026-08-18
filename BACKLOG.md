@@ -430,6 +430,69 @@ it there too.
 
 ---
 
+## 🎨 POSTER STUDIO — decided 2026-08-18, phased
+
+**⚠️ This SUPERSEDES the 2026-08-17 scope line** that said one template, no
+editor, "cut if it grows". Aidan reopened it deliberately and chose the full
+destination: *"we can do option 3 first... however i want to expand this out to
+be a fantastic inbuilt editor. i think it is a selling point for the app."*
+
+**The build order is FORCED, not chosen.** AI variations of a user's own design
+cannot operate on a bitmap — "make this more bold" applied to a PNG is a new
+poster, not an edit. They need the poster to be a structured document. Sphaer
+already has one: `PosterLayout` resolves every rect, baseline and font size and
+is serialisable, and `assertLayoutIsPaintable` validates it before it can be
+drawn. So: families -> persist the layout -> editor over the document -> AI
+transforms of the document. Skipping to an editor that edits pixels forecloses
+the AI half permanently.
+
+**The references are already in the repo and had never been used.**
+`scripts/seed-assets/posters/` holds TEN hand-authored posters demonstrating ten
+different compositional systems. The generator drew on none of them; it solved
+exactly one geometry. That, not colour and not repetition-in-the-abstract, is
+why the output reads as templated.
+
+### Phase 1 — IN BUILD (branch `feat/poster-families`)
+- [ ] Three family solvers from the seed posters (Swiss two-block, rotated
+      spine, full-bleed + inset panel), current composition kept as a fourth
+- [ ] Per-family no-photo treatment — the four descending bars at
+      `poster-template.ts:374` read as a loading skeleton and die here
+- [ ] Selection by event category first, then hash; deterministic as now
+- [ ] Palette collision fixed; palettes constrained per family
+- [ ] Shuffle on the create screen
+- [ ] Contact sheet of 12+ real posters in `docs/poster-qa/`, checked at
+      thumbnail size — **a green suite is not evidence for this item**
+
+### Phase 2 — the document model, then the editor
+- [ ] **Persist `PosterLayout` with the event.** This is the real deliverable;
+      the UI is the easy half and everything later depends on this one.
+- [ ] Slot editor: text, image swap + crop, palette, family. Bounded controls
+      over a solved layout — NOT a free canvas.
+- [ ] Undo, and revert-to-generated.
+
+### Phase 3 — AI as collaborator (first running cost)
+- [ ] Variations of the user's OWN layout, three at a time, guard-validated
+- [ ] Polish pass over an assembled poster (hierarchy, spacing, type ramp)
+- [ ] Rate limiting + moderation decided BEFORE launch — reporting is open to
+      any signed-in user, so generation would be too
+
+### Phase 4 — the studio
+- [ ] Free canvas, arbitrary elements, shapes, layer order
+- [ ] User-saved templates; possibly community templates
+
+**Cost named and accepted:** a new product surface in the week whose goal was
+getting the app into people's hands. Phases 2–4 are weeks-to-months. A1 (Apple)
+and A4 (blank posters) still outrank all of it — the families feed the same wall
+that currently has holes in it.
+
+**Revisit:** after the first wall of three families is looked at. If three do
+not make the mural stop reading as generated, more families are not the fix and
+the editor would be built on the wrong diagnosis.
+
+Full design: the Poster Studio document, 2026-08-18.
+
+---
+
 ## 🟡 UNDECIDED — needs Aidan's call. DO NOT BUILD.
 
 Each of these is missing an answer only he can give. Building one on a guess is
