@@ -1,7 +1,12 @@
 import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { validateImageUpload } from '@/utils/upload-validation';
+import {
+  MAX_UPLOAD_BYTES,
+  UploadValidationError,
+  validateImageUpload,
+} from '@/utils/upload-validation';
+import { base64ToBytes, readPngHeader } from '@/utils/poster-guard';
 import {
   isReportKind,
   isReportSeverity,
@@ -71,6 +76,18 @@ export interface SubmitBugReportInput {
   screen?: string | null;
   /** Local image URI from the picker — optional. */
   screenshotUri?: string | null;
+  /**
+   * A FLATTENED annotated screenshot as bare base64 PNG — the screenshot and
+   * the reporter's marks fused into one image. Takes precedence over
+   * `screenshotUri` when present, because it IS that screenshot plus the
+   * circle round the problem.
+   *
+   * Only one image is ever uploaded. There is deliberately no strokes-as-JSON
+   * column beside it: the reader wants to see the circle, and a second
+   * representation would be a migration plus a renderer that can disagree with
+   * the picture, in exchange for nothing.
+   */
+  screenshotBase64?: string | null;
 }
 
 /** The single documented cast at the bug-report boundary (same rule as
@@ -178,8 +195,14 @@ export async function submitBugReport(
   const severity = kind === 'bug' && input.severity ? input.severity : null;
   const screen = kind === 'bug' ? input.screen?.trim() || null : null;
 
+  // An annotated screenshot replaces the raw one — it contains it. Checked
+  // first so a reporter who circles something never has the un-annotated
+  // version uploaded instead, which would silently throw away the marks and
+  // look identical from the form.
   let screenshotPath: string | null = null;
-  if (input.screenshotUri) {
+  if (input.screenshotBase64) {
+    screenshotPath = await uploadAnnotatedBugScreenshot(reporterId, input.screenshotBase64);
+  } else if (input.screenshotUri) {
     screenshotPath = await uploadBugScreenshot(reporterId, input.screenshotUri);
   }
 
@@ -224,6 +247,65 @@ async function uploadBugScreenshot(userId: string, uri: string): Promise<string>
   const { error } = await supabase.storage
     .from('bug-screenshots')
     .upload(path, blob, { upsert: false, contentType: blob.type || `image/${ext}` });
+  if (error) {
+    if (isMissingBucketError(error)) throw new BugReportUnavailableError();
+    throw error;
+  }
+  return path;
+}
+
+/**
+ * Upload a FLATTENED annotated screenshot (bare base64 PNG).
+ *
+ * ── Why this is not just `uploadBugScreenshot` with a data: URI ──────────────
+ * Because that does not work. Every other upload in the app goes
+ * `fetch(uri) → blob → upload(blob)`, and React Native's `fetch` does NOT
+ * reliably resolve `data:` URIs — the same wall the poster generator hit (see
+ * `uploadGeneratedEventPoster`). The path that works on iOS, Android and web
+ * alike is base64 → ArrayBuffer → `upload(arrayBuffer, { contentType })`.
+ * Handing the annotator's output to the blob path would fail on a phone while
+ * passing every test that mocks `fetch`.
+ *
+ * Decoding here rather than in the caller is deliberate, for the same reason
+ * the poster does it: the checks below then run on the EXACT bytes that go
+ * over the wire, not on a copy that was verified earlier and re-encoded since.
+ *
+ * `readPngHeader` is the cheap structural check that the capture actually
+ * produced an image — a `toDataURL` that fires before the canvas has laid out
+ * returns a valid PNG that happens to be 0×0, and that is exactly the
+ * "annotated screenshot containing nothing" failure. It is not a pixel check:
+ * decoding an IDAT stream in JS on a phone is not a reasonable thing to ship,
+ * and the real pixel evidence lives in `scripts/qa-annotate-screenshot.ts`.
+ */
+async function uploadAnnotatedBugScreenshot(
+  userId: string,
+  base64Png: string
+): Promise<string> {
+  const bytes = base64ToBytes(base64Png);
+  const header = readPngHeader(bytes);
+  if (!header || header.width <= 0 || header.height <= 0) {
+    throw new UploadValidationError(
+      "The annotated screenshot didn't render properly. Please try again."
+    );
+  }
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    const mb = (bytes.byteLength / 1024 / 1024).toFixed(1);
+    throw new UploadValidationError(
+      `The annotated screenshot came out at ${mb} MB, over the ${
+        MAX_UPLOAD_BYTES / 1024 / 1024
+      } MB limit. Please try again.`
+    );
+  }
+
+  const path = `${userId}/${Date.now()}.png`;
+  const { error } = await supabase.storage
+    .from('bug-screenshots')
+    // `bytes.buffer` is exact-length — base64ToBytes slices rather than
+    // subarrays precisely so this does not upload trailing zero bytes.
+    .upload(path, bytes.buffer as ArrayBuffer, {
+      upsert: false,
+      contentType: 'image/png',
+    });
   if (error) {
     if (isMissingBucketError(error)) throw new BugReportUnavailableError();
     throw error;
