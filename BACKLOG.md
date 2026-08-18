@@ -1,889 +1,730 @@
 # Sphaer — Backlog
 
-Single source of truth for what to build next. The repo is worked on in
-**checkpointed sessions**: one feature end-to-end per session, then human
-review before the next. Future autonomous Claude sessions read the
-`▶ UP NEXT` block, build it, update this file, hand back.
+**Single source of truth for what to build next.** Rebuilt from scratch
+**2026-08-18** because the previous revision was last written **2026-06-17**
+(`7d40eda`) and 26 commits had landed since — its `▶ UP NEXT` was pointing a
+future session at a June Figma decision and knew nothing about July or August.
+
+> **Every status in this file was checked against the code on 2026-08-18**, not
+> against another document. Where the code could not settle it, the item says
+> **UNVERIFIED** and why. An honest "could not confirm" beats a confident guess —
+> this file has been confidently wrong before.
+>
+> The old file's full prose (every shipped item written out at length) is not
+> lost: `git show 7d40eda:BACKLOG.md`. Everything still *open* in it has been
+> re-filed below.
+
+---
+
+## ▶ UP NEXT — as of 2026-08-18
+
+Three items. All three are **decided** — do not re-grill them, build them.
+Ordered: ship 1, then 2, then 3.
+
+### 1. Every Share button in the app hands people a dead link (P0, S)
+
+**Why.** `src/services/share.service.ts:25` sets `SHARE_BASE_URL =
+'https://sphaer.app'`, and every share payload — event (`:29`), circle (`:34`),
+profile (`:39`) — is a URL on that host. **`sphaer.app` 404s.** So the app's
+entire sharing surface currently sends a broken link, and the whole point of
+this week is *"something we can really share to people."* This is the cheapest
+high-value fix on the list.
+
+**Already decided** (grill, 2026-08-17): *custom scheme `sphaer://` NOW,
+universal links built up in parallel.* The scheme half already works —
+`app.json` sets `"scheme": "sphaer"` and `src/lib/linking.ts` already parses
+`sphaer://circles/x`, `sphaer://event/x`, `sphaer://user/x` (`:8`, `:68`,
+`:97`). Nothing new has to be invented; the share payload just isn't using it.
+
+**Done when.**
+- [ ] Share payloads carry a link that actually resolves for the recipient —
+      `sphaer://…` for someone with the app, and honest copy for someone
+      without it (do not silently hand out a 404).
+- [ ] `shareEvent` / `shareCircle` / `shareProfile` all covered, plus the
+      ticket screen's `handleInviteFriends`, which delegates to `shareEvent()`.
+- [ ] A test asserts the payload contains no bare `https://sphaer.app/` URL
+      while that domain is unserved.
+
+**Files.** `src/services/share.service.ts`, `src/lib/linking.ts`,
+`app/(tabs)/circles/[id].tsx:330`, `app/event/[id].tsx`, `app/ticket/[id].tsx`.
+
+**Not in scope.** Standing up `sphaer.app`, the AASA file, `assetlinks.json`,
+`associatedDomains` — that is the universal-links half and it is blocked on
+Aidan (domain + Apple account). Filed under BLOCKED ON AIDAN.
+
+---
+
+### 2. Circle permission tiers + all-members-post (Lara #6) (P0, M)
+
+**Why.** The last unbuilt point on Lara's list that is fully decided. Circles
+today have exactly one boolean, `circles.is_public`
+(`20240101000000_initial_schema.sql:27`), and **`app/(tabs)/create/circle.tsx:110`
+hardcodes `is_public: true`** — so every circle ever created is public and the
+column has never varied. There is no tier, no picker, no member-post policy.
+
+**Decided 2026-08-17 (verbatim).** *Three tiers — public / semi-public /
+private — and **all members can post events**. Admins moderate, they do not own
+posting.* This matches the app's anti-gatekeeping thesis; CLAUDE.md's hard rule
+that circle membership is never a prerequisite for creating an event stays
+intact — this is about posting *into* a circle, not about creating at all.
+
+**Done when.**
+- [ ] A migration replaces/extends `is_public` with the three tiers, **authored
+      but NOT pushed** — see STANDING HAZARDS, apply one file at a time.
+- [ ] SELECT RLS per tier: public readable by all; semi-public discoverable but
+      contents member-gated; private invisible to non-members.
+- [ ] An event may be attached to a circle by any **member** of that circle —
+      today the only insert policy is `events_insert_own`
+      (`auth.uid() = creator_id`), with no `circle_members` check at all.
+- [ ] Tier picker in Create Circle + Edit Circle.
+- [ ] Existing circles keep working: every current row is public, so the
+      migration must default to public.
+
+**Files.** `supabase/migrations/2026081x_circle_tiers.sql` (new),
+`app/(tabs)/create/circle.tsx`, `src/services/circles.service.ts:10` (the
+`.eq('is_public', true)` browse filter), `app/(tabs)/circles/[id].tsx`.
+
+**Watch out.** `visibility: 'anyone' | 'invite_only'` already exists but it is
+on **events**, not circles (`src/services/events.service.ts:164`,
+`app/(tabs)/create/index.tsx:45,724`). Don't conflate the two; do decide how
+they interact (a private circle's public event?) and record the answer here.
+
+---
+
+### 3. Apple Sign In (P0 store blocker — write it now, test it later) (M)
+
+**Why.** The app ships Google sign-in, which makes Sign in with Apple
+effectively mandatory at review. **Verified absent 2026-08-18:** no
+`expo-apple-authentication` in `package.json`, no implementation anywhere.
+Worse, `app/legal/privacy.tsx:18` already tells users they can sign in with
+"Google / Apple" — the privacy policy promises a feature that does not exist,
+and a reviewer reading the policy against the app can flag that on its own.
+
+**Approach.**
+1. `npx expo install expo-apple-authentication`; config-plugin entry in
+   `app.config.js`.
+2. `signInWithApple()` in `src/services/auth.service.ts`, mirroring
+   `signInWithGoogle()` — Apple's native sheet, then
+   `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
+3. `AppleButton` in `src/components/auth/AuthControls.tsx`; render on
+   `app/(auth)/index.tsx`, `login.tsx`, `signup.tsx`.
+4. Same skip-onboarding routing as Google → `/(tabs)/feed`.
+5. Non-iOS: render for consistency, no-op with an honest alert.
+
+**Done when.**
+- [ ] Button on landing / login / signup; flow returns a session and routes past
+      onboarding.
+- [ ] Written and typechecked. **Testing is blocked** — it needs the Apple
+      Developer account, a Service ID, a Team ID, a Key ID and a signing key,
+      plus the Supabase dashboard Apple provider. Write it, mark it
+      write-complete, hand the test to Aidan.
 
 ---
 
 ## How to use this file (for future sessions)
 
-1. Start every session by reading `▶ UP NEXT` and skipping straight to the
-   first item there. Do **not** re-grill decisions that are already locked
-   in the item's spec.
-2. While building, if you discover work that should be its own item, add it
-   to the appropriate priority section below — *don't expand the scope of
-   the current item*.
-3. When the item ships:
-   - Move it out of `▶ UP NEXT` into a new `## ✓ Shipped` section at the
-     bottom (date + one-line summary + commit/PR link).
-   - Promote the next two items from P0 into `▶ UP NEXT`, give them the
-     full B-spec treatment (why / done-when / files / approach / open
-     questions).
-   - Commit `BACKLOG.md` changes in the same PR as the feature so the
-     review captures both.
-4. Items below `▶ UP NEXT` are **lightweight** — title + one-line why +
-   done-when checklist. They get fleshed out only when promoted.
-5. Priority sections (`P0`, `P1`, `P2`) are ordered — top item in each
-   section ships first.
+The checkpointed-session contract is unchanged — it has been working and Aidan
+works this way. What changed on 2026-08-18 is the shape of the sections below
+it, and one hard new rule at the end.
 
-**Token budget guardrail (user request):** the human asked that we stop work
-once daily Claude usage hits ~90%. We can't query usage directly. Be
-conservative — prefer shipping one solid item to half-shipping two. If a
-session feels like it's stretching past ~3 hours, stop and hand back.
+1. **Start by reading `▶ UP NEXT`** and build the first item. Do not re-grill
+   decisions already locked in the item's spec.
+2. **Never build anything under `🟡 UNDECIDED`.** Those items are missing a call
+   only Aidan can make. Silently building one wastes the work — the profile
+   rework got built and rejected on sight the same day (`920ed0f` → `5446eb5`)
+   for exactly this reason. Bring the question, don't guess the answer.
+3. `🟢 DECIDED BUT UNBUILT` is the takeable pool. If `▶ UP NEXT` is empty,
+   promote from there — P0 first — and give it the full spec treatment
+   (why / done-when / files / not-in-scope).
+4. While building, if you find work that should be its own item, **file it in
+   the right section** — don't expand the current item's scope.
+5. When an item ships: move it to `✅ SHIPPED` with the date, a one-line
+   summary and the commit hash; promote the next item into `▶ UP NEXT`; commit
+   this file **in the same session** as the feature.
+6. **Status claims must be verified against code**, not against this file or the
+   Obsidian notes. If you can't confirm it, put it under `❓ UNVERIFIED` and say
+   what would settle it. This file was two months wrong once already.
+7. **You do not push.** Sphaer is `push: false` — a shared repo (Aidan + Lara as
+   co-creator, Rabon on design). Prepare branches locally; Aidan pushes.
+   *(Note: `CLAUDE.md`'s git section still says "Direct merge to `main`" and its
+   README section says "Never commit directly to `main`". Both predate
+   `push: false`. Branch and stop.)*
 
----
-
-## 🐞 Glitches & bugs — Lara's Figma audit (2026-06-17)
-
-Source: Figma "Glitches & bugs documentation" (node 6516:19) + a messaging bug
-and a web-responsiveness ask from the user. Triaged + partly fixed in the
-2026-06-17 session. Legend: ✅ fixed this session · 🔒 blocked (needs a
-decision / asset / repro from the team).
-
-### ✅ Done
-- **Web responsiveness / bottom scrollbar** — app shell pinned to `100dvh`
-  (`app/+html.tsx`); fits every phone, bottom nav always visible, content scrolls
-  inside its own ScrollViews. Also removes the iOS overscroll bounce.
-- **About field placeholder escaped its box** — shared `Input` now grows for
-  `multiline` content (`src/components/ui/Input.tsx`).
-- **"Get Booked" → "Book"** — event-detail CTA (`app/event/[id].tsx`).
-- **Street shown twice** — top row shows venue/district only; the full address
-  appears once in the Location section (`app/event/[id].tsx`).
-- **"Sub Title" → "Subtitle"** — create-form label + alert (`app/(tabs)/create/index.tsx`).
-- **Address autocomplete stray comma** — `cleanAddress()` strips a leading/
-  trailing/doubled comma from Google's `formattedAddress` (`src/lib/places.ts`).
-- **Message the host from an event** — direct 1:1 Message button on the event
-  artist row → `/messages/[creatorId]` (`app/event/[id].tsx`).
-- **#6 Social links** — `instagram`/`linkedin` columns (migration
-  `20260617000000`) + fields in onboarding/edit + tappable links on the profile.
-- **#9 Feed card expanded** — event card now shows the subtitle, a description
-  snippet, and an "X going" count (`src/components/feed/EventCard.tsx`; the feed
-  query embeds `event_registrations(count)`).
-
-### ✅ Resolved — no change needed
-- **#2 "can only message people you follow"** — checked every layer (messages
-  RLS insert/select, the rate-limit + notification triggers, the client, and
-  moderation `blockedIds`): there is NO follow gate; messaging already works
-  without following. The new follow-independent Message button is the clean path.
-  If a specific "blocked" page still recurs it's a different cause — need the
-  exact error.
-- **#5 Circle avatar vs cover** — keep both: the cover image lives on the circle
-  *detail* page (Lara didn't realise). No change.
-
-### ▶ NEXT — max priority (do right after this patch, with a `/grill-me`)
-- **#7 + #8 Cover-image crop + media gallery** — let events & circles upload and
-  arrange more images about their event/circle, and crop the cover frame. One
-  piece of work; grill to scope the UX + storage before building.
-
-### 🔒 From Figma — revisit with the team
-- **#1 Create-activity crashes / loses progress** ("collapses, I get kicked
-  out") — no static cause found; the `create-activity` ErrorBoundary catches a
-  render throw and resets the form. NEEDS the exact error text (red screen /
-  console) or repro steps.
-- **#3 Back button dead after sign-up / "couldn't go back to add Neukölln"** —
-  onboarding → location is one-way by design (`router.replace`, `/location` has
-  `gestureEnabled:false`). NEEDS a decision: allow back-to-edit during onboarding
-  vs rely on Edit Profile afterwards.
-- **#4 "needs a comma" (missing comma)** — exact screen unclear from the note.
-  NEEDS the specific screenshot (one-char fix once found).
-- **#10 Onboarding copy** — team is "still deciding"; NEEDS the final wording.
-- **#11 Three too-vague notes** — "overlay here", "does this dropdown work +
-  change the icon", "change things for pitching" — NEEDS which screen / what.
+**Token budget guardrail (Aidan's request).** Stop work around ~90% of the daily
+Claude usage. Prefer one solid shipped item to two half-shipped ones. Past ~3
+hours, stop and hand back.
 
 ---
 
-## ▶ UP NEXT
+## Status snapshot — measured 2026-08-18
 
-### 1. Feed filter affordance — product decision needed (Figma 4045:8204)
-
-~~Figma structural follow-ups (greeting header, Welcome screen, UX pass)~~
-— **SHIPPED 2026-06-11** (`5097fa3`, `632e064`), see ✓ Shipped. The one
-loose end from the Figma audit filing needs a call only the user can make:
-
-**Why.** The Figma feed places a sliders/filter icon button (45px,
-rounded, rotated 90°) at the right end of the Feed/Map/Mural toggle row,
-presumably opening a filter sheet. We ship the Near me / Tonight /
-This weekend / Free chip row beneath the header instead.
-
-**Decide (user input needed):** adopt the filter-sheet pattern, keep the
-chips, or both. Then implement accordingly.
-
-**Done when.**
-- [ ] Product decision recorded here
-- [ ] If adopting: filter icon in the toggle row + a filter sheet wired
-      to the existing EventFilters state
-
-**Figma access that works:** fileKey `HIVq6Vaymj01dZ37AvwCUF`
-(`Sphaer_Prototype_RA`, Pro-owned), explicit nodeIds only — never the
-Starter-capped copy `iuCO8ENAhfYIJly1JGAeU1` or the giant board node
-`6239:6597`.
-
-**Otherwise next:** the 9 pending migrations are now **APPLIED** (2026-06-15,
-see the struck "APPLY THE 9 PENDING MIGRATIONS" entry below). Remaining
-user-authorization blockers: deploy `supabase/functions/delete-account`,
-regenerate `src/types/supabase.ts` (`gen types --linked`), and Apple Sign In
-(#2 below) once the Apple dev account exists.
-
----
-
-### 2. Apple Sign In (P1 launch blocker, conditional on Apple dev account)
-
-**Why.** App Store policy: any app offering third-party sign-in (Google,
-Facebook, etc.) MUST also offer Sign in with Apple — failing this is a
-near-guaranteed reject at review. We already ship Google.
-
-**Approach.**
-1. Add `expo-apple-authentication` to the project (`npx expo install
-   expo-apple-authentication`). Drop the Apple button onto the landing
-   screen + login screen + signup screen, mirroring the existing
-   `GoogleButton` in `src/components/auth/AuthControls.tsx`.
-2. Add `signInWithApple()` to `src/services/auth.service.ts` — mirrors
-   `signInWithGoogle()` but goes through Apple's native sheet, exchanges
-   the identity token for a Supabase session via
-   `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
-3. Configure Supabase Auth's Apple provider (one-time dashboard work):
-   add the Apple Service ID, Team ID, Key ID, and signing key.
-4. Same skip-onboarding flow as Google — Apple users land straight on
-   `/(tabs)/feed`.
-
-**Done when.**
-- [ ] Apple button on landing, login, signup.
-- [ ] Sign-in flow returns a session and routes the user past onboarding.
-- [ ] Manually verified on an iOS simulator/device (Apple sign-in is iOS-
-      only at the OS level, but the button can render on Android/web for
-      consistency — pressing it just no-ops with an "Apple sign-in is only
-      available on iOS" alert).
-
-**STOP CONDITION.** Apple Sign In requires an Apple Developer account
-($99/year) + a Service ID configured in App Store Connect + a signing key
-generated and downloaded from there. If the Apple dev account isn't set
-up yet, file this as a blocked-on-credentials item and skip — the user
-must register / configure those before any of this can be tested.
-
-**Files likely touched.**
-- `src/services/auth.service.ts` — add `signInWithApple()`.
-- `src/components/auth/AuthControls.tsx` — new `AppleButton`.
-- `app/(auth)/index.tsx`, `login.tsx`, `signup.tsx` — render the button.
-- `package.json` — `expo-apple-authentication`.
-- `app.json` — `expo-apple-authentication` config plugin entry.
-
----
-
-## P0 — App audit 2026-06-11 (launch blockers — NEW)
-
-Fresh three-angle analysis (user journeys / code robustness / launch ops).
-Items verified against code with file evidence; none duplicate earlier sections.
-
-### ~~Report & block — UGC moderation~~ — shipped 2026-06-12 (`51abfd7` migration + `121fc81` feature); INERT until migration applied
-Migration `20260612020000_reports_blocked_users.sql` (FIFTH in the gated list) + moderation.service with graceful degradation (missing-table → reads empty, writes show "available after the next app update"; PGRST205 shape verified against the live project). OverflowMenuSheet entry points on user profile (report/block + blocked-state body), event detail, circle detail, DM thread (composer → Unblock bar). Blocked creators filtered from feed/map/mural via useEvents; blocked partners hidden from inbox + badge; blocked senders hidden in group chats. 4 component tests. Residual (filed, small): circle-page activity lists and direct deep links to a blocked user's event aren't filtered.
-
-### ~~App icons are 1×1-pixel placeholder stubs~~ — shipped 2026-06-12 (`33bdd56`): generate-app-icons.ts emits real icon + adaptive; web favicon still a stub (filed below)
-Why: `assets/images/icon.png` + `adaptive-icon.png` are 69-byte 1×1 PNGs; only splash.png is real. Generate a 1024×1024 icon + Android adaptive (foreground/background, 108dp safe zone) from the SphaerIcon hoops via `scripts/generate-splash.ts`'s sharp pipeline.
-Scope: S.
-
-### ~~eas.json missing + no version strategy~~ — shipped 2026-06-12 (`33bdd56`)
-Why: no eas.json → no build profiles, no `runtimeVersion`, no auto-increment `buildNumber`/`versionCode` (app.json hardcodes 1.0.0). Blocks any store build. Create eas.json (development/preview/production), set `autoIncrement`, decide on expo-updates OTA.
-Scope: M.
-
-### ~~Env-var startup validation~~ — shipped 2026-06-12 (`33bdd56`)
-Why: `src/constants/config.ts` defaults missing `EXPO_PUBLIC_*` vars to `''` — auth/maps fail silently. Add a startup assert that throws a clear error screen in dev and logs loudly in prod when required vars are empty.
-Scope: S.
-
-### ~~app.json store metadata incomplete~~ — app.json half shipped 2026-06-12 (`33bdd56`); App Store Connect form items remain ops
-Why: missing description/category/privacy fields; bundle ids + scheme are set. Fill what app.json owns; track the App Store Connect form items (privacy URL, age rating with UGC implications) alongside.
-Scope: S–M (partly ops).
-
-### Crash monitoring + minimal analytics
-Why: ErrorBoundary logs to console only — production crashes are invisible. Wire Sentry (expo plugin) into ErrorBoundary + global handler; decide on privacy-friendly analytics (PostHog/none) per the no-tracking ethos.
-Scope: M. (User call on vendor.)
-
----
-
-### ~~APPLY THE 9 PENDING MIGRATIONS~~ — ✅ ALL APPLIED 2026-06-15 (via Supabase MCP, user-authorized)
-All 9 applied to production in order through the connected Supabase integration (the local CLI was never logged in/linked). Verified: `list_migrations` shows all 9 recorded; `reports` / `blocked_users` / `rate_limit_log` tables exist with RLS; `tsc` clean; a live report submit inserted + persisted a `reports` row end-to-end (then removed). So now LIVE: saved-event reminder column, denormalized follow counts (+ triggers), circle delete + member-kick RLS, event subtitle/spots/visibility/media columns, report & block tables, rate limiting (messages 30/min · follows 60/hr · reports 10/hr), notification producers (+ notifications added to the Realtime publication), storage MIME/10MB caps, `profiles.verified` (+ anti-self-grant trigger).
-**Remaining follow-ups (non-blocking):** (a) regenerate `src/types/supabase.ts` via `npx supabase gen types typescript --linked` — until then the documented casts in moderation.service.ts / events.service.ts + getProfile()'s two COUNT queries keep working and `tsc` is green; (b) the delete-account edge function deploy is still separately pending; (c) security advisor: the new SECURITY DEFINER **trigger** functions are EXECUTE-able by anon/authenticated (low risk — trigger fns aren't RPC-callable in practice) — optional hardening = `REVOKE EXECUTE … FROM anon, authenticated`; (d) leaked-password protection still OFF (dashboard toggle).
-
-### ~~web favicon.png is still a 1×1 stub~~ — shipped 2026-06-12 (`68dc4d1`): real 48px render, app.json already pointed at it
-
-### ~~conditional useState in EventRegistrationSheet~~ — shipped 2026-06-12 (`3130587`): hook hoisted, stale-registering reset, eslint override removed (rules-of-hooks = error everywhere)
-
-### ~~eslint warning burn-down + expo-doctor failures~~ — shipped 2026-06-12 (`24eb300`): 0 errors / 0 warnings, doctor 19/19
-Real exhaustive-deps fixes where safe, justified disables where re-running would loop; expo-modules-core direct dep removed, react-test-renderer pinned 19.2.0, expo/expo-font/expo-router patch bumps. npm audit's 14 pre-existing advisories deliberately untouched (unvetted upgrades).
-
-### NEW (2026-06-12): Alert.alert is a silent no-op on react-native-web
-Found via the signup bug (422 user_already_exists was alerted → web users saw a dead button). Auth credential screens fixed 2026-06-12 (`d88e277`, inline FormErrorText pattern). ~28 other files still use Alert.alert for failure feedback that web users never see (onboarding, verify-email, create flows' upload errors, profile mutations…). Sweep them to inline errors / FormErrorText / ConfirmSheet. Native users are unaffected (Alert works there), so this is P2 unless web becomes a launch target. Scope: M.
-
-### ~~no-op Tabs.Screen declarations in (tabs)/_layout.tsx~~ — shipped 2026-06-12 (`6091c93`): removed (feed kept to pin the initial tab); warnings verified gone
-
-## P1 — App audit 2026-06-11 (broken or missing expected features)
-
-### ~~Event-detail Follow button is cosmetic~~ — shipped 2026-06-12 (`8546173`)
-Why: the artist-row Follow on `app/event/[id].tsx` (~336) only flips local state — never calls `followUser()`, never hydrates from `isFollowing()`, resets on every visit. Wire it like the circle-detail Organizer follow (shipped `ce45511`).
-Scope: S.
-
-### ~~Cancel registration~~ — shipped 2026-06-12 (`8546173`)
-Why: `unregister()` exists in registrations.service.ts but no screen calls it. Add "Cancel registration" to the ticket screen (and/or event detail when registered) with ConfirmSheet.
-Scope: M.
-
-### ~~Creator attendee list~~ — shipped 2026-06-12 (`8546173`); RLS already world-readable, works now
-Why: creators can edit/delete events but can't see who registered. Add an attendees sheet (EntityListSheet pattern) on event detail, creator-only for v1.
-Scope: M.
-
-### ~~Circle edit & delete (parity with events)~~ — shipped 2026-06-12 (`5a7ad34` + RLS migration `e1881fd`); INERT until migration applied
-Why: events gained creator edit/delete (`c4406a4`); circles have neither — `updateCircle` exists, no delete service, no UI. Mirror the event pattern incl. RLS check for circle delete.
-Scope: M.
-
-### ~~"FEW TICKETS LEFT" badge is hardcoded~~ — removed 2026-06-12 (`8546173`) until a spots column ships
-Why: EventRegistrationSheet always renders the scarcity badge regardless of data. Wire to real spots/registration counts or hide until spots exist (Spots field is itself a filed create-form gap).
-Scope: S.
-
-### ~~Cold-start deep link handling~~ — shipped 2026-06-12 (`4c1cc3a`)
-expo-router already handled signed-in scheme links; the gap was the signed-out path. Pending-deep-link stash (AsyncStorage, 15-min TTL, survives OAuth relaunch) captured at the (tabs) auth redirect, replayed once after landing in tabs; `pathFromUrl()` normalizes sphaer:// + sphaer.app URLs (27 unit tests). Universal Links (AASA/assetlinks) remain gated on the Apple dev account / Play signing — hook-in points documented in src/lib/linking.ts.
-
-### ~~Cold-start feed discovery CTA~~ — shipped 2026-06-12 (`c68ba48`)
-Why: a zero-follow user sees explanatory text but no action. Add "Browse circles" CTA to the feed empty state.
-Scope: S.
-
-### ~~User search~~ — shipped 2026-06-12 (`a8e0c2c`)
-Placement decided (autopilot): an Artists section above event results in the feed list view when the search query is ≥2 chars — no scope toggle, map/mural stay events-only. searchProfiles ilike on display_name/username with the shared PostgREST sanitization, 250ms debounce + request-id cancellation, blockedIds filtering, rows → /user/{id}. Verified live.
-
----
-
-## P2 — App audit 2026-06-11 (robustness & quality)
-
-### ~~Double-tap mutation guards~~ — shipped 2026-06-12 (`8546173`/`5a7ad34`)
-Why: `handleMembership` (circles/[id].tsx) checks `busy` only via disabled prop timing; event-detail save rollback can invert state under double-tap. Add entry guards + functional setState rollbacks on join/leave/save/follow/register.
-Scope: S.
-
-### ~~CircleJoinSheet welcome-timer null guard~~ — shipped 2026-06-12 (`5a7ad34`); real bug: dismissed sheet still navigated 2.6s later
-Why: the 2.6s dwell timer closes over `shown`; backdrop-close mid-dwell nulls it → potential crash at `goToCircle(shown.id)`. Guard + add `shown` to the effect deps.
-Scope: S.
-
-### ~~Organizer fetch hardening~~ — shipped 2026-06-12 (`5a7ad34`)
-Why: the two count queries in circles/[id].tsx Promise.all lack catches (one failure rejects the batch); `handleFollowOrganizer` reads possibly-stale `followingOrganizer` under rapid taps. Catch per-query, use functional toggle.
-Scope: S.
-
-### ~~Realtime re-subscribe on app foreground~~ — shipped 2026-06-12 (`c68ba48`): AppState listener + foregroundTick in AppContext
-Why: auth token refresh handles resume, but dropped Realtime channels stay dead until a manual refetch. Add AppState listener → `supabase.realtime` reconnect / bump refetch ticks on active.
-Scope: M.
-
-### ~~Supabase fetch timeout~~ — shipped 2026-06-12 (`c68ba48`): 15s AbortController wrapper
-Why: no fetch override — a hung request leaves buttons disabled forever on flaky mobile networks. Add an AbortController-based timeout (~15s) in the client factory.
-Scope: S.
-
-### ~~Circle-create partial failure UX~~ — shipped 2026-06-12 (`5a7ad34`)
-Why: circle row inserts before cover upload; an upload failure leaves the circle cover-less with only an alert. Offer retry-upload or proceed-without-cover messaging (row itself is fine).
-Scope: S.
-
-### ~~ESLint + expo-doctor in CI~~ — shipped 2026-06-12 (`c68ba48`): 0 errors / 52 warnings, lint blocking, doctor non-blocking
-Why: CI runs tsc+jest only; no eslint config exists, so `as any` router casts (CircleJoinSheet/CreateMenuSheet) and style drift go uncaught. Add eslint-config-expo + a CI step + expo-doctor.
-Scope: S.
-
-### ~~Production console noise sweep~~ — shipped 2026-06-12 (`c68ba48`): 17 calls gated behind __DEV__
-Why: ~32 unguarded console.log/warn across geocoding/places/hooks ship to prod. Gate behind `__DEV__` or strip via babel in production builds.
-Scope: S.
-
-### ~~Circle member management (creator kick)~~ — shipped 2026-06-12 (`5a7ad34`); INERT until RLS migration applied
-Why: Members sheet is read-only; creators can't remove members. Long-press remove (EntityListSheet already supports long-press actions).
-Scope: M.
-
-### ~~"Tonight / This weekend" DST note~~ — shipped 2026-06-12 (`c68ba48`): windows recompute on foregroundTick
-Why: boundaries computed in device-local time; a timezone change or DST transition mid-session leaves filters stale until reload. Low impact — recompute on app foreground alongside the Realtime resume work.
-Scope: S.
-
-### Storage bucket posture review (extends existing MIME item)
-Why: all three buckets are public-read. Posters/avatars arguably fine; decide whether profile-gallery should be signed-URL private before scale.
-Scope: decision + M.
-
-### i18n / German localization (product decision)
-Why: Berlin-first app, all copy hardcoded English (de-DE number formats already used). Decide v1 language stance; if bilingual, ~40+ strings need extraction (expo-localization + i18n-js).
-Scope: L. (User call.)
-
----
-
-## Feature-gap scan 2026-06-15 (NEW — not yet built)
-
-Fresh read of the app vs. README/schema. Verified against this file (no dupes). Codebase is mature — the only pure-`console.log` dead handlers in all of `app/` are the two inbox header buttons (#1, #2).
-
-### P1 — real holes a user will hit
-
-#### New-conversation picker (inbox "+" is a dead stub)
-Why: the inbox "Start new conversation" button only `console.log`s — you can only DM by visiting a profile first; no `/messages/new` route exists. Evidence: `app/(tabs)/messages/index.tsx:213`. Needs a user-search/recent-contacts picker → opens the DM thread. Scope: M.
-
-#### ~~Pull-to-refresh on inbox / notifications / profile~~ — shipped 2026-06-15 (`see ✓ Shipped`)
-Why: RefreshControl was wired only on feed/circles/mural. Inbox (`messages/index.tsx`), notifications (`notifications.tsx`), and `/user/[id]` had none. Scope: S–M.
-
-#### Profile cover image (promised + schema-backed, unbuilt)
-Why: README lists "profile photo + cover image" and `profiles.cover_url` exists, but there's no upload UI and no render — ProfileView's hero shows only the avatar. Evidence: `ProfileView.tsx:116`, `profile-completion.ts:16` ("no editor for it today"). Needs a 16:9 picker in ProfileForm + `uploadProfileCover` (mirror `uploadCircleCover`) + banner render on own + `/user/[id]`. Scope: M.
-
-### P2 — robustness / UX polish
-
-#### Inbox "options" meatball is a dead stub
-Why: top-left ellipsis `console.log`s but advertises `accessibilityLabel="Open options"` to screen readers. Either build a real menu (mark-all-read, message settings) or remove. Evidence: `app/(tabs)/messages/index.tsx:203`. Scope: S.
-
-#### Disciplines collected but never displayed
-Why: onboarding + Edit Profile capture `disciplines[]`, but ProfileView never renders them — orphaned data README promises. Evidence: `onboarding.tsx:47`, `ProfileForm.tsx:384`; absent from `ProfileView.tsx`. Confirm against Figma before building (artist frame may omit a chip row). Scope: S.
-
-#### Saved-events sheet has no un-save
-Why: you can save an event but can't remove it from the Saved sheet — `EntityListSheet` only exposes long-press for the Following (user) variant. `unsaveEvent()` already exists. Evidence: `profile/index.tsx:379`, `EntityListSheet.tsx:186`. Scope: S.
-
-#### Circle group chat — no leave / report / moderation from inside
-Why: the circle chat header links out to the circle page but has no overflow menu — can't leave the circle or report it / report a sender from the conversation (DM threads got this). Evidence: `app/(tabs)/messages/circle/[id].tsx`. Scope: S–M.
-
-### Later / decision-gated
-
-#### Global connectivity / offline awareness
-Why: every failure renders the same generic offline ErrorState regardless of cause; no `NetInfo` layer to distinguish offline vs. server error, no auto-retry-on-reconnect. Scope: M. (Vendor/product call — pairs with the auth-error offline copy already shipped.)
-
-#### Event detail — "Contact organizer" CTA
-Why: circle detail shipped an Organizer row with Follow + Contact→DM; event detail's artist row only has Follow. Inconsistent. Confirm against Figma event-detail frame (`3491:2499`) first. Evidence: `app/event/[id].tsx` artist row. Scope: S.
-
----
-
-## P0 — App Store launch blockers (audit 2026-06-09 — promote candidates)
-
-These are submission-blockers, not polish. Each is a near-guaranteed App
-Store / Play Store rejection. Promote to `▶ UP NEXT` before any other
-P1 work once Apple Sign In + the Figma audit clear.
-
-### ~~Privacy Policy + Terms of Service pages don't exist~~ — shipped as in-app routes 2026-06-09
-Why (historical): `app/(auth)/signup.tsx` linked to `https://sphaer.app/privacy` and `/terms`; both 404'd. Shipped in-app `app/legal/privacy.tsx` and `app/legal/terms.tsx` via a new `<LegalScreen />` component; signup links now `router.push('/legal/...')` instead of `Linking.openURL` external. Follow-up if hosted external pages are needed for SEO / sharing: rewire to those URLs.
-
-### ~~iOS permission descriptions missing from `app.json`~~ — shipped 2026-06-09
-Why (historical): `app.json` only set `photosPermission` for image-picker. The Near-me filter uses `expo-location` and would have crashed at permission request time. Shipped: full `ios.infoPlist` entries for location, photo library (read + add), camera, notifications; new `expo-location` config plugin entry; Android `permissions` array. HIG-style copy ("Sphaer uses your X to do Y for you"). Future: re-verify on real iOS device when push notifications land and `NSUserNotificationsUsageDescription` is actually invoked.
-
----
-
-## P0 — Investor demo polish
-
-Lightweight — one-line why + checklist. Promote to `▶ UP NEXT` with full
-spec when scheduled.
-
-### ~~Create Activity screen — Figma audit (`6277:10002`)~~ — FULL structural replication shipped 2026-06-12
-Token pass `4c51ce6`, full rebuild + circle-creation mirror in the 2026-06-12 commits: Sub Title/Media/Spots/visibility radios/functional Preview all built; fields persist once migration `20260612010000` is applied (graceful degradation until then — THIRD pending migration in the authorization-gated list).
-
-### ~~Circle detail — Organizer section (Figma 6274:7785)~~ — shipped 2026-06-11
-Avatar/name/role → /user/{id}, stat row (getProfile + 2 head counts), Follow toggle + Contact→DM; hidden for self. SealCheck badge deferred (verified flag is mock-only).
-
-### Circle detail — "From the community" posts (Figma 6274:7785, middle block)
-Why: frame shows appleMail post cards (title Semibold 17, body 14, pin+timestamp meta 13 #949494, Share/Save 40px outline buttons, "Get in touch" 40px chocolate CTA). NO posts table exists — needs schema + service + UI. Product call on scope before building.
-Done when:
-- [ ] Schema decision, then build, or explicitly drop from v1
-
-### ~~Chat header bars (`6298:6104`/`6173`)~~ — shipped 2026-06-11
-Circle chat header: 48px avatar, Semibold 17 ink title, member-count subtitle (no presence tracking, so no fake "online"), shadow bar. 6298:6173 = the already-compliant event-detail header. DM/event chat headers can adopt the same bar style in a later pass.
-
-### ~~Feed header — greeting + circular search button (Figma 4045:8204)~~ — shipped 2026-06-11
-Commit `5097fa3`. SearchFilterBar `greeting` prop: pin + serif greeting (city underlined) + 45px circular search button, expands to input + Cancel. Feed/Map/Mural inherit via FeedHeader; Circles keeps the pill. See ✓ Shipped.
-
-### Feed filter icon in the Feed/Map/Mural row (Figma 4045:8204) — promoted to ▶ UP NEXT #1
-Tracked there; needs the user's call on filter-sheet vs chips vs both.
-
-### ~~"Welcome {name}" post-signup transition (Figma 5013:10915)~~ — shipped 2026-06-11
-Commit `632e064`. `app/(auth)/welcome.tsx` interstitial — ~1.6s dwell, tap-to-skip, fade with reduce-motion respected; wired from signup + verify-email; (auth) layout fall-through added. See ✓ Shipped.
-
----
-
-## P0 — Real bugs
-
-### MOCK_EVENTS retired (already in existing Profile v2 #19 — keep there)
-
----
-
-## P1 — Core flows
-
-### ~~Profile editing flow polish — Figma visual match (remaining slice)~~ — closed 2026-06-11: no Figma frame exists
-Surveyed the ENTIRE prototype board (`6239:6597`, 20385×4239) via high-res
-screenshot slices on 2026-06-11: there is **no Edit Profile screen in the
-Figma**. The board contains auth/onboarding, feed/map/mural, event
-detail + registration + ticket, circles browse/join, circle detail page +
-circle group chat, the create flow (menu sheet + Create Activity form +
-publish confirmation), the artist profile (`/user/[id]`, "Lea Weber"),
-and component sheets — nothing else. Our Edit Profile UI (inline
-validation + dirty-state Save, shipped 2026-06-08) follows the app's
-design tokens and IS the reference until a design lands. Reopen only if
-the designer adds a frame.
-
-**Board survey side-findings (frames that exist but were never in the
-audit queue — no node IDs known; board `get_metadata` times out, so get
-IDs from a pasted frame link when needed):**
-- Circle detail page (cover, Upcoming Activities, Members, posts) +
-  **circle group chat** — design reference for Messaging v2 / circle
-  page work below.
-- Create flow: create-menu sheet, full Create Activity form (topic
-  chips, title/subtitle/describe, cover+media, date/time, location,
-  price/spots, visibility, Preview/Publish), publish confirmation.
-  Our `create/` screens should be audited against these eventually.
-- Artist profile `/user/[id]`: verified badge, counts row, About,
-  Activity cards, Experience timeline, Testimonials, Images grid,
-  "Available for work" pill + Get in touch — matches the Profile v2
-  deferred items.
-
----
-
-## P1 — Launch blockers (App Store requirements)
-
-(Account deletion is in `▶ UP NEXT` #2 as the Figma-blocked fallback work.)
-
-### Apple Sign In (if Google Sign In is shipped)
-Why: App Store rule — if you offer third-party sign-in (Google, Facebook), you must also offer Sign in with Apple. Otherwise reject.
-Done when:
-- [ ] Apple sign-in button on landing + login screens
-- [ ] `expo-apple-authentication` integrated
-- [ ] Supabase Auth Apple provider configured
-- [ ] Same OAuth-skip-onboarding flow as Google
-
-### ~~Notifications list screen (data layer ready, UI missing)~~ — shipped 2026-06-09
-Shipped `app/notifications.tsx` as a root-level `presentation: 'card'` route (the bottom tab bar is already full at 5 tabs). Consumes the existing `useNotifications()` hook. Each row has a type-tinted icon (follow / event_reminder / circle_event / message), a copy line, relative time-ago, an unread dot, and routes on tap to the right destination (`/user/<id>`, `/event/<id>`, `/messages/<id>`). Per-row mark-as-read on tap; "Mark all read" CTA in the top-right when `unreadCount > 0`. Empty state ("You're all caught up") + ErrorState for not-signed-in. Reachable from a new bell icon on the profile TopBar with a red unread-count badge (caps at 99+). Producer side (Postgres triggers that actually fan out into `notifications`) still missing — tracked in the expanded Push notifications entry.
-
-### ~~Permission Info.plist sweep (HIG copy)~~ — shipped 2026-06-09 (merged with P0 permission descriptions)
-
-### Email confirmation re-enabled (already in existing Profile v2 #9)
-
----
-
-## P2 — Soon (next quarter-ish)
-
-### Push notifications via Expo Notifications (client half + producer half)
-Why: Currently notifications only render in-app. Real engagement needs push. **Producer side is also missing** — even after the notifications-screen ships, no Postgres trigger fires on messages INSERT, follows INSERT, or events INSERT, so the in-app notifications list stays empty for new activity. The producer triggers are the bigger half of this item.
-Done when:
-- [ ] **Client:** `expo-notifications` setup + permission flow + `profiles.expo_push_token` column + storage
-- [x] **Producer:** AUTHORED 2026-06-12 (`4b68aea`, migration `20260612040000_notification_producers.sql`, in the gated apply list) — messages/follows/circle-event triggers + Realtime publication fix; closes Activities v2 #18 too
-- [ ] **Push delivery:** edge function that reads `notifications` rows pending delivery and calls Expo Push API with the user's token
-- [ ] Scheduled job for event reminders (N hours before `events.starts_at` for any user with that event saved)
-- [ ] In-app preferences screen for which notification types to receive
-
-### Saved-event reminders — schema shipped 2026-06-09; producer + UI pending
-Migration `20260609000000_saved_events_reminder.sql` adds `saved_events.reminder_at TIMESTAMPTZ NULL` + a partial index `saved_events_reminder_at_idx WHERE reminder_at IS NOT NULL` for the future scheduled-job query. Forward-compat scaffolding only — the column is unread until the producer ships.
-Done when:
-- [ ] **Migration applied** — `supabase db push` once the user is ready
-- [ ] Service helper accepts an optional `reminderAt` on save (regenerate types first)
-- [ ] Optional timepicker on event save (default: 2 h before start)
-- [ ] Scheduled job (edge function or `pg_cron`) sweeps reminders due in next 15 min → enqueues `notifications` of type `event_reminder` → push delivery handles the rest
-
-### ~~Inline form validation on Create flows (not Alert popups)~~ — shipped 2026-06-09 (Create Event + Create Circle both use inline errors now)
-Why: `app/(tabs)/create/index.tsx` and `app/(tabs)/create/circle.tsx` use `Alert.alert('Title required')` etc. The rest of the app (signup, ProfileForm) uses inline per-field error state. Investors notice the inconsistency.
-Done when:
-- [ ] Convert `Alert.alert('Title required')` etc. on both create screens to per-field `error` prop on the `Input` component
-- [ ] Match the dirty-state guard pattern from ProfileForm (Save disabled until form is dirty + valid)
-- [ ] Visually verified parity with signup.tsx
-
-### ~~"Not found" + network-error recovery UX~~ — fully shipped 2026-06-11 (`f53344c`)
-Shipped:
-- `<ErrorState />` lives at `src/components/ui/ErrorState.tsx` (icon + headline + body + Retry primary button + Back outline button)
-- `/event/[id]` "Event not found" path uses ErrorState with a Back-to-feed CTA
-- `/user/[id]` "Profile not found" path uses ErrorState with a Back CTA
-- All 3 chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now read the hook `error` state and render ErrorState with a working Retry button (hooks expose `refetch()` that bumps an internal tick to re-run the fetch + re-bind the Realtime subscription)
-
-Remaining — shipped 2026-06-11 (closes the item):
-- Uniform shape everywhere: `{ data, isLoading, error: string | null, refetch }`, error cleared at fetch start. `useEvent` + `useCircle` gained memoized-fetch refetch; `useNotifications` gained isLoading/error/refetch (tick re-binds the Realtime channel too); `MessagesContext` surfaces `error`.
-- Consumers wired: event detail, ticket (own registration error + dual-fetch retry), circle detail (network error split from not-found), feed map native+web + mural (ErrorState only when cache empty — stale data preferred), notifications (new loading spinner + retryable error), DM inbox, `/user/[id]` (error vs not_found distinguished; secondary count/gallery queries still degrade silently).
-- Excluded by design: `useProfile` (decorative DM-header use only), own-profile extras (degrade to zeros), auth mutations (own UX).
-
-### ~~"Available for work" placeholder bar on own profile~~ — removed 2026-06-09
-Why (historical): the bar's "Get in touch" CTA alerted "Coming soon" — meaning the user was being asked to message themselves. Removed entirely from `app/(tabs)/profile/index.tsx`. When Profile v2 #2 ships the actual `is_available_for_work` toggle, the bar will surface on `/user/[id].tsx` for users who opt in.
-
-### ~~Ticket detail "Download as PDF" / "Send by email" placeholders~~ — removed 2026-06-09
-Why (historical): both buttons alerted "Coming soon"; investor demo friction. Removed for v1; re-add when PDF gen (`expo-print`) + email-send (Supabase edge function) actually ship. Bonus: `handleInviteFriends` now delegates to the shared `shareEvent()` so the canonical URL + platform-tuned payload matches the rest of the app.
-
-### ~~Unfollow from the follower / following list~~ — shipped 2026-06-09
-`EntityListSheet`'s `UserRow` accepts a new optional `onLongPress` prop; the parent `EntityListSheet` accepts a new `onLongPressUser?: (profile: Profile) => void` when `type === 'user'`. `/(tabs)/profile/index.tsx` wires it for the Following sheet only (Followers can't be unfollowed — wrong direction of the relationship). Long-press sets an `unfollowTarget` state which renders a `<ConfirmSheet>` ("Unfollow X? Their activities will stop appearing on your feed."). On confirm: optimistic remove from the visible list + counter decrement, then `unfollowUser(user.id, target.id)`; rollback on error. `delayLongPress={400}`; `accessibilityHint` set so screen readers announce the long-press affordance.
-
-### Share — web preview pages + Universal Links / App Links (deferred infrastructure)
-Why: The in-app Share buttons + canonical `sphaer.app/...` URLs already ship (see ✓ Shipped 2026-06-09). What's left is the deep-link plumbing so the URLs actually open something useful when received.
-Done when:
-- [ ] Web preview pages at `sphaer.app/event/<id>`, `/circles/<id>`, `/user/<id>` with OG tags + "Open in app" button (needs DNS + hosting decision)
-- [ ] Apple App Site Association file at `sphaer.app/.well-known/apple-app-site-association` (needs Apple Developer account)
-- [ ] Android `assetlinks.json` (needs Google Play app signing key)
-- [ ] iOS `associated-domains` entitlement + Android intent filters in `app.json`
-
----
-
-## P2 — Code hygiene & known bugs (audit 2026-06-09)
-
-Things the audit flagged as wrong-but-not-on-fire. Group several into one
-PR per ship; don't expand the current item to absorb these.
-
-### ~~Message hooks swallow fetch errors (3 hooks)~~ — hook half shipped 2026-06-09
-Each of `useMessages`, `useEventMessages`, `useCircleMessages` now exposes an `error: string | null` state and sets it in the `.catch` branch of the initial fetch before logging. The chat screens still need to read the new state and render `<ErrorState />` — that part lands when ErrorState ships in the next P2 item.
-
-### ~~Unsafe JSONB casts in messages.service.ts~~ — shipped 2026-06-11
-Hand-rolled runtime shape guards (no new deps) at the `getConversations` cast boundary: per-kind partner guards (Profile/Event/Circle) + Message guard, checking exactly the fields the inbox renders (NOT-NULL columns per the migration SQL as required strings, nullable ones as nullable). On drift the service throws `get_conversations: <column> row failed <shape> validation (got keys: ...)` into the existing error path instead of silently rendering blank rows. All four `as unknown as` casts removed.
-
-### ~~Missing skeletons on `/user/[id]` + message threads~~ — shipped 2026-06-09
-`/user/[id]` already shows `ProfileSkeleton` during `status === 'loading'` — audit was wrong about that one. New `src/components/ui/skeletons/MessageBubbleSkeleton.tsx` exposes `MessageBubbleSkeleton` (single bubble — side / width / index props) and `MessageBubbleSkeletonList` (a 6-bubble alternating-sides stack mimicking real conversation rhythm). All three chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now render the list during `isLoading` instead of a centred `ActivityIndicator`.
-
-### ~~Other-users-profile (`/user/[id]`) still falls back to `mockProfiles`~~ — shipped 2026-06-09
-Removed the `getMockProfileByExactId` import and call from `app/user/[id].tsx`. Live Supabase `fetchRealProfile(id)` is now the only source — if the DB doesn't have the id, the screen renders the ErrorState "Profile not found" path that shipped earlier today. The `MockProfile` type alias is still imported for the display shape (used by `adaptProfileToDisplay`) — separate from the data fallback.
-
-### ~~Stale `MockConversation` type import~~ — proper rename shipped 2026-06-11 (`3c46692`)
-`ConversationRowDisplay` now lives in message.types.ts; mockMessages.ts is an unused dev fixture — delete when convenient.
-
-#### (historical note)
-On closer reading, `app/(tabs)/messages/index.tsx` uses `MockConversation` as a deliberate display-shape adapter — real Conversation rows are mapped into the legacy shape so the Figma-styled `ConversationRow` component keeps working. Not stale. The real follow-up is to update `ConversationRow` to accept the native `Conversation` type and rename `MockConversation` → `ConversationRowDisplay` in a proper types file. Bigger refactor; not a hygiene-batch item.
-
-### ~~`as any` route casts in BottomNav + EntityListSheet~~ — shipped 2026-06-09
-Both `BottomNav.tsx` and `EntityListSheet.tsx` now import `type Href from 'expo-router'` and cast via `as Href` instead of `as any`. Type system intact.
-
-### ~~`fontWeight: '510' as any` in ViewToggle~~ — shipped 2026-06-09
-Switched both occurrences to `'500'` (the value RN was silently falling back to anyway). Inline comment documents the Figma-510 origin and the rounding rationale.
-
-### ~~Memo audit of high-churn parents~~ — wrapped 3 hot FlatList row components 2026-06-09
-Three components that render inside FlatLists were re-rendering on every parent state change despite their own props being unchanged. All three got `React.memo`-wrapped via the `Impl` rename + `export const X = React.memo(XImpl)` pattern: `ChatBubble` (one per message in chat threads), `EventCard` (one per event in Feed), `ConversationRow` (one per row in Messages inbox). Each carries an inline comment explaining the parent re-render pressure. Remaining (not yet done):
-- [ ] Profile screen subtree memoisation (`ProfileCompletionCard`, `SettingsSection`)
-- [ ] Circle cards memoize their handlers via `useCallback`
-
-### ~~Accessibility audit (concrete numbers)~~ — swept 2026-06-11
-52 files: +77 `accessibilityLabel`, +146 `accessibilityRole`, +14 `accessibilityState`, +5 hints, +1 value. Icon-only buttons labeled action-first ("Go back", "Save event", "Clear search"); stateful toggles (bookmark/follow/join/chips/tabs) announce state; entity cards announce their target ("Open {event}"); BottomNav tabs named (were silent); Modal overlay de-grouped via `accessible={false}`; spinner-buttons keep their names while busy. Props-only — no behavior/style changes; adversarially verified (one redundant label removed).
-
-### Contrast: `colors.neutral.meta` #767779 on white measures 4.48:1 — fails WCAG AA by 0.02
-Found by the a11y sweep's spot-check. It's a Figma token (Neutral/meta), so changing it deviates from the design source of truth. Decide with the designer: darken to ~#727274 (passes 4.5:1) or accept (passes AA-large at 3:1; most usages are ≥large or decorative metadata). Code untouched.
-
-### ~~Document the eslint suppressions~~ — shipped 2026-06-09
-All 4 suppressions in MuralCanvas (×3) + update-password (×1) now carry a one- to three-line comment explaining the omitted dep (Reanimated shared values, wheel handler reading .value at fire time, run-once-on-mount avoidance of infinite loop).
-
----
-
-## P2 — Security (audit 2026-06-09)
-
-### ~~Image upload file-type validation~~ — complete 2026-06-12 pending push (`f9d2f21`)
-Client half shipped earlier (validateImageUpload wired into all upload paths); server half authored as migration `20260612050000_storage_image_mime_limits.sql` (bucket allowed_mime_types + 10MB cap, in the gated apply list). Remaining only: optional virus-scan idea — dropped for v1.
-
-### ~~Rate limiting on writes~~ — migration authored 2026-06-12 (`b32f2e6`), pending push
-`20260612030000_rate_limiting.sql`: rolling-window log + SECURITY DEFINER `check_rate_limit`; BEFORE INSERT triggers — messages 30/min, follows 60/hr, reports 10/hr. No trigger on notifications (producer fan-out must not be throttled). EXECUTE revoked from client roles so the log can't be forged. In the gated apply list.
-
-### Google Maps API key restrictions
-Why: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is bundled into the APK / IPA (unavoidable on Expo). If unrestricted, an attacker can reuse it for their own quota / billing. One-time ops fix.
-Done when:
-- [ ] In Google Cloud Console, restrict the Maps API key to bundle IDs `com.sphaer.app` (iOS + Android)
-- [ ] No code change; just operational checklist
-
-### ~~PostgREST `.or()` search uses unescaped user input~~ — shipped 2026-06-09 (strips `,():*` before interpolation)
-Done when:
-- [ ] Strip PostgREST-reserved chars (`,`, `(`, `)`, `*`, `:`) from search input before interpolation
-- [ ] Or move to a PostgREST function with explicit parameters
-
----
-
-## P2 — Data integrity (audit 2026-06-09)
-
-### Denormalised follower / following counts — migration shipped 2026-06-09
-`20260609010000_denormalized_follow_counts.sql` adds `profiles.followers_count INT NOT NULL DEFAULT 0` + `profiles.following_count INT NOT NULL DEFAULT 0`, backfills both from the existing `follows` rows, and installs an `AFTER INSERT / DELETE` trigger function `follows_update_counts()` that atomically `count = count + 1` / `GREATEST(0, count - 1)`. SECURITY DEFINER + locked search_path. Remaining:
-- [ ] **Apply with** `npx supabase db push`
-- [ ] After apply: regenerate `src/types/supabase.ts`, drop the two parallel COUNT queries from `getProfile()` and just read the columns
-
-### Soft-delete policy decision
-Why: Events / circles / messages are all hard-deleted today; cascade deletion of an account vapourises everything. For future content moderation / dispute resolution, decide whether to add `deleted_at TIMESTAMPTZ` columns now and filter at query time.
-Done when:
-- [ ] Product decision: hard-delete v. soft-delete per content type
-- [ ] If soft-delete: migrations add `deleted_at`, all service queries add `WHERE deleted_at IS NULL`, account deletion still hard-purges the user's own rows but moderation can soft-delete others'
-
----
-
-## P2 — Developer experience (audit 2026-06-09)
-
-### ~~Zero test coverage~~ — 75 tests / 10 suites (pure-util units 2026-06-10 + component smoke 2026-06-11)
-`jest` + `jest-expo@~55` (SDK-matched) installed; `npm test` script + `jest` preset config in package.json (`@/` alias mapped, `__tests__/**/*.test.*` matcher). Six suites under `src/utils/__tests__/`: validators (email/password/username/url), event-filters (isTonight / isThisWeekend / currentWeekendWindow with pinned `now` dates + applyChipFilters AND-semantics), ics (CRLF, UTC times, TEXT escaping, multi-VEVENT bulk, null-starts_at drop), upload-validation (MIME allowlist, case-insensitivity, size cap boundary), profile-completion (null→100%, whitespace-only, empty arrays), geo (haversine vs. known Berlin landmark distances). `tsconfig.json` adds `"jest"` to `types`. All 61 green; tsc clean.
-CI shipped 2026-06-10: `.github/workflows/ci.yml` runs `tsc --noEmit` + `jest --ci` on push/PR to main (Node 20, npm cache, 15-min timeout; `npm ci` dry-run verified the lockfile is in sync).
-Remaining slice shipped 2026-06-11: @testing-library/react-native@13.3.3 + react-test-renderer pinned to react 19.2.0. Four component suites (14 tests): signup validation (errors/clear/trim/welcome-route), create-event validation (inline errors + clear-on-edit, full screen render with real Input/Button/Tag/DateTimeField), EventCard save toggle (stateful a11y labels, press isolation, route push), Tag press canary. Queries lean on the a11y sweep's labels/roles, doubling as accessibility regression tests. Note for future suites: React 19 async act() hangs under jest-expo — flush effects with waitFor on an observable side effect instead.
-
-### ~~TypeScript enums for `notification.type` and `circle_members.role`~~ — shipped 2026-06-09
-New `src/types/enums.ts` exports `NotificationType` and `CircleRole` string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` already wired to use `NotificationType` (META_FOR_TYPE record + routeFor switch). Remaining slice shipped 2026-06-11: `joinCircle` gained a typed `role: CircleRole = 'member'` param (3 call sites unaffected) and `getAdminCircles` pins its filter with `'admin' satisfies CircleRole` (generated Supabase types widen the column to `string`, so `satisfies` restores typo protection).
-
----
-
-## Backlog (later — months out)
-
-- ~~**Circle group chat (Messaging v2)**~~ — stale, closed 2026-06-12: shipped during the 06-08/09 messaging build. `/messages/circle/[id]` exists with Realtime + Figma header, `useCircleMessages` is wired, and circle detail links to it (circles/[id].tsx ~392). The only unbuilt idea from this entry is an *embedded* chat tab inside the circle page instead of navigation — not planned.
-- **Ticketing / Stripe integration** — schema has `events.is_free` + `price` + `ticket_url` but `registrations.service.ts` is RSVP-only (no payment processor). Investors will ask about monetisation. Big project: Stripe Checkout + webhook for confirmation + refund / cancel path + `paid_at` column on registrations.
-- **Notification triggers (Activities v2 #18 — pair with push notifications)** — Postgres trigger on `events` INSERT fans out a `notifications` row to every user in `circle_follows` WHERE circle_id matches the event's circle_id. Needed once the notifications screen ships, otherwise the screen stays empty for circle-event activity.
-- ~~**Onboarding tutorial (3-screen swipeable intro before signup CTA)**~~ — shipped 2026-06-09. `app/(auth)/intro.tsx` + gated from landing via AsyncStorage `sphaer:has-seen-intro`.
-- **Onboarding screen consolidation (5 → 3)** — current first-time path is splash → tagline → landing → signup → verify-email → onboarding → /location → feed. Folding the `/location` neighborhood picker into the onboarding form's final step would cut to 3 screens and feel less interrogative.
-- **Photo likes + comments on profile gallery (Profile v2 #4 + #5 promoted)** — tap a gallery thumbnail → photo detail page with hearts + comments + caption display. New tables: `profile_image_likes (user_id, image_id)` + `profile_image_comments (id, image_id, author_id, content, created_at)`. Notifications producer fans out to the gallery owner.
-- ~~**Bulk calendar export for saved events**~~ — shipped 2026-06-09 (`Export N to calendar` CTA on the Saved sheet).
-- **Map clustering** — when zoomed out, group pins to avoid visual mess. `react-native-maps` supports this with a cluster wrapper.
-- **Dark mode** — `theme.ts` is already token-based, so this is mostly a swap of color values + `useColorScheme()` hook + a refactor of every screen to read colors via a `useColors()` hook instead of importing `colors` directly.
-- **Blocking / reporting users** — mute/block flow + report-to-mods. App Store may push back if absent given the social nature.
-- **Analytics (PostHog / Mixpanel)** — track funnel: signup → first event view → first save → first message. Pick one.
-- **Crash reporting (Sentry / Bugsnag)** — wire to error boundaries from the P1 item.
-- **AI-generated event posters** — user mentioned this is coming. Designers can generate a poster from an event title/description. Hook `expo-image-manipulator` for client crop, openAI or Replicate for the gen, store dims at gen time (resolves the deferred `poster_width`/`poster_height` columns from the Mural session).
-- **Splash screen polish** — current splash is the Expo default. Custom Sphaer artwork matching the landing screen.
-- **Profile image gallery editing** — long-press to delete, drag-to-reorder. Currently photos are append-only inside Edit Profile; no delete in view mode.
-
----
-
-## ✓ Shipped
-
-*Add shipped items here as they land: title, date, one-line summary, PR/commit link.*
-
-- **2026-06-12 (later) — Signup bug + moderation + deep links + migrations batch (10 commits).** `fix(auth) d88e277` — **user-reported bug**: signup 422 (`user_already_exists`) and every login failure were routed to Alert.alert, a silent no-op on react-native-web — web users saw a dead button. Inline FormErrorText + per-field errors now; verified live both ways (curl proved password policy/email provider fine; the 422 only fires for duplicate emails). `fix(events) 3130587` EventRegistrationSheet conditional-useState hoisted, eslint rules-of-hooks back to error. `chore(web) 68dc4d1` real favicon. `feat(db) b32f2e6/4b68aea/f9d2f21/51abfd7` — FOUR authored-not-applied migrations: rate limiting, notification producers (+ Realtime publication fix for the live badge), storage MIME caps, reports+blocked_users (gated list now 8). `fix(ui) 3a2e5cb` — all six bottom sheets' close animations had an unguarded unmount callback; a reopen-during-close (finished:false) killed the Modal — found because it made OverflowMenuSheet unopenable in the headless preview, regression-tested. `feat(moderation) 121fc81` — report & block everywhere (App Store 1.2), graceful degradation until db push, feed/inbox/chat filtering, 4 component tests. `feat(nav) 4c1cc3a` — cold-start deep links survive the auth gate (pending-link stash + replay, 27 unit tests; Universal Links still gated on Apple account). Then wave 2 + hygiene: `feat(db) 355f8ee` profiles.verified (+ anti-self-grant trigger, gated list now 9), `feat(profile) 1ac2e49` Activities drill-down sheet, `feat(profile) 828315c` verified badge from real data, `feat(feed) a8e0c2c` artist results in feed search (verified live), `fix(nav) 6091c93` no-op Tabs.Screen removal, `chore(lint) 24eb300` eslint 46→0 + expo-doctor 19/19. 129/129 tests green. Note: 3 throwaway diag accounts (`sphaer-diag-*@example.com`) were created while reproducing the 422 — delete in Supabase dashboard (MCP connector was down).
-- **2026-06-12 — Audit unblocked batch (5 commits + earlier inbox fix).** `feat(db) e1881fd` circles-delete + creator-kick RLS (authored, NOT applied). `chore(ops) 33bdd56` real app icons (were 1×1 stubs) + eas.json + env validation + store metadata. `feat(events) 8546173` real Follow (was cosmetic), cancel registration, creator attendee list, scarcity-badge removal, save/follow double-tap guards. `feat(circles) 5a7ad34` circle edit screen + delete, member kick, welcome-timer dismiss bug fixed, organizer hardening, partial-upload recovery. `chore(infra) c68ba48` 15s fetch timeout, AppState foreground resume + DST recompute, console gating, eslint+expo-doctor CI (0 errors), feed Browse-circles CTA. Earlier: `fix(messages) b277eee` inbox chip row scrolls (Circles was unreachable on phones) + dead Add-filter chip removed. 75/75 tests green throughout.
-- **2026-06-11 — Unblocked-backlog batch (4 commits).** `feat(events) c4406a4` creator edit & delete (ConfirmSheet delete with cascade-accurate copy; new prefilled edit screen with create-parity validation; RLS verified). `style(messages) 3c46692` DM + event chat headers to Figma 6298:6104 (48px thumbs, ink titles, shadow bar, @username subtitle) + MockConversation→ConversationRowDisplay rename. `chore(theme) 605d2eb` hex→token sweep, 22 replacements/13 files + neutral500 token. `feat(circles) 44e53c6` circle cover upload on creation. Earlier same day: Create-Activity style pass (`4c51ce6`), circle chat header (`84f03be`), circle-detail Organizer section (`ce45511`). 75/75 tests green throughout.
-- **2026-06-11 — Figma structural follow-ups: greeting header + Welcome interstitial + UX pass (UP NEXT #1 closed).** All three items from the audit's structural filing shipped, one commit each. **(1) `style(feed) 5097fa3` — greeting header (`4045:8204`):** SearchFilterBar gained an optional `greeting={{city, rest}}` prop — resting state renders location pin + serif "Berlin what's on Today?!" (20px/148%, `colors.neutral.ink`, city in Medium + underline) with a 45px circular white search button; tapping expands to the standard input + Cancel, Cancel collapses back. Crossfade at `motion.duration.standard` (240ms ease-out, opacity-only, row minHeight-pinned so rows below never shift), skipped under OS reduce-motion. Header inset 16px per frame. FeedHeader passes the prop so Feed/Map/Mural inherit; Circles keeps the audited pill. Design context fetched fresh per the handoff's step zero — corrected three assumptions (button 45px not 50, text ink `#1B1B18` not chocolate, copy "Berlin what's on Today?!" capital-T no comma). **(2) `feat(auth) 632e064` — Welcome interstitial (`5013:10915`):** new `app/(auth)/welcome.tsx` — centered serif "Welcome {firstName}" (26px ink, name Medium) on white, 320ms fade-in (reduce-motion skips), ~1.6s dwell then routes to onboarding, tap anywhere skips, routes exactly once. Name precedence: route param → user_metadata.display_name → profile row. signup.tsx session branch + verify-email.tsx SIGNED_IN listener both route here; (auth) layout got a `welcome` fall-through and a fade stack animation. **(3) UX pass (ui-ux-pro-max):** both interactions audited — timings inside the 150–300ms band, one animated element per view, ease-out entering, 45px ≥ 44pt touch target with press feedback + accessibilityLabel on the icon-only button, h1 heading role on the interstitial, ~15:1 text contrast, graceful one-line truncation at narrow widths / large type. No violations to fix. **Verification note:** the preview tab is headless (visibility:hidden, zero rAF ticks) so JS-driver fades can't play live there — verified via computed styles + behaviour (auto-route landed on /onboarding twice); the fade mechanism is identical to the feed crossfade, which screenshots show completing. **Remaining from the filing:** the filter-icon-in-toggle-row product decision — promoted to UP NEXT #1.
-- **2026-06-10 — Figma styling audit COMPLETE — all 14 frames (UP NEXT #1 closed).** Unblocked by switching the MCP fileKey from the Starter-capped personal-drafts copy (`iuCO8ENAhfYIJly1JGAeU1`) to the **original Pro-owned file** (`HIVq6Vaymj01dZ37AvwCUF`) the user was invited to — Figma preserves node IDs across a duplicate, so the queue mapped 1:1. Walked all 12 remaining frames (after the 2 prior splash/tagline). **Fixed inline (4 commits, one per screen):** (1) `style(auth) fc924f3` — Sign Up `2012:1711`: shared `AuthControls` textfield border `#C1C1C1`→`#E0E4EB` (the `--hidden-lines` token), placeholder `#9A9A9A`→`#949494`, Google icon 20→24px (propagates to all 6 auth screens). (2) `style(location) b11e8be` — reveal `2012:1797`: title/circular-button vertical distribution via flex spacers (1.4/1.9/1.0) to match the Figma's upper-third/lower-third spread vs our centred group. (3) `style(feed) 82642af` — event card `4045:8204`: price weight bold→Heavy (added `typography.fontWeight.heavy = '800'` for SF Pro Heavy 860) + colour `#363530`→`#3A3A3A`; meta weight medium→regular + colour `#505049`→`#5A5A5A` (scoped to EventCard so unaudited ProfileActivityCard tokens stay put). (4) `style(circles) fbc4d9a` — `2665:12253`: search placeholder → "Find your scene, find your thing!", section subtitle → "Join {N} {category} circles across Berlin". **Verified already-compliant (purpose-built against their nodes in prior sessions, confirmed via preview screenshots at 390×844):** Sign Up filled (`5013:10790`), Location prompt + searching (`2012:1787`/`5108:8379`), Event detail + price-range variant (`3491:2499`/`4484:10814` — hero/title/location/artist-row/sticky price+date+button bar all align), Registration sheet (`4025:5033` — title/organiser/stepper/calendar+pin+ticket rows/FEW-TICKETS badge/total/Register), Ticket card (`4025:5294`). **Filed as new P0 — Investor demo polish items (structural, out of scope for an inline token pass):** Feed header restructure (greeting + circular search button vs our search input), Feed filter-icon-in-toggle-row, and the `5013:10915` "Welcome {name}" post-signup transition screen we never built. Known limitation across all serif text: Test Martina Plantijn `.otf` still isn't bundled (Georgia/system-serif fallback) — separate backlog item, unchanged by this audit.
-- **2026-06-10 — Feed chip-row clipping fix + test suite bootstrap (61 unit tests).** (1) The Near me / Tonight / This weekend / Free chips rendered clipped (user screenshot showed pills cut to half height). Root cause via DOM inspection: react-native-web's ScrollView ships `{ flexGrow: 1, flexShrink: 1 }` base style — the FlatList below shrank the chip row to 4px. Fix: `style={{ flexGrow: 0, flexShrink: 0 }}` + paddingVertical on the content container. Verified at 390×844: pills full height, horizontal scroll intact, Tonight toggle filters correctly. Commit `e1d48a9`. (2) First test coverage in the repo: jest + jest-expo@~55, `npm test`, six suites / 61 tests over the pure utils (validators, event-filters with pinned clock, ics RFC-5545 compliance, upload-validation allowlist + size boundary, profile-completion, geo haversine against real Berlin landmark distances). tsconfig gains `"jest"` types. All green, tsc clean. Commit `64fd5f4`.
-- **2026-06-09 — Denormalised follower / following counts migration (data integrity).** `supabase/migrations/20260609010000_denormalized_follow_counts.sql` adds `profiles.followers_count INT NOT NULL DEFAULT 0` + `profiles.following_count INT NOT NULL DEFAULT 0`, backfills both from the existing `follows` rows (per-side aggregation joined back into `profiles`), and installs trigger function `follows_update_counts()` (SECURITY DEFINER + locked search_path) wired to `AFTER INSERT` and `AFTER DELETE` on `follows`. Atomic `count = count + 1` and `GREATEST(0, count - 1)` keep the columns consistent under concurrent inserts. Service-layer follow-up: once `supabase db push` runs and types regenerate, `getProfile()` can drop its two parallel COUNT queries against `follows` and read the columns directly — tracked in BACKLOG. Forward-compat scaffolding for now (columns exist but service still uses COUNT until the regenerate). **Apply with:** `npx supabase db push`. Commit `6b236d6`.
-- **2026-06-09 — First-time-user 3-screen intro tutorial (later-backlog promoted).** New `app/(auth)/intro.tsx` — paged horizontal ScrollView with 3 screens (Discover Berlin / Follow artists & circles / Save & get reminded). Each: 112px icon-in-soft-circle, display-serif title, 24-line body, max 320px wide. Top-right Skip button on pages 1+2, "Next" CTA advances `scrollTo` on pages 1+2 then becomes "Get Started" on page 3 which writes the AsyncStorage flag and `router.replace('/(auth)')`. Page-indicator dot row with a width-stretched active dot. Landing screen (`app/(auth)/index.tsx`) now reads `INTRO_SEEN_KEY` on mount; first-timers get `router.replace('/(auth)/intro')` before the landing's fade-in animation has a chance to play. Storage failures fall through to the landing — a missed intro beats a permanently broken first launch. Route registered in `(auth)/_layout.tsx`. Closes the "Onboarding tutorial" backlog (later) entry. Typecheck clean. Commit `fd55297`.
-- **2026-06-09 — Saved-event reminders migration (schema half).** New `supabase/migrations/20260609000000_saved_events_reminder.sql` adds `saved_events.reminder_at TIMESTAMPTZ NULL` + a partial index `saved_events_reminder_at_idx (reminder_at) WHERE reminder_at IS NOT NULL` so the future scheduled-job query — `WHERE reminder_at IS NOT NULL AND reminder_at <= now() + interval '15 min'` — stays cheap. Producer half (scheduled edge function + push) tracked in the Push notifications backlog entry. Until producer ships the column is forward-compat scaffolding only — read-only until the next session. Service / UI changes (reminderAt arg on `saveEvent`, timepicker in the save flow) wait until generated types know about the column (regenerated post-`db push`). **Apply with:** `npx supabase db push` once MCP is back or via CLI.
-- **2026-06-09 — CircleCard React.memo (audit follow-up).** Wrapped `CircleCard` with `React.memo` via the rename-to-Impl pattern. Closes the last component flagged by the memo audit (Feed event card, chat bubble, conversation row, profile completion card, and now circle card all done). Audit-flagged sibling that we don't ship: circle cards memoizing handlers via `useCallback` — the parent already wraps `onPress` in a `router.push` arrow which is recreated each render, but the React.memo wrap means it doesn't matter unless circle props change. Sufficient.
-- **2026-06-09 — Batch: finish memo audit + ErrorState in feed/circles + bulk calendar export (3 P2 items).** (1) `ProfileCompletionCard` now React.memo-wrapped (rename-to-Impl + `export const = React.memo(Impl)` pattern). Closes the profile-screen half of the memo audit. (2) `ErrorState` wired into the two highest-traffic data screens: `app/(tabs)/feed/index.tsx` and `app/(tabs)/circles/index.tsx`. Both hooks already exposed `error` + `refetch`; the screens now branch on `error && items.length === 0` and render `<ErrorState icon="cloud-offline-outline" title="Couldn't load X" body={error} onRetry={refetch} />`. (3) Bulk calendar export — `src/utils/ics.ts` factored the per-event VEVENT lines out into `eventVeventLines()` + added a new `buildEventsIcs(events)` that wraps multiple VEVENTs in a single VCALENDAR. `src/services/calendar.service.ts` gains `addEventsToCalendar(events)` — same Blob-download (web) / data-URI (native) handoff pattern. `EntityListSheet` activity variant gains an optional `headerAction?: { label, icon, onPress }` prop that renders a top-of-list CTA above the rows (new headerAction style — hairline border below, chocolate ink, optional Ionicon). `/(tabs)/profile/index.tsx`'s Saved sheet wires it as `Export ${mySaved.length} to calendar` when the user has at least one saved event. One .ics file = one calendar-app prompt regardless of how many saved events. Typecheck clean. Commit `0712031`.
-- **2026-06-09 — MessageBubbleSkeleton + React.memo on 3 hot FlatList rows (P2 polish + perf).** (1) New `src/components/ui/skeletons/MessageBubbleSkeleton.tsx` exports `MessageBubbleSkeleton` (single bubble — `side` / `width` / `index` props for stagger) and `MessageBubbleSkeletonList` (a 6-bubble alternating-sides stack mimicking real conversation rhythm — long/short/medium/medium/short/long widths). Wired into all 3 chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) during `isLoading`, replacing the centred `ActivityIndicator` they each rendered. (2) Three components that render inside FlatLists were re-rendering on every parent state change: `ChatBubble` (one per message), `EventCard` (one per event in Feed), `ConversationRow` (one per inbox row). All three got React.memo via the rename-to-Impl + `export const X = React.memo(XImpl)` pattern. Each carries an inline comment explaining the parent-re-render pressure being killed. The biggest visible win is `ChatBubble` — `useMessages` flips state on every Realtime message + every read-receipt tick, and without memo every bubble re-renders on every flip. Audit also flagged `/user/[id]` skeleton as missing but it was already wired (`ProfileSkeleton` during `status === 'loading'`). Typecheck clean. Commit `bd37204`.
-- **2026-06-09 — Long-press to unfollow from Following sheet (P2 UX).** `EntityListSheet`'s `UserRow` gained an optional `onLongPress` prop; the parent props grew an `onLongPressUser?: (profile: Profile) => void` for the `type === 'user'` variant (gated on the discriminator). `/(tabs)/profile/index.tsx` wires it on the Following sheet only (the Followers sheet doesn't get it — wrong direction of the relationship; you can't unfollow your followers). Long-press sets a new `unfollowTarget: Profile | null` state which renders a destructive `<ConfirmSheet>` ("Unfollow X? Their activities will stop appearing on your feed."). On confirm: optimistic remove from the visible `following` list + `counts.following` decrement, then `unfollowUser(user.id, target.id)`; on error, rollback (re-add + re-increment). `delayLongPress={400}` so the gesture doesn't fire on accidental holds; new `accessibilityHint="Long-press to unfollow"` on the row so VoiceOver announces it. Typecheck clean. Commit `a25a89c`.
-- **2026-06-09 — Image upload MIME + size validation across all 4 upload paths (P2 security).** New `src/utils/upload-validation.ts` exports `validateImageUpload(blob)` + `UploadValidationError`. Checks `blob.type` against an allowlist (`image/jpeg`, `image/jpg` non-standard, `image/png`, `image/webp`, `image/heic`, `image/heif`, `image/gif`) and `blob.size` against `MAX_UPLOAD_BYTES = 10 MB`. Throws a user-friendly `UploadValidationError` on failure (caller lets it bubble to UI Alert / inline error). Wired into all 4 upload paths via a single-line `validateImageUpload(blob)` call between `uriToBlob()` and the `.upload(...)`: `uploadAvatar` + `uploadGalleryImage` in `profile.service.ts`, `uploadEventPoster` in `events.service.ts`, `uploadCircleImage` in `circles.service.ts`. Backlog tracks the remaining server-side hardening (bucket `allowed_mime_types` config + magic-byte sniffing + optional virus scan) — those add defence-in-depth on top of this client gate. Typecheck clean. Commit `17ee82b`.
-- **2026-06-09 — Other-user profile `/user/[id]` mock fallback retired (Profile v2 #7).** Removed `getMockProfileByExactId` import + call from `app/user/[id].tsx`. The screen now goes directly: `fetchRealProfile(id)` → found OR not_found, no mid-step mock catalog lookup. The `MockProfile` type alias is still imported (it's the display shape consumed by `adaptProfileToDisplay`) — separate concern from the data fallback. Pairs with the ErrorState "Profile not found" path shipped earlier today, so the no-DB-match path now lands on a usable ErrorState instead of a fake profile or bare 404. Typecheck clean.
-- **2026-06-09 — Batch: enums + PostgREST sanitisation + Create form inline validation (3 P2 items).** (1) New `src/types/enums.ts` with `NotificationType` (`'follow' | 'event_reminder' | 'circle_event' | 'message'`) and `CircleRole` (`'admin' | 'member'`) string-literal aliases that match the DB CHECK constraints. `app/notifications.tsx` wired to use `NotificationType` for both `META_FOR_TYPE` record keys and the `routeFor` switch discriminant — typo protection back. (2) `src/services/events.service.ts` `.or()` search now sanitises user input: `filters.search.replace(/[,():*]/g, ' ').trim()` strips PostgREST-reserved chars (commas split filter clauses, parens nest them, asterisk is a column wildcard, colon separates field.op.value). Empty after-sanitisation short-circuits the `.or()` clause so a search of just `,*` doesn't fire a malformed query. (3) Create Event and Create Circle screens no longer use `Alert.alert('Title required')` for validation. Create Event gains `errors: {title, startsAt, endsAt}` state — `handleCreate()` collects ALL field errors at once (instead of sequential Alert popups), clears them on edit, threads `errors.title` into `<Input error>`, renders red error captions below both `<DateTimeField>`s with a new `fieldError` style. Create Circle gets a single-field `nameError` via the same pattern. Both match the signup.tsx / ProfileForm.tsx convention. Typecheck clean. Commit `915b7ef`.
-- **2026-06-09 — Notifications list screen (P1 — useNotifications hook was unused until now).** New `app/notifications.tsx` route at the app root with `presentation: 'card'`. Consumes the existing `useNotifications()` hook (which already has its Realtime subscription baked in). Renders a chronological FlatList; each row shows a type-tinted icon-in-circle (follow → blue person-add, event_reminder → orange alarm, circle_event → green calendar, message → purple chat-ellipses), a copy line, relative time-ago via `formatMessageTime`, and an unread dot on the right when `is_read=false`. Tap a row → routes to the right destination via a `routeFor()` switch (`follow` → `/user/<reference_id>`, `event_reminder` + `circle_event` → `/event/<reference_id>`, `message` → `/messages/<reference_id>`) and marks just that row read via a direct `supabase.from('notifications').update({ is_read: true })`. Top-right "Mark all read" button uses the hook's existing `markAllRead`. Empty state for zero notifications ("You're all caught up"); ErrorState for the no-session case. Reachable from a new bell icon on the profile TopBar (in `app/(tabs)/profile/index.tsx#TopBar`) with a red round badge showing the unread count (caps at "99+"). The bottom-nav was already full at 5 tabs so a bell-icon-in-TopBar was the cleanest entry. Producer side (Postgres triggers fanning into the `notifications` table) is still missing — tracked in the now-expanded Push notifications entry. Typecheck clean. Commit `7c03531`.
-- **2026-06-09 — `<ErrorState />` primitive + wired into 5 screens (P2 polish, audit follow-up).** New `src/components/ui/ErrorState.tsx` is the missing twin of `EmptyState` — same icon-in-circle + headline + body shape, but with a primary "Try again" button (dark chocolate fill) and an optional "Back" outline button below. Spaced variant fills the viewport for full-screen states. Wired into 5 screens: (1) `app/event/[id].tsx` "Event not found" path swapped a bare `<Text>` for ErrorState with a calendar icon + a "Back to feed" CTA; (2) `app/user/[id].tsx` "Profile not found" path swapped icon-text-text for ErrorState with a Back CTA; (3-5) all three chat screens (`/messages/[id]`, `/messages/event/[id]`, `/messages/circle/[id]`) now consume the new `error` state from `useMessages` / `useEventMessages` / `useCircleMessages` and render ErrorState with a working Retry button. The Retry button calls `refetch()` — a new addition to each hook that bumps an internal `refetchTick` useState, which the fetch effect depends on, so calling refetch re-runs both the initial fetch AND re-binds the Realtime subscription (handles transient connection loss too). Typecheck clean. Follow-up: wire ErrorState into every other data-fetch path (`useEvents`, `useCircles`, `useProfile` — most are still ActivityIndicator-only on failure). Commit `dbffa11`.
-- **2026-06-09 — Code hygiene batch (4 fixes from audit).** (1) Message hooks `useMessages`, `useEventMessages`, `useCircleMessages` all swallowed initial-fetch errors via `.catch((err) => console.error(...))`; each now also calls `setError(err.message)` and exposes `error: string | null` in its return shape. The chat screens still need to consume the new error and render `<ErrorState />` — that ships with the ErrorState component in the next P2 item. (2) `BottomNav.tsx` + `EntityListSheet.tsx` route casts changed from `router.push(x as any)` to `router.push(x as Href)` (importing `type Href from 'expo-router'`). Type system no longer bypassed. (3) `ViewToggle.tsx` `fontWeight: '510' as any` → `'500'` (the value RN was silently falling back to anyway); inline comment documents Figma origin + rounding. (4) All four `react-hooks/exhaustive-deps` suppressions (3 in `MuralCanvas`, 1 in `update-password`) now carry explanatory comments: Reanimated shared values that don't trigger React renders, wheel handler reading `.value` at fire time, run-once mount avoiding infinite loop. (5) `MockConversation` import in messages inbox was flagged by audit as "stale" — on re-read it's a deliberate display-shape adapter, not stale; kept with a note in BACKLOG for a follow-up rename. Typecheck clean. Commit `0a18f6e`.
-- **2026-06-09 — Removed "Available for work" placeholder bar + ticket "Coming soon" buttons (P2 polish).** Two P2 "dead UI" items shipped as one cleanup. (1) The "Available for work" bar on `/(tabs)/profile` rendered on the user's OWN profile with a "Get in touch" button that alerted "Coming soon" — i.e. the user was being asked to message themselves. Removed the `<AvailableForWorkBar />` from both render paths (dev-fallback + authed), deleted the component function, deleted the orphan `availableBar / availableLeft / availableTitle / availableDot / availableLocation / getInTouchButton / getInTouchText` styles, removed now-unused `Alert` import + `INK / META / SUCCESS_DOT` constants. Documented with a one-line comment that the bar will return on `/user/[id]` when Profile v2 #2 ships the `is_available_for_work` toggle. (2) `app/ticket/[id].tsx` had two outline buttons "Download as PDF" + "Send by Email" wired to `handleComingSoon()` → `Alert.alert('Coming soon')`. Removed both buttons + the `handleComingSoon` function. Bonus: `handleInviteFriends` now delegates to the shared `shareEvent(event)` from `share.service.ts` so the canonical URL + platform-tuned payload is consistent with event detail / circle / profile share buttons; removed now-unused `Share` + `Alert` imports. The remaining ticket actions are "Invite Friends" (works) + "Done" (back). Typecheck clean. Commit `e7ead60`.
-- **2026-06-09 — iOS + Android permission descriptions in app.json (P0 App Store blocker).** `app.json` only had `photosPermission` for `expo-image-picker`. The Near-me filter calls `expo-location`, which would have crashed at permission-request time on iOS (no `NSLocationWhenInUseUsageDescription`) and been rejected at App Store Connect upload. Shipped a full sweep: new `ios.infoPlist` entries for `NSLocationWhenInUseUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSPhotoLibraryAddUsageDescription`, `NSCameraUsageDescription`, `NSUserNotificationsUsageDescription` — all with HIG-style copy ("Sphaer uses your X to do Y" with concrete examples). New `expo-location` config-plugin entry sets `locationAlwaysAndWhenInUsePermission` so the prompt copy is consistent. `expo-image-picker` plugin gained `cameraPermission` for selfie/QR scan use. Android side: new `android.permissions` array listing `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`, `CAMERA`, `POST_NOTIFICATIONS`, `INTERNET`. Merged the original P1 "HIG copy sweep" item into this ship since the HIG-style copy was written in the same pass. Outstanding: test on a real iOS device when push notifications actually invoke `NSUserNotificationsUsageDescription`. Commit `28ca7e7`.
-- **2026-06-09 — Privacy Policy + Terms of Service as in-app routes (P0 App Store blocker).** Original BACKLOG entry assumed legal pages would be hosted at `sphaer.app/privacy` + `/terms` (those URLs 404 today). Shipped a faster alternative: new `src/components/legal/LegalScreen.tsx` is a reusable shell (back chevron + title + scrollable structured-section body) consuming a `{ title, lastUpdated, intro, sections: [{heading, body}] }` prop where `body` can be a string or a mix of paragraph strings and `{bullets: [...]}` blocks. New routes `app/legal/privacy.tsx` + `app/legal/terms.tsx` each compose `<LegalScreen>` with App-Store-submittable boilerplate copy — Privacy covers data collection (auth, profile, content, optional location for Near me), usage purposes (no ad networks, no behavioural profiling), Supabase as the EU-region data processor, GDPR rights (access/edit/delete/export), no tracking cookies, 16+ age requirement; Terms covers eligibility, account responsibility, content ownership + IP licence-to-display, acceptable use, event-organiser disclaimer, termination, warranties + liability limits, governing law (Germany / Berlin courts). Both end in a `privacy@sphaer.app` / `hello@sphaer.app` contact footer. Last-updated date set to 2026-06-09; user can refine wording. `app/(auth)/signup.tsx` now navigates via `router.push('/legal/terms')` / `'/legal/privacy'` instead of `Linking.openURL` external (now-unused `Linking` import removed). `app/_layout.tsx` registers both new routes as `presentation: 'card'`. Both screens have `makeRouteErrorBoundary` per the established pattern. Each is reachable without an auth session — App Store reviewers must read them without signing up. Typecheck clean. Commit `2e668c1`.
-- **2026-06-09 — Add to calendar via .ics on event detail (P2 polish).** New `src/utils/ics.ts` generates RFC 5545-compliant VCALENDAR/VEVENT strings from an event (CRLF line endings, UTC `YYYYMMDDTHHMMSSZ` timestamps, proper escape sequences for `\\`, `;`, `,`, and newlines in TEXT fields). New `src/services/calendar.service.ts#addEventToCalendar()` hands the .ics off to the system calendar in a platform-conditional way: on web, builds a Blob URL of the file and triggers a download via a transient `<a download>` element (works on Chrome / Safari / Firefox); on native, base64-encodes the body into a `data:text/calendar;base64,...` URI and hands to `Linking.openURL` — iOS opens the system Calendar's "Add Event" sheet, Android opens the calendar picker. No new permissions needed because we never touch the device calendar directly — the OS routes to whatever calendar app the user has. base64 encoder is platform-conditional too: `btoa` on web (with a UTF-8 pre-encode so emoji in descriptions survive), `Buffer.from` on RN. New `calendar-outline` button on `app/event/[id].tsx` topbar between the share and bookmark buttons; `accessibilityLabel="Add to calendar"`. Output sanity-checked in Node against a sample event with semicolons, commas, and a newline in the description — all escape sequences emit correctly, VEVENT validates as a self-contained calendar item. Commit `bb20bda`.
-- **2026-06-09 — In-app share buttons on event/circle/profile (P2 polish).** New `src/services/share.service.ts` centralises three share helpers — `shareEvent(event)`, `shareCircle(circle)`, `shareProfile(profile)` — each builds a canonical `https://sphaer.app/event/<id>` / `circles/<id>` / `user/<id>` URL and calls React Native's `Share.share()` with a platform-tuned payload (iOS keeps `message` + `url` separate so receivers render link-preview cards; Android folds the URL into `message` because `url` is silently dropped there). The web-preview pages at those URLs don't exist yet, but baking the canonical URL in now means every share emitted from the app is forward-compatible the moment the web app + Universal Links / App Links land (filed as deferred-infrastructure item under P2). `app/event/[id].tsx`: existing placeholder `handleShare` (which previously only shared a title + location string with no URL) now delegates to `shareEvent()`; removed the now-unused `Share` import from react-native. `app/(tabs)/circles/[id].tsx`: replaced the no-op `information-circle-outline` button in the topbar with a `share-outline` button wired to `shareCircle()`. `app/user/[id].tsx`: added a second `share-outline` button in the topbar next to the back chevron — required adding `flexDirection: 'row'` + `justifyContent: 'space-between'` to the existing navBar style so the two buttons sit on opposite sides; gated on `displayProfile &&` so it doesn't render on the loading/not-found states. Visually verified in preview on `/user/lea-weber` (dev fallback mock profile): share-outline icon visible top-right next to back chevron, `aria-label="Share profile"` confirmed. `event/[id]` and `circles/[id]` paths require a real DB record (could not verify the exact icon swap end-to-end without seeded UUIDs), but the implementations are byte-identical patterns to the user/[id] one so the typecheck-pass is high-confidence. Commit `2ac34b7`.
-- **2026-06-09 — Mural refresh affordance (P2 polish — overscroll → button).** Spec called for vertical overscroll → refetch, but the Mural canvas's pan gesture already owns vertical drag (with rubber-band at both ends), and adding overscroll-triggers-refresh would either fight that rubber-band or risk regressions in the carefully-tuned pan/pinch math. Shipped the same UX intent via a small floating refresh button — 36×36px circle in the top-right of `canvasSlot`, semi-transparent black background (`rgba(0,0,0,0.55)`) with a 1px white-15% border so it reads on both bright posters and the black wall background, white refresh icon (ionicons `refresh`), white spinner during the refetch. `zIndex: 10` sits it above the GestureDetector so taps don't get swallowed. Hit-slop padded 10px on each side for thumb reach. New `handleRefresh` callback awaits `refetch()` from `useEvents`; sets `isRefreshing` state so the icon swaps to a spinner during the round-trip. Visually verified in preview: button renders top-right with subtle dark fill + white outline, accessible via `aria-label="Refresh mural"`, tap fires `refetch` without throwing. The existing `useFocusEffect(refetch)` still covers the "switch tab, come back" case — this button covers "I want fresh data right now without leaving the wall." Commit `9695fe2`.
-- **2026-06-09 — Discovered: Save/bookmark sync already shipped in an earlier session (BACKLOG retirement).** The P2 "Save/bookmark events synced (move from AsyncStorage to saved_events table)" entry was stale — `src/services/events.service.ts` already has `getSavedEventIds()`, `saveEvent()`, `unsaveEvent()`, `getSavedEvents()` all hitting the `saved_events` table; `app/(tabs)/feed/index.tsx#toggleSave()` and `app/event/[id].tsx` both call those service functions with optimistic UI; `app/(tabs)/profile/index.tsx` renders saved activities via the `getSavedEvents(user.id)` + `openSheet === 'saved'` EntityListSheet. The whole flow is DB-backed end-to-end; only AsyncStorage usage left in the codebase is the legacy onboarding flag in `app/location.tsx` (which already auto-migrates to `profiles.onboarding_completed`). Retired the BACKLOG entry as part of the Mural refresh ship.
-- **2026-06-09 — Tonight / This weekend / Free quick-filter chips on Feed (P2 polish).** New `src/utils/event-filters.ts` exposes `isTonight()`, `isThisWeekend()`, `currentWeekendWindow()` (Mon-Thu: upcoming Fri 18:00 → Sun 23:59:59; Fri pre-18:00: today 18:00 → Sun; Fri post-18:00 / Sat / Sun: now → Sun 23:59:59), and `applyChipFilters(events, { tonight, thisWeekend, isFree })` — the single predicate that all three feed views share. `EventFilters` (in `src/types/event.types.ts`) gains `tonight?` and `thisWeekend?` flags; `isFree?` was already there from a previous session, now finally surfaced. `app/(tabs)/feed/index.tsx`: three new chips render in the existing chipRow next to Near me (Tonight / This weekend / Free), styled with the same chip pattern (white pill, dark active state, icon + label) — renamed `nearMeChip*` styles to plain `chip*` so the new chips reuse them. ChipRow now scrolls horizontally on narrow screens (was a flex row; ScrollView with `horizontal` prevents overflow). Tonight ⇄ This weekend are mutex (selecting one auto-clears the other); Free stacks freely since it's orthogonal to time. Empty state copy branches on which chip is active: "Nothing on tonight", "Nothing on this weekend", "No free events match" — body always points back at the chips. `app/(tabs)/feed/map.tsx` and `app/(tabs)/feed/mural.tsx` both delegate to `applyChipFilters()` in their `visibleEvents` memos so view switches stay coherent — toggling Tonight on Feed, then switching to Map, leaves the map showing the tonight subset. Visually verified in preview: Free chip narrows the list to the 2 free events (Open Mic Prenzlauer + Berlin Zine Fair); Tonight shows "Nothing on tonight" empty state (the seed data has no events for today); clicking This weekend clears Tonight and shows "Nothing on this weekend". Commit `eb3934b`.
-- **2026-06-09 — Email confirmation interstitial (Profile v2 #9 — code half).** New `app/(auth)/verify-email.tsx` interstitial sits between signup and onboarding when the Supabase project's email-confirmation toggle is ON. Subscribes to `onAuthStateChange` and routes to `/onboarding` the moment `SIGNED_IN` arrives (which fires when the user taps the email link, lands back on the app with the session-bearing URL fragment, and `detectSessionInUrl: true` parses it). Renders the typed email back to the user, an animated spinner + "Waiting for confirmation…" status, a "Resend email" CTA with a 60-second cooldown (calls `supabase.auth.resend({ type: 'signup', email })`), and a "Start over" link that signs out any pending session and bounces to the landing. `useAuth.signUp()` now returns the raw supabase `data` so callers can branch — `signup.tsx`'s `handleSignUp()` checks `result?.session` and routes to `/onboarding` when confirmation is OFF (immediate session, current dashboard state) or `/verify-email?email=...` when confirmation is ON (no session yet, link sent). `_layout.tsx` gains a third mid-flow fall-through for `verify-email` so the layout doesn't intercept the screen when a session briefly populates. Visually verified in preview: navigated directly to `/verify-email?email=test@example.com`, screen renders all elements correctly with the email echoed. **DEPLOYMENT NOTE for the human:** flip Supabase dashboard → Authentication → Providers → Email → "Confirm email" ON. The interstitial code is in place — once the toggle flips, the next email signup will go through `/verify-email` automatically. Test plan: with the toggle on, sign up a throwaway → see verify-email screen → check inbox → click link → confirm you land on onboarding without the verify-email screen visible afterward. Commit `6933a2b`.
-- **2026-06-09 — Password reset / forgot password (P1 App Store launch blocker).** `src/services/auth.service.ts` gains two new helpers: `requestPasswordReset(email)` (wraps `supabase.auth.resetPasswordForEmail` with a platform-conditional redirect URL — `<origin>/update-password` on web, `sphaer://auth/update-password` on native, mirroring the Google OAuth pattern) and `updatePassword(newPassword)` (wraps `supabase.auth.updateUser({ password })`). Two new screens: `app/(auth)/reset-password.tsx` (email field + "Send reset link" CTA → on submit calls the service and flips to a "Check your inbox" success state with the email echoed back; surfaces inline validation for malformed addresses; always shows the same success state regardless of whether the email matched an account, to avoid leaking which addresses are registered) and `app/(auth)/update-password.tsx` (deep-link landing — polls `getSession()` then subscribes to `onAuthStateChange` with a 1.5s fallback to detect whether the recovery token populated a session; renders three states: "Set a new password" with new + confirm fields when a recovery session is present, "Password updated" success after successful `updateUser`, "Link expired" when no recovery session shows up after the polling window; on success signs out the recovery session before bouncing to login because silently signing the user in via a recovery flow is surprising and means a stolen email link grants persistent access). The login screen's existing "Forgot password?" link now `router.push('/(auth)/reset-password')` instead of the placeholder Alert. `app/(auth)/_layout.tsx` gets a second mid-flow fall-through: previously only `onboarding` was allowed to mount while a session was present (post-signup form), now `update-password` is also allowed because Supabase populates a temporary recovery session before the screen mounts — without the fall-through the layout would bounce the user to `/location` or `/feed` before they could set a new password. The `lastSeg` is cast to `String()` because expo-router's generated route literal type hasn't picked up the new files yet. Visually verified in preview: clicking "Forgot password?" on /login navigates to /reset-password with correct chrome (logo, serif title, dark CTA, back-to-login link), inline email validation shows "Enter a valid email address" for malformed inputs, /update-password loads the "Link expired" state after the 1.5s polling window when accessed directly without a token. **DEPLOYMENT NOTE for the human:** the Supabase Auth dashboard's "Reset Password" email template needs the `redirectTo` URLs added to its allowlist (Authentication → URL Configuration → Redirect URLs) — add `<production-web-origin>/update-password` and `sphaer://auth/update-password`. Until those are allowlisted, Supabase will refuse to redirect and the reset email's link will dead-end on the Supabase error page. Email template body can stay default. **Test plan (not yet executed end-to-end — needs the dashboard config + a throwaway account):** sign up a throwaway, log out, log in screen → Forgot password → enter the throwaway email → check inbox → click link → land on /update-password → set new password → log in with the new password. Commit `7498329`.
-- **2026-06-09 — Account deletion (P1 App Store launch blocker).** New `supabase/functions/delete-account/index.ts` edge function: verifies the caller's JWT via a user-scoped client, best-effort cleans up storage (avatars under `<userId>/`, gallery objects under `<userId>/`, plus posters on events they created and images on circles they created — fetched via a creator_id query BEFORE the cascade fires so paths are still resolvable), then calls `admin.auth.admin.deleteUser(userId)`. The schema already has `profiles.id REFERENCES auth.users(id) ON DELETE CASCADE` and every downstream FK is `ON DELETE CASCADE` (events, event_registrations, event_message_reads, saved_events, follows, circles, circle_members, circle_follows, circle_message_reads, messages, direct_message_reads, notifications, profile_images) — so a single auth-row delete cascades the entire user graph. No new migration needed. Client: new `src/services/account.service.ts#deleteAccount()` invokes the function via `supabase.functions.invoke('delete-account')` with the caller's JWT auto-attached. UI: new `SettingsSection` at the bottom of `app/(tabs)/profile/index.tsx` (below the Available-for-work bar, separated by a hairline) with a red trash icon + "Delete account" row; tapping opens a two-step ConfirmSheet flow — first sheet "Delete your Sphaer account?" with red "Continue" button; on Continue advances (with a 240ms gap so the close animation finishes cleanly) to second sheet "Permanently delete account · Last chance" with red "Delete account" button. On success the local session is killed via signOut() (errors swallowed because the JWT now references a non-existent user) and the user is bounced to `/`. Visually verified in preview by clicking through both sheets. `tsconfig.json` now excludes `supabase/functions/**` from the project's tsc check since the edge function runs under Deno's own type system. **Deployment note:** the function file is committed but NOT yet deployed — Supabase MCP returned net::ERR_FAILED for the entire session. Run `supabase functions deploy delete-account` once the MCP is back up or via the CLI to make the client call resolve; until deployed the UI surfaces "Function not found" via the ConfirmSheet's error alert. **Test plan (not yet executed — no throwaway account at hand):** sign up a throwaway account, post an event, save another event, follow someone, join a circle, send a DM; tap Delete account → Continue → Delete account; verify (a) you're bounced to `/`, (b) the auth row is gone (Supabase dashboard → Auth → Users), (c) the profile row is gone (`select * from profiles where id = '<uuid>'`), (d) the event is gone, (e) the save is gone, (f) the follow is gone, (g) the circle membership is gone, (h) the message is gone, (i) the avatar object is gone from the avatars bucket. Commit `629b901`.
-- **2026-06-09 — Figma audit: Tagline screen (2012:1683).** "Your City. Your Sphaer." on the landing screen was at fontSize 24 / weight bold for "Your Sphaer." — Figma spec is 26 / Medium. Updated styles.tagline / styles.taglineBold on `app/(auth)/index.tsx`. Color, layout, animation, and hero structure already matched. Font file Test Martina Plantijn is referenced via `typography.fontFamily.display` but not loaded at runtime — falls back to system serif until the .otf files land (separate item). Commit `bc36700`.
-- **2026-06-09 — Figma audit: Splash Screen (2012:1757).** Replaced the 1×1 placeholder `assets/images/splash.png` with a Figma-matched 1024×1024 splash. New `scripts/generate-splash.ts` emits the splash via sharp: white Master Cream bg (`#FFFFFF`), two-hoop logo from the existing `SphaerIcon` SVG paths scaled 3× and centred, "Sphaer" wordmark below in system sans-serif Semibold, all in Neutral/chocolate (`#2B2A27`). Cluster centred vertically with the Figma's ~7.5px optical lift. Closes the "Splash screen polish" Backlog (later) item early. Commit `bf3cd71`. **Note for future sessions:** the Figma audit is now the active UP NEXT — 12 screens remaining, user pending a Figma subscription upgrade for full audit bandwidth.
-- **2026-06-08 — P1 Core flows: 5 items shipped in one pass.** State discovery first — the BACKLOG significantly understated progress, so the actual remaining slice across the section was much smaller than 5 fresh items. **Messaging v1 closed out**: codebase already had migrations (`20260601*`), `messages.service`, `useMessages` with Realtime subscriptions, chat detail screen with `formatSeenTime`-driven read receipts, and the Instagram-style BottomNav unread badge — the only residual was the misleading "Coming soon — DMs are not wired up yet" Alert on the own-profile placeholder bar, which is actually a Profile v2 #2 "Available for work" toggle concern; updated the alert copy to point at that instead. The real DM entry on `/user/[id].tsx` (`onMessagePress` → `router.push('/messages/${id}')`) was already correctly wired. **Instagram unread row styling** (newly unblocked): `ConversationRow` now switches name to bold + ink and preview to semibold + ink when `unreadCount > 0`; reverts to medium + meta-grey when zero. The existing count pill stays put on the right. **Search expansion + debounce**: extended `events.service.ts`'s title-only `ilike` to a PostgREST `.or()` across `title` + `description` + `location_name` + `address`, plus a new `useDebounce` hook wired through the feed at 300ms so typing doesn't fire one Supabase round-trip per keystroke. Verified the `.or()` syntax against the live DB ("public" search returns Founders Meetup + Studio 8 Berlin). **Profile editing flow polish**: added per-field validation (bio ≤80, about ≤600, website regex), wired `error` props through to the Tagline / About / Website Inputs, added a JSON-stringify `isDirty` guard that disables Save until the form has actually changed, and clear-field-error-on-edit so sticky errors don't fight the user. **Events Near Me**: added `nearMe?: boolean` to EventFilters + `userCoords` to AppContext; new `src/utils/geo.ts` with haversine + `NEAR_ME_RADIUS_KM = 5`; chip on the feed between header and list with three visual states (off / on / busy); first tap requests `expo-location` permission, caches coords, sets filter; client-side haversine in `visibleEvents` filters events with valid lat/lng (no-lat events pass through silently rather than disappearing); empty-state copy switches to "Nothing within 5 km — try expanding" when the filter is on. Chip renders correctly in preview; runtime permission grant is OS-mediated. Visual Figma match on Edit Profile carved off as a separate item pending the Whole-app styling audit. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Feed list non-visual lint pass: 6 magic numbers → theme tokens.** Figma MCP still rate-limited (View seat on Professional plan), so I split the visual half of the Per-screen Feed sub-audit off as its own follow-up and shipped the structural half — the lint pass that doesn't strictly require Figma access. Audited the 4 Feed surface files (`app/(tabs)/feed/index.tsx`, `src/components/feed/FeedHeader.tsx`, `EventCard.tsx`, `SearchFilterBar.tsx`) for hex literals and magic font/radius numbers. `feed/index.tsx` and `FeedHeader.tsx` came back clean — all colour/spacing/font-size references already go through `colors.*` / `spacing.*` / `typography.*`. `EventCard.tsx`: `borderRadius: 8` → `radius.sm`, `fontSize: 20` → `typography.fontSize.lg`. `SearchFilterBar.tsx`: `fontSize: 17` ×2 → `typography.fontSize.md`, `fontSize: 15` → `typography.fontSize.base`, `fontWeight: '400'` → `typography.fontWeight.regular`. Each swap is byte-equivalent (the token literal values match the inline ones) so no visual change is possible. Remaining inline values are intentional Figma-specific gaps that don't map to existing tokens: `fontSize: 14` ×2 (between `sm: 13` and `base: 15`), `borderRadius: 18` and `borderRadius: 28` (no exact match in the radius scale), and the universal `shadowColor: '#000'` pattern (kept inline because the brand `colors.black` is `#0D0D0D`, not pure black). Visual comparison against Figma waits on the MCP rate limit reset — that piece stays in UP NEXT. Typecheck clean. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Error boundaries on every top-level route.** New `src/components/ui/ErrorBoundary.tsx` exposes two surfaces: an `ErrorBoundary` class component for explicit subtree wrapping, plus a `makeRouteErrorBoundary(name)` factory that plugs straight into expo-router's per-route `export const ErrorBoundary = ...` mechanism. The same `DefaultFallback` view backs both — centred alert icon, "Something went wrong" headline, body copy, dev-only error.message under the body, chocolate "Try again" button that resets the boundary state. A short Node script swept 21 routes (`(auth)` × 4, `(tabs)` × 11, plus event/user/profile-edit/ticket/location detail screens) and added `import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary'; export const ErrorBoundary = makeRouteErrorBoundary('<slug>');` to each. Slugs are short and grep-friendly (`feed-list`, `event-detail`, `messages-circle`, etc.) so a future Sentry/Bugsnag wiring can group by them. First-pass script bug: my insertion heuristic put the new import on a blank line in the middle of multi-line imports, breaking syntax — fixed by a second-pass script that strips every occurrence and re-inserts after the last completed `from '…'` line. Verified the fallback by injecting a temporary `if (window.location.search.includes('crash=1')) throw …` into the feed screen and loading `/feed?crash=1`: fallback rendered exactly as designed, error detail visible in __DEV__, the bottom nav stayed functional (the rest of the app keeps working when one screen crashes), and the console got the tagged `[ErrorBoundary:feed-list]` payload. Temporary throw reverted before commit. Sentry/Bugsnag wiring stays a P2 follow-up. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — RN `Image` → `expo-image` sweep across 21 files.** Installed `expo-image@~55.0.11` via `npx expo install`. A short Node script peeled `Image` out of every `import { ... } from 'react-native'` line and added `import { Image } from 'expo-image'` alongside it, then renamed every `resizeMode="cover"` (7 JSX sites) to `contentFit="cover"`. Files touched: feed map, all three message threads, both circle screens, both create screens, event detail, conversation row, both circle cards, bottom nav, mural poster, avatar, circle activity card, chat bubble, event card, profile activity card, entity list sheet, circle join sheet, profile form, profile view, circle preview modal. `MuralPoster` comments updated to reflect that expo-image renders a real `<img>` on web (no more RN-Web `background-image: z-index -1` trick), so the wrapper-bg-color workaround note is gone — wrapper stays transparent for visual continuity but the constraint is lifted. `useMuralDimensions.ts` keeps the `Image.getSize()` static call from `react-native` deliberately: it's a metadata API, not a render path, and migrating it would require switching to expo-image's `loadAsync` which adds API surface without the rendering benefit. Typecheck clean. Feed list verified visually in preview (Open Mic / Funkhaus Late / Berlin Zine Fair posters all render correctly via expo-image). Mural dev-mode appearance unchanged from before the migration (same canvas-pan/zoom that puts posters outside the dev-mode visible strip). Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Email signup → onboarding form no longer intercepted by the (auth) redirect.** Bug filed during this morning's auth-edge-case audit: `signup.tsx` does `router.replace('/(auth)/onboarding')` after a successful `signUp()`, but on the same render cycle `(auth)/_layout` saw the new session and bounced the user to `/location` — the onboarding stack unmounted before paint and every new email signup landed in the app with only `display_name` set. Fixed via Option B from the spec: `(auth)/_layout.tsx` now reads `useSegments()`, detects when the active child route is `onboarding`, and falls through to the Stack instead of redirecting. Returning-user behaviour preserved — `profile.onboarding_completed=true` still goes to `/(tabs)/feed`, anyone else not on `/onboarding` still goes to `/location`. Verified in preview: navigating to `/onboarding` with no session now mounts the route (onboarding.tsx returns `null` because `!user`, but the empty render confirms the layout no longer intercepts — previously the URL would have bounced to `/location` instead). Trace walked through all four entry paths (email signup, OAuth signup, email returning login, OAuth returning login) — all land correctly. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — evt-startup poster ships: BUILD IN PUBLIC, deep teal + terminal-green accent.** Last picsum.photos placeholder on the figma-seed pool is gone. Added a new `startup` design to `scripts/generate-svg-posters.ts` using the existing `bigType` generator — deep teal bg (`#0F2A2E`), warm cream fg (`#F3EFE5`), terminal-green accent stripe (`#7AE07A`). Headline "BUILD IN PUBLIC" splits across two lines (BUILD / IN PUBLIC), subtitle "Founders meetup — 5-min demos, honest questions", meta "SAT 30 MAY · 18:00 · FACTORY GÖRLI". Re-ran the generator (50 KB PNG, 16 KB WebP) and uploaded to `event-posters/figma-seed/evt-startup.webp`. Swapped `evt-startup.poster_url` in `mockEvents.ts` from `picsum.photos/seed/sphaer-startup/800/900` to the new Supabase URL, added matching `poster_width: 800` / `poster_height: 1133` for the Mural prefetch path. Re-seeded; DB row confirms the new URL. Standalone render verified (BUILD/IN PUBLIC headline, accent stripe, meta line all crisp at 800×1133). All 39 figma-seed events now ship authored or generated posters. Note: event detail hero crops the middle of portrait posters — this is shared with every other event and is its own backlog item if it ever becomes a problem. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Compress Figma-seed posters to WebP: 41.23 MB → 2.32 MB (94.4% saved).** Added `sharp@0.34.5` as devDep. Extended `scripts/import-figma-posters.ts` to pipe each downloaded PNG through `sharp(...).webp({ quality: 80 })` before upload — output path now `event-posters/figma-seed/<evt-id>.webp` with `Content-Type: image/webp`. Per-poster size log shows ratios between 24% and 79% of source; total drop is the headline number. Also extended `scripts/generate-svg-posters.ts` (the SVG-typography pipeline) to encode straight to WebP — was uploading PNG and would have been left out of the savings otherwise. Local `.png` cache + on-disk `.png` copy retained for debug visibility. Swapped all 38 figma-seed `.png` URLs in `mockEvents.ts` to `.webp` via a sed-style global replace. Re-seeded — DB now shows 38 events with `.webp` poster_url (the 39th is `evt-startup` still on a picsum placeholder, tracked as new UP NEXT #2). Verified on Feed list view: OPEN/Funkhaus Late/Berlin Zine Fair posters all render at full quality. One transient ORB-block on the first cold fetch of newly-uploaded SVG posters resolved on next reload (Cloudflare cache propagation). Old `.png` storage objects retained — cleanup is a future follow-up. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Loading skeletons audit: SkeletonBlock primitive + Feed/Profile/Circles/Event/User skeletons.** Replaced the raw centred `ActivityIndicator` on five mid-screen loading paths with shimmer-pulsing skeletons that mirror the populated layout, so the swap to real data lands without a visual jump. New `src/components/ui/SkeletonBlock.tsx` is the single shimmer primitive — width/height/radius/delay props, opacity-pulse from 0.55 → 1 over 900ms (same cadence as Mural's existing SkeletonWall, deliberately matched so the app's loading feel is consistent everywhere). Four screen-level skeletons under `src/components/ui/skeletons/`: `EventCardSkeleton` (358×231 card with text-block placeholders + 163-wide poster block), `CircleCardSkeleton` (176×313 vertical card with circular image + title + counts), `ProfileSkeleton` (avatar + name + stats row + action button + section block + 3-up image grid), `EventDetailSkeleton` (320-tall hero + title + meta + organiser row + body paragraph). Wired in at: `app/(tabs)/feed/index.tsx` (4 EventCardSkeletons), `app/(tabs)/circles/index.tsx` (2 sections × 3 CircleCardSkeletons inside a horizontal ScrollView matching the populated structure), `app/(tabs)/profile/index.tsx` (ProfileSkeleton replaces both authLoading and extrasLoading spinners), `app/event/[id].tsx` (EventDetailSkeleton), `app/user/[id].tsx` (ProfileSkeleton). Each call site staggers the pulse via the `index`/`delay` prop so a grid of skeletons feels alive rather than flashing in lockstep. Visually verified the EventCardSkeleton via a temporary forced-true injection in the feed — title rows, meta lines, and poster block all render with correct sizes and the pulse is visible. In-flight button spinners (Follow toggle, save button) are preserved per spec. Imports of `ActivityIndicator` cleaned up from four files. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — App-wide empty states audit: Feed, Messages inbox, Circles browse all use `<EmptyState>`.** Walked every tab via a code inventory (preview can't simulate a fresh account in dev mode), classified each list-rendering screen, and replaced three plain-text empty branches with the screen-level EmptyState variant. **Feed** (`app/(tabs)/feed/index.tsx`) — "No activities yet" string → calendar-outline icon + "Nothing on right now" title + a body line explaining when the feed will fill, and a separate search-aware variant ("No matches for \"X\"") when a search query is active. **Messages inbox** (`app/(tabs)/messages/index.tsx`) — single "No conversations to show" line → tab-aware copy via a new `emptyCopyForFilter()` helper: All / Unread / Favourites / Direct / Activities / Circles each get their own icon + headline + body (e.g. Unread: "You're all caught up — Nothing unread, new messages will show up here"). **Circles browse** (`app/(tabs)/circles/index.tsx`) — already had an icon + line, refactored to use EmptyState for visual consistency. Orphan `empty`/`emptyText` styles removed from all three. Inventory subagent classified the remaining sites: Map / Mural / chat threads / circles detail / EntityListSheet — each already adequately handled (map has natural empty render, mural is mock-data-backed, chat threads are placeholder screens, circle detail uses inline italic hints, EntityListSheet renders centered text via its `emptyMessage` prop). Verified the Messages "All" tab empty state visually in the preview (chat bubble icon in soft circle + bold headline + centered body). Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Empty state on other users' profile gallery + sections; reusable `<EmptyState>` lands.** New `src/components/ui/EmptyState.tsx` with two implicit variants — inline (italic body, no icon, optional onPress) for section-level empties, and screen (icon + title + body + CTA + spaced) for the upcoming app-wide audit. Wired into `ProfileView` at four sites: Images section now always renders with "{displayName} hasn't uploaded any photos yet." (centred) when an other-user profile has no gallery rows; Experience section now shows a placeholder for both own-profile ("Add roles, residencies, and projects from Edit Profile.") and other-profile ("{displayName} hasn't added any experience yet."); Testimonials migrated from inline italic to EmptyState with name-personalised copy for other-user profiles; Activity section's empty placeholder is gated on `activitiesCount === 0` so we don't lie ("Anke Peters hasn't shared any activities yet" while stats say Activities: 1 — we just don't fetch the timeline list on /user/[id]). Orphan `emptyHint` style removed from ProfileView. Verified on Anke Peters (`db34aadd-9c59-44cc-af50-693c81de8f69`) — has experience, no images, no testimonials — all three empties render correctly. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Auth edge-case audit: SIGNED_IN race fixed, /location belt-and-braces, email-signup-onboarding bug filed.** Audited the 4 entry paths plus session-expiry and OAuth-cancel after the `onboarding_completed` migration shipped. Found two issues. (1) `AuthContext.onAuthStateChange` re-fetched the profile on every event without flipping `isLoading` back to true — so after a fresh `SIGNED_IN`, the `(auth)` layout's gate ran for a frame against a stale `profile?.onboarding_completed=undefined` and routed returning users to `/location` before the new profile arrived. Fixed by discriminating on event type: `SIGNED_IN` flips loading; `TOKEN_REFRESHED` / `USER_UPDATED` / `INITIAL_SESSION` leave it alone (profile didn't change); `SIGNED_OUT` clears. (2) `app/location.tsx`'s early-bail only honoured the legacy AsyncStorage flag, so a reinstall user with `onboarding_completed=true` in the DB but no local flag would have been stuck on the prompt. Now bails if either signal is set, and migrates the legacy flag → DB column at the same time. Session expiry was already correct (supabase-js `autoRefreshToken: true` + the onAuthStateChange listener handles SIGNED_OUT cleanly). OAuth-cancel was already correct (`'cancelled'` substring check silences the alert; the browser modal makes multi-tap impossible). New backlog bug filed: email-signup-skips-onboarding-form (`(auth)/_layout`'s redirect overrides `router.replace('/onboarding')` before the form ever mounts). Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Profile completion % card replaces persistent "Finish setting up your profile" banner.** New `src/utils/profile-completion.ts` helper scores six fields (avatar_url, bio, about, location, disciplines, experiences) at equal weight and returns `{ percentage, missing }`. `cover_url` was dropped from the list because ProfileForm has no editor for it (counting it would cap real users below 100% with no fix path). New `src/components/profile/ProfileCompletionCard.tsx` renders the sparkles icon + "Profile N% complete" title + readable missing-fields subtitle ("Add a profile photo and a tagline") + a thin progress bar; returns `null` at 100% so the card unmounts entirely once the user is done. Replaced `ProfileIncompleteBanner` in `app/(tabs)/profile/index.tsx` and deleted the old file. Demo ghost profiles (`scripts/seed-demo-data.ts`) hit 100% (all six fields filled) so the demo profile shows no card. Visually verified at 33% completion via a temporary dev-fallback injection — title, subtitle, progress bar, and chevron all render as designed. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Login → location-onboarding glitch fixed: server-side `onboarding_completed` flag.** Returning users were sometimes re-routed through `/location` after login because the old gate relied on an AsyncStorage flag that's local to a single install — reinstall, second device, or web-after-native silently wiped it. New migration `20260608000000_onboarding_completed.sql` adds `profiles.onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE` and backfills `TRUE` for any profile that already has a `neighborhood` or non-empty `location` (18 of 21 live rows). `app/(auth)/_layout.tsx` now gates on the new column — onboarded users go straight to `/(tabs)/feed`, first-timers still get `/location`. `app/location.tsx`'s `finishAndGoToFeed` writes the flag (and neighborhood) to the DB profile via `updateProfile()` and pushes the updated profile into AuthContext, so the next login skips the screen without ever mounting it. The legacy AsyncStorage flag is still read on mount as a fast-path migration: if it's set but the DB column isn't, the screen quietly upgrades the DB and bails. Types regenerated in `src/types/supabase.ts`; `mockEvents.ts` host-profile factory updated to include the required field. Branch: `funny-kare-983d2c`.
-- **2026-06-08 — Mural polish pass: 1.3× initial zoom + minimap + smooth filter relayout + 10 SVG-generated posters.** Initial mount now opens at scale 1.3× so the canvas clearly overflows in every direction — reads as "more wall to explore" instead of the previous "you can see everything." New `MuralMinimap` component at bottom-right shows the wall's outline with poster cells and a viewport rectangle that tracks pan/zoom; opacity fades 0.7→1.0 on active gesture (mirrors iOS scrollbar); tap anywhere on it to teleport viewport. Filter changes that resize the canvas now fade-dip opacity 1→0.25→1 over ~360ms so the snap reads as a transition. New `scripts/generate-svg-posters.ts` produces typography-driven posters (bigType / gradient / geometric / twoColor styles) via sharp; 10 new posters this batch — Rough Trade Night, Floh Kreuzberg, Who Owns the City, Void & Volume, Tresor 4-Floor, Riso Workshop, Das Programm, Berlin Zine Fair, Funkhaus Late, Cafe Lichtblick Open Mic. **39 events total** in the DB now.
-- **2026-06-08 — Mural densification: +13 posters from Figma secondary pool, ~28 events total.** Pulled `imgRectangle4..14` + `imgFrame4`/`imgFrame7` from the original Figma export — these were a secondary pool of 13 high-res posters the first import pass skipped (it only looked at the `imgPoster*` slot). Visual confirmation: all 5 of the user's reference posters (Pictoplasma, Blues & Rhythm Festival, Type Craft Workshop, Berlin Collection Launch / Studio 8, Das Plakat MK&G) were *already in the Figma file* — no AI gen needed. Added new MOCK_EVENT entries for each (Toundra @ Bi Nuu, SXTN tour, Foreign Diplomats @ Badehaus, DSO Berlin / Santtu-Matias Rouvali, Margiana exhibition, The Bitter End, "thought about leaving" reading night, modular synth open lab, etc), each with embedded poster dimensions. Re-seed pushed 29 events to Supabase. Mural canvas grew from 585×789 to 740×840 — visible benefit: more posters per row, wall now feels meaningfully bigger to pan around. Branch: `funny-kare-983d2c`. AI gen item retired since the Figma pool covered it.
-- **2026-06-08 — Mural sizing pass: Figma-correct dense layout + instant cold mount.** Band height dropped from `screenHeight/2` (~400px) to a fixed 140px (matches the Figma comp showing ~5 bands of ~93px-wide posters per iPhone viewport). `MIN_BAND_COUNT=3` keeps the wall from collapsing on small data sets. Cold mount now skips `Image.getSize()` entirely for figma-seed posters thanks to embedded `poster_width`/`poster_height` on each MockEvent — first paint is instant instead of waiting 10–15s for 32MB to download. Two CSS-stacking-context bugs fixed along the way: removed `backgroundColor` from both the canvas and each poster wrapper because RN Web's `<Image>` renders its picture at `z-index: -1`, which any parent `backgroundColor` painted over. Branch: `funny-kare-983d2c`. Follow-up: more posters via AI gen (now UP NEXT #1) — wall feels right but still small.
-- **2026-06-08 — Figma poster import (15 designer-curated posters).** `scripts/import-figma-posters.ts` extracts posters from Figma file `HIVq6Vaymj01dZ37AvwCUF` via the Figma MCP, uploads to Supabase Storage at `event-posters/figma-seed/<evt-id>.png`, and `src/data/mockEvents.ts` updated for 15 of 16 events (`evt-startup` retains picsum until a 16th designer poster lands — tracked in P0). Verified: 15 rows in `events` table with figma-seed URLs; Mural visibly renders "Fire of Love" / "Typography Experiment" / etc. Branch: `funny-kare-983d2c`. Follow-up: WebP compression for the ~32MB total → see P0 "Compress Figma-seed posters."
-- **2026-06-08 — Mural feature (2D pan-pinch poster wall).** Brick layout, pinch-zoom with focal point, web wheel-handler for trackpad pan/pinch, Feed/Map/Mural filter parity. Branch: `funny-kare-983d2c`.
-
----
-
-# Appendix — Detailed specs (preserved from earlier sessions)
-
-## Messaging v1 (decisions locked, ready to build when promoted)
-
-> **STALE — messaging shipped across 2026-06-08/09** (DMs, circle + event chats, Realtime, read receipts, unread badges, skeletons, error states, Figma-matched headers). This section is the original build plan, kept for the schema/decision record only.
-
-Architectural calls already made (don't re-grill these next session, just build):
-
-| Decision | Locked answer |
+| | |
 |---|---|
-| Scope | **1:1 DMs first.** Circle group chat follows in a separate session. |
-| Realtime | **Supabase Realtime subscription** on the `messages` table. Polling rejected. |
-| Read state | **Full read receipts** (iMessage-style: "Read 2m ago" visible to sender). Unread count badge on inbox + Messages tab. |
-| Mock data | Existing `src/data/mockMessages.ts` retired during build — replaced by real Supabase reads. |
-| Entry points | Profile "Get in touch" button (currently shows Alert) → routes to `/messages/[id]` with that user. Plus a "+" on inbox to start a new chat (later). |
+| Branch | `prep/2026-08-17-buildable` — **20 commits ahead of `origin/main`, unpushed** |
+| `main` | `57d9618` (2026-06-19), in sync with GitHub |
+| `npx jest --ci` | **505 passed / 505 total, 33 suites**, exit 0 |
+| `npx tsc --noEmit` | exit 0, zero errors |
+| `npm run lint` | exit 0, zero problems — but see below |
+| Migrations on disk | **24 files**; 3 dated `20260817` |
+| Repo docs | `CLAUDE.md`, `BACKLOG.md`, `RABON-GLITCHES.md`. **No `HANDOFF.md`, no `DECISIONS.md`** — despite other notes referencing them. Visual evidence lives in `docs/mural-qa/`, `docs/poster-qa/`, `docs/profile-qa/`. |
 
-### Schema work needed (one migration)
-`messages` table exists with `(id, sender_id, recipient_id, circle_id, content, created_at)`. For 1:1 read receipts add:
-```sql
-ALTER TABLE public.messages
-  ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
-CREATE INDEX IF NOT EXISTS messages_recipient_unread_idx
-  ON public.messages (recipient_id, read_at);
+**Lint's "zero problems" is narrower than it sounds.** `eslint.config.js`
+ignores `dist/*`, `.tmp/*`, `.expo/*`, `.claude/*`, `supabase/*` and
+`src/types/supabase.ts`. That is a deliberate, correct scope — `.claude/*` held
+26 problems in an abandoned worktree nobody ships — but "clean" means `app/` and
+`src/` are clean, not the whole tree.
+
+---
+
+## ⛔ STANDING HAZARDS — read before touching the database
+
+**1. NEVER run `supabase db push`.** The local migration files and the live
+database have completely diverged: **22 local files never applied remotely, 17
+remote migrations with no local file, zero in sync** — against a production
+database with real user accounts. A push would replay five months of schema
+history onto a database that already has that schema.
+
+**Apply migrations one file at a time:**
+```bash
+npx supabase db query --linked --file supabase/migrations/<one_file>.sql
 ```
-RLS for messages already exists (participants-only read, sender-only insert) — `read_at` UPDATE needs a new policy:
-```sql
-CREATE POLICY "messages_read_recipient_update" ON public.messages
-  FOR UPDATE USING (auth.uid() = recipient_id)
-  WITH CHECK (auth.uid() = recipient_id);
-```
+Reconciliation, when it happens, starts from `supabase db pull` — never a push.
 
-### Files that already exist (placeholder — to be replaced)
-- `app/(tabs)/messages/index.tsx` — inbox with hand-curated mock list
-- `app/(tabs)/messages/[id].tsx` — placeholder chat screen ("Chat coming soon")
-- `src/components/messages/ConversationRow.tsx` — list row (visual, reusable)
-- `src/data/mockMessages.ts` — mock conversations
+**2. ⚠️ `CLAUDE.md` still tells you to run the banned command.** It lists
+`npx supabase db push` twice — once in Commands (line ~15) and once as step 4 of
+Getting Started (line ~503) — with no warning anywhere. A session that reads
+CLAUDE.md first, as it is instructed to, will be told to run the single most
+dangerous command in this repo. **The ban currently exists only inside the three
+August migration file headers.** Fixing CLAUDE.md is filed as a P0 below.
 
-### Files to build
-- `src/services/messages.service.ts` — already exists for some helpers; add `getInbox(userId)`, `getThread(userId, otherUserId)`, `sendMessage`, `markAsRead(messageIds)`
-- `src/hooks/useMessages.ts` — already exists; rewrite to subscribe to Realtime
-- `src/components/messages/MessageBubble.tsx` — NEW. Tail-pointing bubble (Figma-matching)
-- `src/components/messages/ChatComposer.tsx` — NEW. Text input + send button at the bottom of the chat screen, KeyboardAvoidingView
-
-### Build order (one session each)
-1. Migration + service helpers + types
-2. Inbox real data + Realtime subscription for new-message badges
-3. Chat detail screen with bubble list + composer + Realtime + mark-as-read
-4. Wire profile "Get in touch" to route to chat. Add unread badge to Messages tab in BottomNav
-
-### Out of scope for v1
-- Circle group chat (follows in v2 — schema already supports `circle_id`)
-- Search within messages
-- Media attachments
-- Voice notes / reactions
-- Push notifications (separate feature)
+**3. `src/types/supabase.ts` is two months stale.** Last touched 2026-06-17,
+hand-edited, and it knows about **14 tables** — not `bug_reports`, not
+`blocked_users`, not `rate_limit_log`, all of which are live. Services touching
+those tables carry documented casts. Regenerating is filed as a P1 below, and it
+must happen *after* the schema drift is understood, not before.
 
 ---
 
-## Profile v2 — Deferred items
+## 🔴 BLOCKED ON AIDAN — no agent can do these
 
-These were considered during the profile/auth real-data build (May 2026) and
-explicitly cut from v1 scope to keep that ship-able.
+One line each, phone-actionable. Nothing in here is a code problem.
 
-### ~~1. Verified badge~~ — shipped 2026-06-12 (`355f8ee` migration + `828315c` render); INERT until migration applied
-`profiles.verified` column + anti-self-grant trigger (NINTH in the gated apply list); ProfileView renders the Figma check-decagram from real data via isVerified() (false on pre-migration DBs). Grant via dashboard column flip.
-
-### 2. "Available for work" toggle
-
-- Bottom bar with green pill ("Available for work · Prenzlauerberg") + "Get in
-  touch" CTA at the bottom of the profile.
-- **What shipped in v1:** the bar renders as a placeholder for every user (no
-  toggle), neighborhood is editable, "Get in touch" shows a "Coming soon" alert.
-- **What's deferred:** the actual toggle column + filter logic.
-- **When we come back:**
-  - Add `is_available_for_work BOOLEAN DEFAULT FALSE` to `profiles`.
-  - Add a toggle row in `ProfileForm` (Edit Profile).
-  - Only render the bottom bar when the toggle is true.
-  - Add a "Browse available creators" filter chip somewhere in feed/circles.
-
-### 3. "Get in touch" → real DM bootstrap
-
-- Right now the button shows `Alert.alert('Coming soon', 'DMs are not wired up yet.')`.
-- **Cut reason:** DMs themselves are still mock-data only (`/messages/[id]` is a
-  placeholder screen). Hooking the button up requires building the DM thread
-  layer first.
-- **When we come back:** after `messages` table reads/writes are wired with
-  Supabase Realtime, the button does
-  `router.push('/messages/new?recipient=' + profile.id)` or similar.
-
-### 4. Likes + comments on gallery photos
-
-- The `profile_images` table shape is already correct for this (one row per
-  image, stable IDs).
-- **What shipped in v1:** gallery grid only, no like/comment UI.
-- **When we come back:** add `profile_image_likes (user_id, image_id)` and
-  `profile_image_comments (id, image_id, author_id, content, created_at)`
-  tables, photo detail page, heart icon on thumbnails, comments list +
-  composer, notifications on like/comment.
-
-### 5. Photo detail page (with captions)
-
-- The `caption` column is in the `profile_images` schema but no UI surfaces it.
-- **When we come back:** tap a gallery thumbnail → opens a photo detail page
-  → owner can edit caption inline, others can like/comment (see #4).
-
-### 6. Testimonials
-
-- Profile page shows "No testimonials yet" empty state.
-- **Cut reason:** other-user-writes-on-your-profile is its own moderation /
-  approval flow.
-- **When we come back:** add `testimonials (id, profile_id, author_id, content,
-  is_approved, created_at)` table with owner-approval workflow before display.
-
-### ~~7. Migrate other users' public profiles (`/user/[id]`) to Supabase~~ — done 2026-06-09 (`17ee82b`): mock fallback retired, live Supabase only
-
-- Personal profile (`/(tabs)/profile`) is real-data backed.
-- Other users' profiles still read from `mockProfiles.ts` via
-  `getMockProfileById()`.
-- **When we come back:** swap the `useEffect` in `app/user/[id].tsx` to call
-  `getProfile(id)` from the service, fall back to a 404 state if not found.
-
-### 8. Public profile handles (username / @lea_weber)
-
-- The `username` column exists and is `UNIQUE`, but signup no longer collects it.
-- **Cut reason:** chose simpler "display_name only" model for signup (Q2 in
-  grilling). Profile URLs use UUIDs for now.
-- **When we come back:** add a "Claim your @handle" prompt in Edit Profile,
-  reserve URLs like `sphaer.app/user/lea_weber` once a user claims one.
-  Useful prerequisite for @mentions in messages.
-
-### 9. Email confirmation
-
-- Turned off in the Supabase dashboard for now so signup → onboarding works in
-  one shot.
-- **When we come back (before public launch):** turn confirmation back on, add
-  `/(auth)/verify-email.tsx` interstitial that polls `getSession()` or listens
-  to `onAuthStateChange`, only routes to onboarding once a session appears.
-
-### 10. Avatar cropping UI
-
-- v1 uses `expo-image-picker`'s built-in `allowsEditing: true` (basic 1:1 crop).
-- **When we come back:** a proper cropping experience with pinch-to-zoom,
-  rotation, etc. — probably via `react-native-image-crop-picker` or a custom
-  reanimated implementation.
+| # | What to do | Why it's blocking |
+|---|---|---|
+| A1 | **Start Apple Developer enrolment ($99/yr)** — identity verification runs 24–48h, so start it before anything else. | Gates Sign in with Apple, signing certs, App Store Connect, TestFlight. The longest clock on the project. |
+| A2 | **Run `eas init`** in the repo once. | `app.config.js:41` deliberately leaves `extra.eas.projectId` unset with a comment explaining why — inventing one produces a config that looks complete and fails at the build server. EAS cannot build without it. |
+| A3 | **Put a real Google Maps key in `.env.local`** — the value there is literally `placeholder_maps_key`. | The map is one of the three headline feed modes and it cannot work until a real key exists. `app.config.js` will now correctly interpolate it; the key itself is the only missing piece. |
+| A4 | **Replace the blank seeded posters in Supabase Storage.** Run `npx tsx scripts/audit-posters.ts` to get the exact filenames — it measures visible pixels against production. | These files return HTTP 200, decode fine and paint nothing, so they reach the Mural as holes. Count is recorded as **7 in `scripts/audit-posters.ts`'s header and 8 in `docs/poster-qa/README.md`** — the repo contradicts itself; the script settles it. |
+| A5 | **Apply `supabase/migrations/20260817200000_events_aggregated_source.sql`** with `npx supabase db query --linked --file <path>`. | Its header says **NOT APPLIED**. It is the schema half of the event scraper (Lara #2) and it is already written — see the DECIDED BUT UNBUILT entry. One command unblocks the whole feature. |
+| A6 | **Verify the `delete-account` edge function is deployed** (needs an authorised Supabase session). | Apple hard-requires in-app account deletion. The UI and `supabase/functions/delete-account` both exist in the repo; if the function isn't deployed, tapping Delete Account errors — a guaranteed rejection. |
+| A7 | **Flip two Supabase dashboard toggles**: enable leaked-password protection; allowlist the password-reset redirect URLs. | Reset emails dead-end without the allowlist. |
+| A8 | **Restrict the Google Maps API key** in Google Cloud Console to bundle IDs `com.sphaer.app` (iOS + Android). | The key is bundled into the APK/IPA — unavoidable on Expo. Unrestricted, anyone can spend your quota. |
+| A9 | **Serve `sphaer.app`** (it 404s) — a privacy-policy URL and a not-installed fallback page at minimum. | Both stores require a *public* privacy URL; the in-app pages don't satisfy it. Also the precondition for universal links. |
+| A10 | **Supply the Test Martina Plantijn font files** into `assets/fonts/` (the directory does not exist). | Every serif heading falls back to Georgia, and generated posters set their titles in the system face. See the code half in P1. |
+| A11 | **Give Rabon's answers** — Master Flow node id (icons), developer-page component (inbox type), and calls on R6 / R7 / R9. | Four design items are stalled with nothing an agent can act on. See UNDECIDED. |
+| A12 | **Push `prep/2026-08-17-buildable`** (20 commits, still local). | `push: false`. Every push is yours. |
+| A13 | **Pin the Mural supply plan (Lara #1 + #10)** with Lara — poster swapping cadence, circle images, how the wall stays fed. | The one point on Lara's list that has never had specifics. Code cannot proceed without them. |
 
 ---
 
-## Activities v2 — Deferred items
+## 🟢 DECIDED BUT UNBUILT — takeable work
 
-Cut from scope during the May 2026 activity/circle real-data build to keep that
-shippable for the investor demo.
+Nothing here needs a new decision. Anything not in `▶ UP NEXT` is fair game.
 
-### 11. Server-side full-text search
+### P0
 
-- v1 search is client-side filter over fetched rows (see grilling Q6c).
-- **Cut reason:** the seeded data set is small (~25 events, ~32 circles).
-  Client filter is instant.
-- **When we come back:** when feeds exceed a few hundred rows, switch to
-  `.or()` queries with `ilike` across multiple columns. For really large
-  scale, add a Postgres `tsvector` column on `events.title || description`
-  with a GIN index.
+#### Fix `CLAUDE.md`'s `db push` instructions — 10 minutes, highest damage prevented
+Two lines in `CLAUDE.md` (~15 and ~503) still instruct `npx supabase db push`,
+which is banned. Replace both with the `db query --linked --file` form and add
+the divergence warning to the top of the file. **Not done in this rebuild
+because the 2026-08-18 documentation task was scoped to `BACKLOG.md` only.**
+Scope: XS. Do it first, in its own commit.
 
-### 12. "Attended" status / check-in flow
+#### Event scraper (Lara #2) — the schema half is written, nobody knew
+`supabase/migrations/20260817200000_events_aggregated_source.sql` exists on this
+branch and is **not applied**. It adds three nullable columns to `events` —
+`source`, `external_id`, `source_url` — with the safety property spelled out in
+its own header: an import must be **re-runnable** (same feed twice updates one
+row), **correctable** (a venue moving a door time changes the row it owns), and
+**withdrawable wholesale** (`delete from events where source like 'tina:%'`
+removes every aggregated listing and cannot touch a human-posted row, because
+human rows have `source IS NULL`).
 
-- The `event_registrations` table has no status enum (hard-delete on cancel,
-  see grilling Q3b) — there's no way to mark someone as "they showed up."
-- **When we come back:** add `attended_at TIMESTAMPTZ` column. A QR-code
-  check-in flow or organizer-driven "mark attendee" toggle sets it.
+Both the Week Plan and the Publish Plan record this point as *"not started"*.
+That is wrong — the hard part is written. Remaining:
+- [ ] Aidan applies the migration (A5).
+- [ ] Tina's aggregator writes ICS/RSS/JSON-LD rows in with `source = 'tina:*'`.
+      **Not in this repo** — the decision was Tina aggregates externally and
+      writes to Sphaer's Supabase. Verified: no ingestion/scraper/RSS/ICS code
+      exists anywhere in `src`, `app`, `supabase/functions` or `scripts`, which
+      is correct.
+- [ ] Sphaer-side: decide whether imported events are visually marked, and
+      whether `source_url` is surfaced on event detail. *(This sub-question is
+      undecided — see UNDECIDED.)*
+Scope: S in this repo, M in Tina's.
 
-### 13. Private circles
+#### `__DEV__` auth bypass and its three spread accommodations
+`app/(tabs)/_layout.tsx:35` still reads `if (!session && !__DEV__)`, and `:20`
+disables deep-link recovery in dev. **This does not ship an open app** — Metro
+folds `__DEV__` to `false` in production and preview builds, so the submitted
+binary is safe. It matters for two narrower reasons: `eas.json`'s `development`
+profile sets `developmentClient: true`, producing a binary where `__DEV__` *is*
+true — hand that to a TestFlight tester and they get the app with no login wall.
+And `app/(tabs)/profile/index.tsx` carries three accommodations for a signed-out
+state production never reaches, one of which renders mock profile data from
+`src/data/mockProfiles.ts`. Rip all of it out.
+Scope: S–M.
 
-- `circles.is_public` exists but every circle created today is forced to true.
-- **When we come back:** expose a toggle in Create Circle. RLS for private
-  circles needs a "members only" SELECT policy that's not yet written.
+#### The profile screen is the one data screen with no error surface
+`app/(tabs)/profile/index.tsx` swallows both of its loads. The counts + gallery
+fetch ends `.catch(() => { if (active) setGallery([]) })` (~:193) and the sheet
+fetch ends `.catch(() => …setFollowers([]))` (~:148). A network failure renders
+a profile with zero followers, zero circles, zero activity — indistinguishable
+from a genuinely empty account. `ErrorState` already exists and is wired into
+every other data screen.
+Scope: S.
 
-### ~~14. Activity edit & delete UI~~ — shipped 2026-06-11 (`c4406a4`): creator-only Edit/Delete on event detail + prefilled edit screen; poster editing still open
+### P1
 
-- `events.service.ts` has `updateEvent()` and `deleteEvent()` but no UI surfaces them.
-- **When we come back:** Edit button on the activity detail page (visible only to creator).
+#### Regenerate `src/types/supabase.ts`
+Stale since 2026-06-17; 14 tables, missing `bug_reports`, `blocked_users`,
+`rate_limit_log`. `npx supabase gen types typescript --linked`. Then drop the
+documented casts in `moderation.service.ts` / `events.service.ts` and the two
+parallel COUNT queries in `getProfile()` (the denormalised
+`followers_count` / `following_count` columns exist). Sequence this **after**
+the migration drift is understood — generated types will reflect the live DB,
+which is not what the local migration files describe.
+Scope: S, but do it deliberately.
 
-### ~~15. Profile count drill-down~~ — shipped 2026-06-12 (`1ac2e49`)
-Activities count on own profile + /user/[id] opens UserEventsSheet (created ∪ registered, world-readable per event_registrations_read_all RLS, created-only degradation).
+#### Load the display font (the code half of A10)
+`app/_layout.tsx:75–91` has the entire `useFonts` block **commented out**,
+waiting on the files. Uncommenting it is trivial; the files (A10) are the
+blocker. Worth pairing: this is why generated poster titles set in the system
+face rather than Martina Plantijn, and why every serif heading falls back to
+Georgia.
+Scope: XS once the files land.
 
-### ~~16. Circle cover image upload~~ — shipped 2026-06-11 (`44e53c6`): 16:9 picker on create-circle, uploadCircleCover beside the avatar path
+#### New-conversation picker — the inbox `+` is still a dead stub
+`app/(tabs)/messages/index.tsx:226` — a prominent dark primary CTA whose
+`onPress` is `console.log('[Messages] new conversation')`. There is no
+`/messages/new` route (`app/(tabs)/messages/` holds only `[id].tsx`, `circle/`,
+`event/`, `index.tsx`). You can only DM by visiting a profile first. Filed since
+2026-06-15 and again in the 07-13 recon and the 08-02 publish plan; the recon's
+detailed build spec still stands.
+Scope: M.
 
-- Create Circle form only collects an avatar. `circles.cover_url` stays null
-  except for seeded mocks.
-- **When we come back:** add a second image picker to Create Circle and to
-  Edit Circle. `uploadCircleImage()` already supports `kind: 'cover'`.
+#### The "Favourites" filter chip always returns nothing
+`app/(tabs)/messages/index.tsx:196` — `return []; // not implemented yet`.
+It renders, it taps, it shows an empty inbox. Either implement favouriting or
+remove the chip before anyone tests the app.
+Scope: S either way.
 
-### ~~17. Lat/lng auto-resolution from address~~ — stale, closed 2026-06-12: already shipped
-Create Activity geocodes on submit via `geocodeAddress` (src/lib/geocoding.ts, wired in app/(tabs)/create/index.tsx) with live-geocode fallback. Entry predates that ship.
+#### Third-party avatar placeholders in the inbox
+`app/(tabs)/messages/index.tsx:115,136,156` fall back to `picsum.photos` and
+`i.pravatar.cc`. Live external image calls from a shipping app, and a privacy-
+questionnaire complication at review. Replace with a local placeholder.
+Scope: S.
 
-### 18. Notifications on new activities from followed circles
+#### Profile cover image — promised, schema-backed, still unbuilt
+`profiles.cover_url` exists, the README promises "profile photo + cover image",
+and `src/utils/profile-completion.ts:17` says in a comment that there's no
+editor for it. No upload UI, no render. Circles have this; profiles don't.
+Needs a 16:9 picker in `ProfileForm` + `uploadProfileCover` (mirror
+`uploadCircleCover`) + a banner on own profile and `/user/[id]`.
+Scope: M.
 
-- `notifications` table exists with type='circle_event', no producer wired.
-- **When we come back:** Postgres trigger on event INSERT that fans out
-  notification rows to all followers of the event's circle.
+#### Manual pinning in circle group chats (the other half of Lara #5)
+The pinned-events section shipped (`30cb98b`) and works, but **nothing is
+pinnable by hand** — `src/components/messaging/PinnedEventsSection.tsx:32-33`
+states it outright: *"pinned" means "an upcoming event of this circle"*, derived
+from `events.circle_id`. There is no pin column or table in any migration.
+Derived-upcoming is a defensible v1 and Lara's point ("so events don't get lost
+in conversation") is substantially served — but if an organiser ever wants to
+pin a specific thing, that is unbuilt and needs schema.
+Scope: M. Confirm with Lara that derived-only is enough before building.
 
-### 19. Mock data fully removed
+#### Circle group chat has no leave / report / moderation from inside
+`app/(tabs)/messages/circle/[id].tsx` has no overflow menu at all — verified,
+zero matches for leave/report/overflow. You can't leave the circle or report it
+or report a sender from the conversation. DM threads got this in June.
+Scope: S–M.
 
-- `src/data/mockEvents.ts` and `src/data/mockCircles.ts` are still imported
-  by the seed script.
-- **When we come back:** once the seeded data has been replaced by real user
-  content (post-launch), delete the mock files + the seed script.
+#### `Alert.alert` is a silent no-op on react-native-web — **22 files**
+Found via the June signup bug: a 422 was alerted, so web users saw a dead
+button. The auth credential screens were fixed (`d88e277`, inline
+`FormErrorText`). **22 files still use `Alert.alert` for failure feedback** —
+onboarding, verify-email, create-flow upload errors, profile mutations. Native
+is unaffected. P1 rather than P2 now that a Vercel web build is the sharing
+surface people actually see.
+Scope: M.
 
-### 20. Activity edit from Create flow + draft saving
+#### Crash monitoring
+`ErrorBoundary` logs to console only — production crashes are invisible. No
+Sentry, no PostHog, nothing in `package.json`. Wire Sentry into `ErrorBoundary`
++ the global handler. *(Analytics vendor is a separate, undecided question.)*
+Scope: M.
 
-- Closing Create Activity halfway loses everything.
-- **When we come back:** persist drafts in AsyncStorage so the user can
-  resume; or add a "Save as draft" button + `events.status = 'draft'`.
+#### No un-save from the Saved list
+`unsaveEvent()` exists and is called from the feed
+(`app/(tabs)/feed/index.tsx:322`) and event detail (`app/event/[id].tsx:132`) —
+but not from the Saved category in the Activities sheet.
+`EntityListSheet`'s long-press is wired for the *user* variant only (`:186`).
+Scope: S.
+
+#### Disciplines never appear on the profile
+Collected in onboarding and `ProfileForm`, and now rendered in artist search
+rows (`src/components/feed/ArtistResultRow.tsx`) and `EntityListSheet` — but
+**not in `ProfileView.tsx`**, the one place a user would look. Partly fixed
+since this was first filed; the profile itself is still the gap.
+Scope: S.
+
+#### The inbox meatball is a dead stub advertising itself to screen readers
+`app/(tabs)/messages/index.tsx:216` — `console.log('[Messages] options')` behind
+`accessibilityLabel="Open options"`. Build a real menu (mark-all-read, message
+settings) or remove it.
+Scope: S.
+
+#### R4 — inbox private⇄circle switch — **already done, re-filed as closed**
+`RABON-GLITCHES.md` still lists R4 as 🔴 Open. The code has it: the inbox filter
+row is `All / Unread / Favourites / Direct / Activities / Circles`
+(`app/(tabs)/messages/index.tsx:40-56`, filtering at `:185-206`). Rabon's ask —
+a switch between private and group chats — is satisfied. RABON-GLITCHES.md was
+not updated by this rebuild (scope was `BACKLOG.md` only); someone should mark
+it there too.
+
+### P2
+
+- **Saved-event reminders — producer + UI.** The `saved_events.reminder_at`
+  column and its partial index shipped in June as forward-compat scaffolding;
+  nothing reads it. Needs an optional timepicker on save (default 2h before) and
+  a scheduled sweep (`pg_cron` or edge function) enqueuing `event_reminder`
+  notifications.
+- **Push notifications — the client half.** Producer triggers exist
+  (`20260612040000_notification_producers.sql`, three of four types). Missing:
+  `expo-notifications` (not in `package.json`), a `profiles.expo_push_token`
+  column, the permission flow, the delivery edge function, and an in-app
+  preferences screen. `event_reminder` is deliberately deferred to the job above.
+- **Memo audit remainder.** Profile subtree (`ProfileCompletionCard`,
+  `SettingsSection`); circle cards memoising handlers via `useCallback`.
+- **Private circles (deferred item #13).** Superseded by UP NEXT #2 — the tier
+  work is the general form of this. Keep the note: RLS for private circles needs
+  a members-only SELECT policy that has never been written.
+- **"Attended" / check-in (deferred item #12).** `event_registrations` has no
+  status enum and hard-deletes on cancel. Would need `attended_at TIMESTAMPTZ`
+  plus QR check-in or an organiser toggle.
+- **Server-side full-text search (deferred item #11).** Client filtering is
+  instant today. At a few hundred rows, move to `.or()` + `ilike`; at real
+  scale, a `tsvector` GIN index on `events.title || description`.
+- **Draft saving in Create Activity (deferred item #20).** Closing the form
+  halfway loses everything. AsyncStorage draft, or `events.status = 'draft'`.
+- **Onboarding consolidation 5 → 3 screens.** Fold `/location` into the
+  onboarding form's final step.
+- **Map clustering.** Group pins when zoomed out.
+- **Profile gallery editing.** Append-only today; no delete or reorder in view
+  mode.
+- **Mock data removal (deferred item #19).** `src/data/mockEvents.ts` and
+  `mockCircles.ts` are still imported by the seed script; `mockProfiles.ts` is
+  still reachable via the `__DEV__` profile path (see P0). Delete once seeded
+  data is replaced by real content.
+- **`mockMessages.ts`** is an unused dev fixture — delete when convenient.
 
 ---
 
-*Add new deferred work above this line. Keep each entry short: why it was cut,
-what the future shape looks like.*
+## 🟡 UNDECIDED — needs Aidan's call. DO NOT BUILD.
+
+Each of these is missing an answer only he can give. Building one on a guess is
+how the profile rework got built and rejected inside the same day.
+
+#### Feed filter affordance (Figma `4045:8204`) — open since June
+The Figma feed puts a 45px rotated sliders/filter icon at the right end of the
+Feed/Map/Mural toggle row, presumably opening a filter sheet. We ship a
+Near me / Tonight / This weekend / Free chip row beneath the header instead.
+**Adopt the sheet, keep the chips, or both?** Rabon's R10 asks for the same
+thing from a different angle, and R10's other half — "tap the search bar,
+categories appear" — is *already built* (`SearchFilterBar` only shows the
+category row when `searchActive || hasSearchText || hasSelectedCategories`).
+*This was the previous file's `▶ UP NEXT #1`. It is a question, not a task, and
+it should never have been sitting where a session would try to build it.*
+Figma access that works: fileKey `HIVq6Vaymj01dZ37AvwCUF` (`Sphaer_Prototype_RA`,
+Pro-owned), explicit nodeIds only — never the Starter-capped copy
+`iuCO8ENAhfYIJly1JGAeU1` or the giant board node `6239:6597`.
+
+#### R9 — feed card: minimal or expanded? **Direct conflict with shipped code.**
+Rabon: *"keep the activity title and A-sized poster… date, time and price"* —
+anything more makes it noisy. But `src/components/feed/EventCard.tsx` currently
+renders subtitle (`:74`), a 2-line description (`:79`) and "X going" (`:92`),
+shipped as `#9 Feed card expanded` (`c84013b`). One of these has to give.
+
+#### R7 — event-detail header has 8 icons; Rabon wants 2.
+Verified in `app/event/[id].tsx`: edit (`:300`), trash (`:310`), people (`:320`),
+ticket (`:330`), chat (`:340`), calendar (`:349`), share (`:357`), overflow
+(`:380`). Rabon: keep Share + Save, move the rest to the profile or collapse
+into `⋯`. Needs a call on which actions move where.
+
+#### R6 — Message vs Following button mismatch on the event artist row.
+Rabon questions whether the Message button belongs there at all. It was added
+deliberately in June ("Message the host from an event"). Resize or remove?
+
+#### R1 — Rabon redesigned the create flow in Figma.
+An FYI, not a bug. Needs him to say *what* changed before any re-sync.
+
+#### R3 (icons) / R5 / R12 — blocked on Figma references
+R3's spacing half shipped; the icon swap needs the **Master Flow** node id.
+R5 needs the **developer page** reference component for inbox fonts/spacing.
+R12's title→subtitle gap was snapped to 4px; "incorrect" has no exact target.
+
+#### R2 — DM composer "not centered"
+Investigated: the composer *is* horizontally symmetric in code (padding 16,
+input `flex: 1`, 8px gap, 36px button) and the web shell has no max-width frame.
+Best guess is a **vertical** quirk — on web a multiline `TextInput` renders as a
+`<textarea>` whose placeholder top-aligns. Needs from Rabon: left/right or
+top/bottom, plus a fresh screenshot. Don't guess-fix the wrong axis.
+
+#### R8 — adopt a 4-point grid everywhere
+Large and cross-cutting: audit every gap/padding to multiples of 4. Worth doing
+as its own scoped task, but confirm it's wanted before a repo-wide sweep.
+
+#### Lara's Figma items still needing the team
+- **#1 create-activity crashes / loses progress** — no static cause found; the
+  ErrorBoundary catches a render throw and resets the form. Needs the exact
+  error text or repro steps.
+- **#3 back button dead after sign-up** — onboarding → location is one-way by
+  design (`router.replace`, `gestureEnabled:false`). Needs a call: allow
+  back-to-edit during onboarding, or rely on Edit Profile afterwards?
+- **#4 "needs a comma"** — screen unclear; needs the screenshot. One-char fix.
+- **#10 onboarding copy** — team still deciding; needs final wording.
+- **#11 three vague notes** — "overlay here", "does this dropdown work + change
+  the icon", "change things for pitching". Needs which screen / what.
+
+#### Are imported (scraper) events visually marked?
+Once `source`/`source_url` land, does the feed distinguish a venue-imported
+listing from a human-posted one, and does event detail link out to the origin?
+Product call. Also: the **RA ToS is still unread** and Sphaer is heading for
+store review — the ICS/RSS position is settled, RA is not.
+
+#### Booking / ticketing — the business question
+Decided for MVP: **free to use, no money moves, RSVP + capacity only.** The
+percentage cut is explicitly deferred to its own session. Don't build Stripe.
+Schema already has `events.is_free`, `price`, `ticket_url`;
+`registrations.service.ts` is RSVP-only.
+
+#### i18n / German localisation
+Berlin-first app, all copy hardcoded English (de-DE number formats already in
+use). Needs a v1 language stance. If bilingual, ~40+ strings to extract via
+`expo-localization` + `i18n-js`. Scope: L.
+
+#### Analytics vendor
+PostHog / none, per the no-tracking ethos. Crash reporting (above) is decided;
+product analytics is not.
+
+#### Storage bucket posture
+All three public buckets are public-read. Posters and avatars are arguably fine;
+decide whether profile-gallery should be signed-URL private before scale.
+
+#### Soft-delete policy
+Events / circles / messages are all hard-deleted; account deletion cascades
+everything away. For future moderation and dispute resolution, decide now
+whether `deleted_at` columns go in.
+
+#### Contrast: `colors.neutral.meta` `#767779` measures 4.48:1 on white
+Fails WCAG AA by 0.02. Verified still `#767779` at
+`src/constants/theme.ts:29`. It's a Figma token, so darkening to ~`#727274`
+deviates from the design source of truth. Passes AA-large at 3:1, and most uses
+are large or decorative. Designer's call.
+
+#### Circle detail — "From the community" posts (Figma `6274:7785`)
+The frame shows post cards with Share / Save / "Get in touch". **No posts table
+exists** — verified, no `circle_posts` anywhere. Needs a schema decision, or an
+explicit drop from v1.
+
+#### Dark mode
+`theme.ts` is token-based so this is mostly a colour swap plus a refactor of
+every screen to read via a `useColors()` hook. Not scheduled; confirm it's
+wanted at all.
+
+---
+
+## ❓ UNVERIFIED — could not be settled from the code
+
+Listed so nobody mistakes them for known facts. Each says what would settle it.
+
+1. **Whether the two August bug-report migrations are actually applied to
+   production.** Their headers say they were applied by hand and are live, and
+   the feature demonstrably shipped — but that is the file's own claim, not an
+   observation. *Settles it:* `npx supabase migration list --linked`, or a
+   read-only query against `bug_reports`.
+2. **Whether the June "9 pending migrations" are really all applied.** The old
+   BACKLOG says all 9 went in on 2026-06-15 via the Supabase MCP. The August
+   migration headers say 22 local files were never applied and 17 remote
+   migrations have no local file. **These two claims are in tension** and I
+   cannot reconcile them offline. Every June item marked "INERT until migration
+   applied" — moderation/report-block, circle delete + member-kick RLS, event
+   subtitle/spots/visibility, rate limiting, storage MIME caps,
+   `profiles.verified` — inherits this uncertainty. *Settles it:* a migration
+   list against the linked project.
+3. **The blank-poster count: 7 or 8 of 50.** `scripts/audit-posters.ts`'s header
+   says seven ("14% of the wall was literally invisible" — 14% of 50 = 7);
+   `docs/poster-qa/README.md` says eight. The posters are not in the repo (they
+   live in Storage; `scripts/seed-assets/posters/` holds 10 real PNGs, none
+   blank). *Settles it:* `npx tsx scripts/audit-posters.ts`.
+4. **"0 of 9 circle events are upcoming."** A live-data fact from the 08-17
+   notes. Not checkable offline, and it matters — it is why the pinned-events
+   section may look empty in a demo.
+5. **Whether `delete-account` is deployed.** The function exists in the repo
+   (`supabase/functions/delete-account`). Deployment needs an authorised
+   session. See A6 — this is a guaranteed rejection if wrong.
+6. **The poster generator has never run on a real iOS or Android device.**
+   Stated plainly by its own author in `40f0af1`: the native capture path is
+   reasoned from the Android/iOS source in `node_modules` and covered by tests,
+   *not observed*. Web capture in real Chromium was verified and measured
+   (`docs/poster-qa/`). A device run is the first thing to do in TestFlight.
+7. **Google Maps key restrictions (A8) and the Supabase dashboard toggles (A7)**
+   are console-side; nothing in the repo can confirm them.
+8. **Whether the Vercel web deploy is current.** `scripts/deploy-web.sh` and the
+   SPA-rewrite fix (`d38cdd0`) exist; the deployed state was not checked.
+
+---
+
+## ✅ SHIPPED
+
+### 2026-08-17 → 18 — the Lara-week batch (all re-verified in code 2026-08-18)
+
+Twenty commits on `prep/2026-08-17-buildable`, **unpushed**.
+
+- **App buildable again** — `66565fe`. `app.json` → `app.config.js` (spreads
+  `app.json`, so the diff stays small) with `runtimeVersion: appVersion`; env
+  interpolation now actually works; `.env` added to `.gitignore`;
+  `eslint.config.js` scoped so a stale worktree stops failing lint.
+  `extra.eas.projectId` is deliberately left unset — see A2.
+- **In-app reporting, open to any signed-in user (Lara #4 + #3)** —
+  `e43e273` table + `bug-screenshots` bucket · `990bae8` screen ·
+  `cfbeae9` + `011844b` type-aware form + triage · `836c803` → `caaf6cc` →
+  `e3328cc` opening it up. `app/bug-report.tsx`; kinds and their field specs in
+  `src/constants/report-kinds.ts` — **bug / feature / change, exactly one
+  required field per kind**, which is what satisfies Lara's #3 "feedback
+  template": uniformity enforced at entry rather than agreed by convention.
+  Reached from the profile settings section (`BugReportRow`).
+  ⚠️ **The lesson from that three-commit chain: the permission lived in FOUR
+  places** — table RLS, storage RLS, the settings entry row, and the screen's
+  own re-check. Opening three of them shipped a screen that rendered "Nothing
+  here." to its own author.
+- **In-app triage screen** — `app/bug-triage.tsx`, gated on
+  `profiles.is_designer`. The real boundary is RLS
+  (`current_user_is_designer()`, `bug_reports_select_designer` /
+  `_update_designer`), not the client check. A `protect_is_designer` trigger
+  blocks clients from granting themselves the flag, and column-level GRANTs mean
+  a designer can only write status / reason / note / fix_prompt —
+  **nobody can edit a reporter's words.**
+- **Mural rendering fix (Lara #1, the render half)** — `3d8b7cb`.
+  `src/hooks/useMuralLayout.ts` + `MuralCanvas` / `MuralPoster`: per-row
+  justification to exact wall width (`TARGET_ROW_HEIGHT = 200`, aspect clamped
+  0.5–1.9), poster recycling so sparse sets don't letterbox, and a placeholder
+  tint instead of white holes. Driven in a real browser at 390×844 against live
+  data and measured — evidence + repro in `docs/mural-qa/`.
+- **Berlin neighbourhood dropdown** — `c4cb8fd`. `NeighborhoodSelectInput` —
+  searchable, free text rejected — used by `ProfileForm`, which onboarding also
+  renders, so both surfaces are covered by one component. The list is a curated
+  **26 entries** in `src/constants/berlinNeighborhoods.ts` (plus 12 boroughs),
+  not the ~96 official Ortsteile; that was the documented builder's choice.
+- **Pinned events + mini-calendar above circle group chats (Lara #5)** —
+  `30cb98b`. `PinnedEventsSection` / `MiniCalendarStrip` / `PinnedEventRow` +
+  `useCirclePinnedEvents`, rendered in `app/(tabs)/messages/circle/[id].tsx`.
+  **UI only — there is no pin column.** "Pinned" is derived from
+  `events.circle_id`. Manual pinning is filed as P1 above.
+- **Profile rework (Lara #7)** — `920ed0f` built a tab strip, **Aidan rejected
+  it on sight**, `5446eb5` restored the original screen with the categories
+  moved inside the Activities sheet. `saved` and `tickets` are gone from the
+  `OpenSheet` union; Tickets is a **badge** on the row, not a tab
+  (`ActivitiesSheet.tsx:125` — *"the badge is the whole reason there is no
+  Tickets tab"*). Before/after evidence in `docs/profile-qa/`; the acceptance
+  test is `v2-own-profile.png` vs `before-profile.png` being the same page.
+- **"My circles" on the circles screen (Lara #8)** — `8b38622`.
+  `MyCirclesSection` + `useMyCircles`, above the browse rows, refetched on join.
+- **Poster generator (Aidan's addition, feeds Lara #10)** — `52076bb` wip +
+  `40f0af1` + `937a2b7`. **One template, auto-filled** from the event's own
+  title/date/time/venue, offered under the cover-image tile when nothing is
+  attached; a picked photo always wins. `poster-template.ts` solves the layout
+  and draws nothing; two renderers consume it —
+  `GeneratedPosterCanvas` (react-native-svg, on device) and `sharp` in
+  `scripts/qa-generate-poster.ts` — and a test asserts they cannot drift.
+  Uploads to `events.poster_url`, which is exactly what the Mural renders.
+  **The guard is the point:** nothing uploads without clearing a structural
+  check and a byte check on the exact bytes going over the wire, because
+  production already contains the failure it prevents.
+  ⚠️ Never run on a real device — see UNVERIFIED #6.
+- **Web deploy** — `d38cdd0`, SPA rewrite kept outside `dist/` so it survives a
+  rebuild; one permanent URL instead of rotating tailnet links.
+- **Test fix** — `5aff2dc`. `PinnedEventsSection` assumed two events five hours
+  apart land on the same calendar day, so the suite failed every day after
+  ~19:00. Now 505/505.
+
+### Earlier — condensed archive
+
+Full prose for everything below: `git show 7d40eda:BACKLOG.md`. Kept here as a
+short index so nothing looks unfiled. All dates 2026.
+
+**06-19** — Rabon audit, self-contained fixes: R3 toggle spacing 30px → 16px,
+R11 search placeholder 17 → 15, R12 title→subtitle gap 2px → 4px (`57d9618`).
+**06-18** — demo data: 10 curated posters (`dacb6af`), 10 rich poster-driven
+events (`bfb65fa`), ghost galleries + circle linking (`1dea96c`), event media
+gallery (`a8b2db1`), public-only feed (`c84013b`).
+**06-17** — Lara's Figma audit pass: `100dvh` app shell (web scrollbar), growing
+multiline `Input`, "Get Booked" → "Book", duplicate street removed, "Sub Title"
+→ "Subtitle", address-autocomplete comma strip, Message-the-host from an event,
+Instagram/LinkedIn social links, expanded feed card. Two items resolved as
+*no change needed*: there is **no follow gate on messaging** (checked RLS,
+triggers, client and `blockedIds`), and the circle avatar/cover both stay.
+**06-15** — all 9 gated migrations applied (see UNVERIFIED #2); pull-to-refresh
+on inbox / notifications / profile.
+**06-12** — the big batch: real app icons + `eas.json` + env validation + store
+metadata (`33bdd56`); report & block moderation (`51abfd7`/`121fc81`); real
+Follow, cancel registration, creator attendee list (`8546173`); circle edit,
+delete, member kick (`5a7ad34`); cold-start deep links (`4c1cc3a`); feed CTA,
+Realtime foreground resume, 15s fetch timeout, console-noise sweep, DST recompute
+(`c68ba48`); user search (`a8e0c2c`); create-activity full structural
+replication; eslint 0/0 + doctor 19/19 (`24eb300`); web-app signup-error fix
+(`d88e277`).
+**06-11** — Figma structural follow-ups: greeting header (`5097fa3`), Welcome
+interstitial (`632e064`), chat header bars, circle Organizer section, circle
+cover upload (`44e53c6`), event edit/delete (`c4406a4`), ErrorState everywhere
+(`f53344c`), accessibility sweep across 52 files, JSONB cast guards.
+**06-10** — Figma styling audit complete, all 14 frames; test suite bootstrapped.
+**06-09** — in-app Privacy + Terms routes; iOS permission descriptions;
+notifications list screen; `ErrorState` primitive; skeletons; intro carousel;
+long-press unfollow; upload MIME/size validation; enums; PostgREST sanitisation;
+inline create-form validation; dead "Coming soon" UI removed.
+
+---
+
+## 📎 Appendix — preserved specs
+
+Kept because they are still the reference for unbuilt work. Nothing here is
+scheduled; items promoted out of it are already filed above.
+
+### Profile v2 — still deferred
+2. **"Available for work" toggle** — `is_available_for_work` column + a bar on
+   `/user/[id]` for opt-in users. The own-profile version was removed in June
+   (it asked you to message yourself).
+3. **"Get in touch" → real DM bootstrap.**
+4. **Likes on gallery photos** — new `profile_image_likes` table.
+5. **Photo detail page with captions + comments** — new
+   `profile_image_comments` table; notifications fan out to the gallery owner.
+6. **Testimonials.**
+8. **Public profile handles** (`@lea_weber`) — `username` exists in the schema.
+9. **Email confirmation re-enabled.**
+10. **Avatar cropping UI** — no `expo-image-manipulator` in the project today.
+
+### Activities v2 — still deferred
+11 (search), 12 (attended/check-in), 13 (private circles), 18 (circle-event
+notifications — producer trigger exists, see P2 push), 19 (mock data removal),
+20 (draft saving). All filed under P2 above with current evidence.
+
+### Messaging v1
+Shipped. The only unbuilt idea from that spec is an *embedded* chat tab inside
+the circle page instead of navigation — not planned.
+
+---
+
+*File a new item in the section that matches its state — SHIPPED, BLOCKED ON
+AIDAN, DECIDED BUT UNBUILT, UNDECIDED, or UNVERIFIED. If you don't know which,
+it's UNVERIFIED.*
