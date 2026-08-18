@@ -13,8 +13,12 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ConversationRow } from '@/components/messages/ConversationRow';
+import { NewConversationSheet } from '@/components/messages/NewConversationSheet';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { OverflowMenuSheet } from '@/components/ui/OverflowMenuSheet';
+import { BlockedAccountsSheet } from '@/components/moderation/BlockedAccountsSheet';
+import { useAppContext } from '@/context/AppContext';
 import { colors, typography } from '@/constants/theme';
 import { useAuthContext } from '@/context/AuthContext';
 import { useMessagesContext } from '@/context/MessagesContext';
@@ -172,9 +176,47 @@ function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute 
 export default function MessagesScreen() {
   const router = useRouter();
   const { user } = useAuthContext();
-  const { conversations, isLoading, error, refresh } = useMessagesContext();
+  const { conversations, isLoading, error, refresh, markRead } = useMessagesContext();
+  const { blockedIds } = useAppContext();
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
   const [refreshing, setRefreshing] = useState(false);
+
+  // The two header buttons. Both were `console.log` stubs until report
+  // ce750054 ("these buttons do nothing on the messaging page").
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [blockedOpen, setBlockedOpen] = useState(false);
+
+  const unreadCount = useMemo(
+    () => conversations.filter((c) => c.unread_count > 0).length,
+    [conversations]
+  );
+
+  /**
+   * Clear every unread badge in one go.
+   *
+   * Sequential rather than `Promise.all`: each target is a separate write,
+   * and firing twenty at once at a phone on hotel wifi is how you get a
+   * partial result with no way to tell which half landed. The inbox is
+   * refreshed once at the end so the badges settle together.
+   */
+  const markAllRead = useCallback(async () => {
+    const unread = conversations.filter((c) => c.unread_count > 0);
+    for (const conv of unread) {
+      try {
+        if (conv.kind === 'dm') {
+          await markRead({ kind: 'dm', partnerId: conv.partner.id });
+        } else if (conv.kind === 'event') {
+          await markRead({ kind: 'event', eventId: conv.event.id });
+        } else {
+          await markRead({ kind: 'circle', circleId: conv.circle.id });
+        }
+      } catch (err) {
+        console.warn('[Messages] mark all read failed for a conversation:', err);
+      }
+    }
+    await refresh();
+  }, [conversations, markRead, refresh]);
 
   // Pull-to-refresh. `refresh()` is a real promise that resolves when the
   // re-fetch settles, so we can drive the spinner straight off the await.
@@ -213,7 +255,7 @@ export default function MessagesScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.ctaCircular}
-          onPress={() => console.log('[Messages] options')}
+          onPress={() => setOptionsOpen(true)}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Open options"
@@ -223,7 +265,7 @@ export default function MessagesScreen() {
 
         <TouchableOpacity
           style={[styles.ctaCircular, styles.ctaCircularDark]}
-          onPress={() => console.log('[Messages] new conversation')}
+          onPress={() => setNewConversationOpen(true)}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Start new conversation"
@@ -314,6 +356,46 @@ export default function MessagesScreen() {
           }
         />
       )}
+
+      {/* `+` — search people, tap one, land in the thread. */}
+      <NewConversationSheet
+        visible={newConversationOpen}
+        onClose={() => setNewConversationOpen(false)}
+        currentUserId={user?.id}
+        blockedIds={blockedIds}
+      />
+
+      {/* `…` — inbox-level actions. Deliberately short: an overflow menu
+          padded out with things that already have a gesture (pull to
+          refresh) is how it goes back to feeling decorative. */}
+      <OverflowMenuSheet
+        visible={optionsOpen}
+        onClose={() => setOptionsOpen(false)}
+        actions={[
+          ...(unreadCount > 0
+            ? [
+                {
+                  label:
+                    unreadCount === 1
+                      ? 'Mark 1 chat as read'
+                      : `Mark all ${unreadCount} chats as read`,
+                  icon: 'checkmark-done-outline' as const,
+                  onPress: markAllRead,
+                },
+              ]
+            : []),
+          {
+            label: 'Blocked accounts',
+            icon: 'ban-outline' as const,
+            onPress: () => setBlockedOpen(true),
+          },
+        ]}
+      />
+
+      <BlockedAccountsSheet
+        visible={blockedOpen}
+        onClose={() => setBlockedOpen(false)}
+      />
     </SafeAreaView>
   );
 }
