@@ -15,6 +15,12 @@ writing lives where it is read.
 | Working copy (read this one) | `C:\Users\Aidan\.tina\sphaer-poster-refs\originals\` |
 | Aidan's original folder (do not modify) | `C:\Users\Aidan\Desktop\Sphaer Posters\` |
 | Files | 39 PNG, ~56 MB, 763–1024 px wide |
+| Extraction scripts | `C:\Users\Aidan\.tina\sphaer-poster-refs\*.py` |
+
+The five scripts that produced this reference sit beside the images, so every number
+below can be regenerated rather than trusted: `prep.py` (thumbnails, dimensions, seed
+matching), `palette.py` and `ink.py` (the two sampling passes), `gen_posters.py`
+(emits `posters.md`), `sheet.py` (emits `contact-sheet.jpg`). They need only Pillow.
 
 If that directory is missing, the analysis below still stands on its own, but the
 palettes and the per-poster claims cannot be re-verified. Re-copy from the Desktop
