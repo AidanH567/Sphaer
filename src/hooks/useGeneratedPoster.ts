@@ -29,6 +29,27 @@ import type { PosterCanvasHandle } from '@/components/events/GeneratedPosterCanv
 import { assertLayoutIsPaintable, PosterGenerationError } from '@/utils/poster-guard';
 import { buildPosterLayout, type PosterInput, type PosterLayout } from '@/utils/poster-template';
 
+/**
+ * Categories arrive from the create form as a live array that is rebuilt on
+ * every keystroke elsewhere in the form. Joining them into a string for the
+ * memo's dependency list means the layout is re-solved when the CATEGORIES
+ * change, not when React hands us a new array with the same contents — which
+ * is every render, and which would rebuild the poster continuously.
+ *
+ * The separator is written as an ESCAPE SEQUENCE, never as a literal control
+ * byte: a raw control character in a source file makes git treat the whole file
+ * as binary, which is what commit 937a2b7 had to undo for the canvas test.
+ *
+ * And it is not a space, because "Social Movements" is a real category — a
+ * space-joined key would split back into two unrecognised categories and
+ * silently drop the event off its family shortlist.
+ */
+const CATEGORY_SEP = '\u0001';
+
+function categoryKey(categories?: readonly string[] | null): string {
+  return categories ? categories.join(CATEGORY_SEP) : '';
+}
+
 export interface GeneratedPoster {
   /** Bare base64 PNG — what `uploadGeneratedEventPoster` wants. */
   base64: string;
@@ -55,14 +76,27 @@ function toPosterInput(input: Partial<PosterInput>): PosterInput | null {
     locationName: input.locationName ?? null,
     address: input.address ?? null,
     photoDataUri: input.photoDataUri ?? null,
+    categories: input.categories ?? null,
+    variant: input.variant ?? 0,
   };
 }
 
 export function useGeneratedPoster(input: Partial<PosterInput>) {
   const canvasRef = useRef<PosterCanvasHandle>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  /**
+   * Which shuffle step the user is on. 0 is the event's canonical poster — the
+   * one it regenerates to on its own — and Shuffle walks forward from there.
+   *
+   * Deliberately NOT persisted anywhere. What gets uploaded is the captured
+   * PNG, so whatever the user shuffled to is the poster; storing the counter
+   * would only matter if we ever re-derived a poster from the event alone, and
+   * that path (the mural fallback) wants the canonical variant 0 anyway.
+   */
+  const [variant, setVariant] = useState(0);
 
-  const { title, startsAt, endsAt, locationName, address, photoDataUri } = input;
+  const { title, startsAt, endsAt, locationName, address, photoDataUri, categories } = input;
+  const catKey = categoryKey(categories);
 
   // Solved synchronously from form state. Cheap (string maths, no I/O), and
   // keeping it in a memo means the offscreen canvas re-renders only when a
@@ -76,9 +110,12 @@ export function useGeneratedPoster(input: Partial<PosterInput>) {
       locationName,
       address,
       photoDataUri,
+      categories: catKey ? catKey.split(CATEGORY_SEP) : null,
+      variant,
     });
     return posterInput ? buildPosterLayout(posterInput) : null;
-  }, [title, startsAt, endsAt, locationName, address, photoDataUri]);
+    // `catKey` stands in for `categories` on purpose — see categoryKey above.
+  }, [title, startsAt, endsAt, locationName, address, photoDataUri, catKey, variant]);
 
   const generate = useCallback(async (): Promise<GeneratedPoster> => {
     if (!layout) {
@@ -114,9 +151,23 @@ export function useGeneratedPoster(input: Partial<PosterInput>) {
     }
   }, [layout]);
 
+  /**
+   * Step to the next family/palette combination.
+   *
+   * Cheap enough to call on every tap: the layout is pure string maths in a
+   * memo, so shuffling re-solves the offscreen canvas and nothing else. It does
+   * NOT capture — the user shuffles until they like what the preview shows,
+   * then presses Generate once.
+   */
+  const shuffle = useCallback(() => setVariant((v) => v + 1), []);
+
   return {
     canvasRef,
     layout,
+    /** Which family solved the current layout, e.g. 'spine'. Null before there is one. */
+    family: layout?.family ?? null,
+    variant,
+    shuffle,
     /** True when the form has enough on it for a poster to exist. */
     canGenerate: layout !== null,
     isGenerating,

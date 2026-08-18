@@ -262,6 +262,13 @@ export const GeneratedPosterCanvas = forwardRef<PosterCanvasHandle, Props>(
             />
           ))}
 
+          {/* `rotation`/`origin` and `textAnchor` are the only two primitives
+              the layout families needed beyond rects and plain runs — a title
+              set vertically up the poster's edge, and type centred on a plate,
+              cannot be expressed by choosing different x and y. Both mirror the
+              SVG attributes `posterLayoutToSvgString` emits (rotate about the
+              run's own anchor point, text-anchor), so the two renderers stay in
+              step. Adding another family does not touch this file. */}
           {layout.texts.map((t, i) => (
             <SvgText
               key={`t-${i}-${t.y}`}
@@ -273,6 +280,10 @@ export const GeneratedPosterCanvas = forwardRef<PosterCanvasHandle, Props>(
               fill={t.fill}
               opacity={t.opacity}
               letterSpacing={t.letterSpacing}
+              textAnchor={t.anchor ?? 'start'}
+              rotation={t.rotate ?? 0}
+              originX={t.x}
+              originY={t.y}
             >
               {t.text}
             </SvgText>
