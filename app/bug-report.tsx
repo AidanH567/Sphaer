@@ -17,6 +17,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from '@/context/AuthContext';
 import { useBugReportSubmit, useCanReportBug } from '@/hooks/useBugReport';
 import { KindPicker } from '@/components/bug-report/KindPicker';
+import {
+  ScreenshotAnnotator,
+  type AnnotationResult,
+} from '@/components/bug-report/ScreenshotAnnotator';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import {
@@ -75,9 +79,35 @@ export default function BugReportScreen() {
   const [primaryError, setPrimaryError] = useState<string | null>(null);
   const [severity, setSeverity] = useState<ReportSeverity | null>(null);
   const [screen, setScreen] = useState<string | null>(null);
-  const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
+  /**
+   * The attached screenshot, with the pixel size the picker reported.
+   *
+   * The size is kept because the annotator needs it twice: to flatten the
+   * marks at the screenshot's REAL resolution rather than the phone's display
+   * size, and to scale the stroke width. Without it the annotated image would
+   * be a downscaled screenshot — legible strokes over an unreadable UI.
+   */
+  const [screenshot, setScreenshot] = useState<{
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
+  /** Bare base64 of the FLATTENED annotated image, once the user has drawn. */
+  const [annotatedBase64, setAnnotatedBase64] = useState<string | null>(null);
+  const [isAnnotating, setIsAnnotating] = useState(false);
 
   const fields = useMemo(() => fieldsForKind(kind), [kind]);
+
+  const annotatedDataUri = annotatedBase64
+    ? `data:image/png;base64,${annotatedBase64}`
+    : null;
+  /**
+   * Annotation needs the source's real dimensions to place marks correctly. A
+   * picker that reported none (rare, but it is an optional field on the asset)
+   * leaves the screenshot attachable and the pen disabled — an honest dead
+   * button beats marks silently landing in the wrong place.
+   */
+  const canAnnotate = Boolean(screenshot && screenshot.width > 0 && screenshot.height > 0);
 
   const setAnswer = useCallback((key: ReportFieldKey, text: string) => {
     setAnswers((prev) => ({ ...prev, [key]: text }));
@@ -95,8 +125,28 @@ export default function BugReportScreen() {
       quality: 0.9,
     });
     if (!result.canceled) {
-      setScreenshotUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setScreenshot({
+        uri: asset.uri,
+        // The picker reports these for every asset. Falling back to 0 rather
+        // than a guess means `fitContain` returns an empty rect and the
+        // annotator declines to draw, instead of laying marks against
+        // invented dimensions and misplacing every one of them.
+        width: asset.width ?? 0,
+        height: asset.height ?? 0,
+      });
+      setAnnotatedBase64(null);
     }
+  }
+
+  function removeScreenshot() {
+    setScreenshot(null);
+    setAnnotatedBase64(null);
+  }
+
+  function handleAnnotationSaved(result: AnnotationResult) {
+    setAnnotatedBase64(result.base64);
+    setIsAnnotating(false);
   }
 
   function handleSubmit() {
@@ -112,7 +162,10 @@ export default function BugReportScreen() {
       severity: showsSeverity(kind) ? severity : null,
       details: buildReportDetails(kind, answers),
       screen: showsScreen(kind) ? screen : null,
-      screenshotUri,
+      screenshotUri: screenshot?.uri ?? null,
+      // The flattened image wins when there is one — it IS the screenshot,
+      // plus the marks. The service enforces the same precedence.
+      screenshotBase64: annotatedBase64,
     });
   }
 
@@ -240,17 +293,63 @@ export default function BugReportScreen() {
               reference from another app is as useful on a feature request as
               a broken screen is on a bug. */}
           <Text style={styles.sectionLabel}>Screenshot</Text>
-          {screenshotUri ? (
-            <View style={styles.screenshotWrap}>
-              <Image source={{ uri: screenshotUri }} style={styles.screenshot} />
-              <TouchableOpacity
-                style={styles.screenshotRemove}
-                onPress={() => setScreenshotUri(null)}
-                accessibilityRole="button"
-                accessibilityLabel="Remove screenshot"
-              >
-                <Ionicons name="close" size={16} color={colors.white} />
-              </TouchableOpacity>
+          {screenshot ? (
+            <View style={styles.screenshotRow}>
+              <View style={styles.screenshotWrap}>
+                <Image
+                  // Once annotated, show the FLATTENED result — the thumbnail
+                  // on the form is then the same picture that gets sent, so
+                  // there is no way to believe you attached marks you didn't.
+                  source={{ uri: annotatedDataUri ?? screenshot.uri }}
+                  style={styles.screenshot}
+                />
+                <TouchableOpacity
+                  style={styles.screenshotRemove}
+                  onPress={removeScreenshot}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove screenshot"
+                >
+                  <Ionicons name="close" size={16} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.screenshotActions}>
+                {/* The whole point of the feature, so it is a labelled button
+                    rather than an icon: a designer who does not notice this
+                    files the vague report we were trying to stop. */}
+                <TouchableOpacity
+                  style={styles.annotateButton}
+                  onPress={() => setIsAnnotating(true)}
+                  disabled={!canAnnotate}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    annotatedBase64 ? 'Edit your marks' : 'Circle what is wrong'
+                  }
+                  accessibilityState={{ disabled: !canAnnotate }}
+                >
+                  <Ionicons
+                    name="brush-outline"
+                    size={18}
+                    color={canAnnotate ? colors.text.primary : colors.text.tertiary}
+                  />
+                  <Text
+                    style={[
+                      styles.annotateButtonText,
+                      !canAnnotate && styles.annotateButtonTextDisabled,
+                    ]}
+                  >
+                    {annotatedBase64 ? 'Edit marks' : "Circle what's wrong"}
+                  </Text>
+                </TouchableOpacity>
+
+                {annotatedBase64 && (
+                  <View style={styles.annotatedBadge}>
+                    <Ionicons name="checkmark" size={14} color={colors.text.secondary} />
+                    <Text style={styles.annotatedBadgeText}>Marked up</Text>
+                  </View>
+                )}
+              </View>
             </View>
           ) : (
             <TouchableOpacity
@@ -281,6 +380,20 @@ export default function BugReportScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Mounted only while open: the annotator holds a full-resolution
+          offscreen canvas, which is not something to keep alive behind a form
+          the user may never annotate from. */}
+      {screenshot && canAnnotate && isAnnotating && (
+        <ScreenshotAnnotator
+          visible
+          uri={screenshot.uri}
+          sourceWidth={screenshot.width}
+          sourceHeight={screenshot.height}
+          onCancel={() => setIsAnnotating(false)}
+          onSave={handleAnnotationSaved}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -388,8 +501,50 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.text.secondary,
   },
+  screenshotRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.base,
+  },
   screenshotWrap: {
     alignSelf: 'flex-start',
+  },
+  screenshotActions: {
+    flex: 1,
+    gap: spacing.sm,
+    // Nudged clear of the thumbnail's absolute remove button.
+    paddingTop: spacing.xs,
+  },
+  annotateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  annotateButtonText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  annotateButtonTextDisabled: {
+    color: colors.text.tertiary,
+  },
+  annotatedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    alignSelf: 'center',
+  },
+  annotatedBadgeText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
   },
   screenshot: {
     width: 120,

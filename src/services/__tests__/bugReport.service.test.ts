@@ -8,6 +8,7 @@ import {
   BugReportUnavailableError,
   TriageNotPermittedError,
 } from '../bugReport.service';
+import { UploadValidationError } from '@/utils/upload-validation';
 import type { BugReportRow } from '@/types/bug-reports';
 
 // ---------------------------------------------------------------------------
@@ -105,6 +106,32 @@ const MISSING_COLUMN_42703 = {
   code: '42703',
   message: 'column profiles.is_designer does not exist',
 };
+
+/**
+ * A byte-accurate PNG header plus filler — enough for `readPngHeader` to read
+ * real dimensions off it. Mirrors the fixture in generated-poster-upload.test.
+ */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+function writeUint32(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+}
+
+function makeAnnotatedPngBase64(width = 1170, height = 2532, totalBytes = 50000): string {
+  const bytes = new Uint8Array(Math.max(29, totalBytes));
+  bytes.set(PNG_SIGNATURE, 0);
+  writeUint32(bytes, 8, 13);
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12); // "IHDR"
+  writeUint32(bytes, 16, width);
+  writeUint32(bytes, 20, height);
+  bytes[24] = 8; // bit depth
+  bytes[25] = 6; // colour type: RGBA
+  for (let i = 29; i < bytes.length; i++) bytes[i] = (i * 31) % 251;
+  return Buffer.from(bytes).toString('base64');
+}
 
 function row(overrides: Partial<BugReportRow> = {}): BugReportRow {
   return {
@@ -287,6 +314,109 @@ describe('submitBugReport', () => {
     const boom = { code: '23514', message: 'check constraint violation' };
     mockResults = { bug_reports: { insert: { error: boom } } };
     await expect(submitBugReport('me', { description: 'x' })).rejects.toBe(boom);
+  });
+});
+
+// ─── The annotated screenshot ────────────────────────────────────────────────
+// A flattened annotation arrives as base64, NOT as a URI, and takes a
+// different code path on purpose: React Native's `fetch` does not reliably
+// resolve `data:` URIs, so the blob route every other upload uses would fail
+// on a phone while passing any test that mocks `fetch` — which is every test
+// in this file. These cover the route that actually works.
+
+describe('submitBugReport — annotated screenshots', () => {
+  it('uploads the flattened PNG as bytes, never through fetch', async () => {
+    // The whole reason this path exists. If `fetch` is touched here, the
+    // feature is broken on device and green in CI.
+    await submitBugReport('me', {
+      description: 'the padding on this card is wrong',
+      screenshotBase64: makeAnnotatedPngBase64(),
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockStorageFrom).toHaveBeenCalledWith('bug-screenshots');
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('uploads the EXACT bytes the annotator produced', async () => {
+    // A re-encode or a truncated buffer here is the "valid file, wrong
+    // content" failure — it would still decode, and the marks would be gone.
+    const base64 = makeAnnotatedPngBase64();
+    await submitBugReport('me', { description: 'x', screenshotBase64: base64 });
+    const body = (mockUpload.mock.calls[0] as unknown[])[1] as ArrayBuffer;
+    expect(Buffer.from(new Uint8Array(body)).equals(Buffer.from(base64, 'base64'))).toBe(true);
+  });
+
+  it('stores it as a PNG in the reporter’s own folder', async () => {
+    // Bucket RLS requires `<userId>/...`, and the annotator always emits PNG.
+    await submitBugReport('me', { description: 'x', screenshotBase64: makeAnnotatedPngBase64() });
+    const path = (mockUpload.mock.calls[0] as unknown[])[0] as string;
+    expect(path).toMatch(/^me\/\d+\.png$/);
+    const options = (mockUpload.mock.calls[0] as unknown[])[2] as { contentType: string };
+    expect(options.contentType).toBe('image/png');
+    expect(mockInsertPayload).toHaveBeenCalledWith(
+      expect.objectContaining({ screenshot_path: path })
+    );
+  });
+
+  it('prefers the annotated image over the raw one it was made from', async () => {
+    // Both are present in the real flow — the form keeps the original URI so
+    // it can be re-annotated. Uploading the raw one would silently discard
+    // every mark, and look identical from the form.
+    await submitBugReport('me', {
+      description: 'x',
+      screenshotUri: 'file:///tmp/original.png',
+      screenshotBase64: makeAnnotatedPngBase64(),
+    });
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the plain upload when nothing was annotated', async () => {
+    await submitBugReport('me', { description: 'x', screenshotUri: 'file:///tmp/shot.png' });
+    expect(global.fetch).toHaveBeenCalled();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a capture that is not a real image', async () => {
+    // `toDataURL` firing before the canvas laid out returns a valid PNG that
+    // is 0×0 — bytes that decode fine and contain nothing.
+    await expect(
+      submitBugReport('me', { description: 'x', screenshotBase64: makeAnnotatedPngBase64(0, 0) })
+    ).rejects.toBeInstanceOf(UploadValidationError);
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled(); // nothing inserted either
+  });
+
+  it('refuses bytes that are not a PNG at all', async () => {
+    await expect(
+      submitBugReport('me', { description: 'x', screenshotBase64: Buffer.from('not a png at all, just text padding it out').toString('base64') })
+    ).rejects.toBeInstanceOf(UploadValidationError);
+    expect(mockUpload).not.toHaveBeenCalled();
+  });
+
+  it('refuses an annotated image over the upload cap', async () => {
+    await expect(
+      submitBugReport('me', {
+        description: 'x',
+        screenshotBase64: makeAnnotatedPngBase64(1170, 2532, 11 * 1024 * 1024),
+      })
+    ).rejects.toBeInstanceOf(UploadValidationError);
+    expect(mockUpload).not.toHaveBeenCalled();
+  });
+
+  it('removes the orphan when the row insert fails after upload', async () => {
+    mockResults = { bug_reports: { insert: { error: { code: '42501', message: 'denied' } } } };
+    await expect(
+      submitBugReport('me', { description: 'x', screenshotBase64: makeAnnotatedPngBase64() })
+    ).rejects.toMatchObject({ code: '42501' });
+    expect(mockRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the bucket missing rather than a raw storage error', async () => {
+    mockNextUpload = { error: { message: 'Bucket not found' } };
+    await expect(
+      submitBugReport('me', { description: 'x', screenshotBase64: makeAnnotatedPngBase64() })
+    ).rejects.toBeInstanceOf(BugReportUnavailableError);
   });
 });
 

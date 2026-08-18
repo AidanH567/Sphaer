@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { annotationColors } from '@/constants/annotation-colors';
 
 export const colors = {
   white: '#FFFFFF',
@@ -57,6 +58,15 @@ export const colors = {
   },
 
   overlay: 'rgba(0, 0, 0, 0.5)',
+
+  /**
+   * Marker colours for screenshot annotation (the report flow).
+   *
+   * Defined in `annotation-colors.ts`, which imports nothing, so the Node QA
+   * renderer can share the exact values rather than a copy that would drift.
+   * See that file for why there are three.
+   */
+  annotation: annotationColors,
 } as const;
 
 // Font family names must match the keys used in useFonts() in app/_layout.tsx
