@@ -37,7 +37,7 @@ const PROVIDER_GOOGLE = Maps?.PROVIDER_GOOGLE;
  */
 export default function MapScreen() {
   const router = useRouter();
-  const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
+  const { feedFilters, setFeedFilters } = useAppContext();
 
   const { events, error, refetch } = useEvents({ categories: feedFilters.categories });
 
@@ -119,7 +119,6 @@ export default function MapScreen() {
       <FeedHeader
         activeView="map"
         onViewChange={(v) => {
-          setFeedView(v);
           if (v === 'list') router.push('/(tabs)/feed');
           else if (v === 'mural') router.push('/(tabs)/feed/mural');
         }}
