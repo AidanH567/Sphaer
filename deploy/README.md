@@ -10,11 +10,49 @@ changes, so nobody has to be sent a new link.
 ## Deploy
 
 ```bash
+npm run deploy:web
+```
+
+**That is the ONLY supported way.** It runs `scripts/deploy-web.sh`.
+
+<details>
+<summary>The manual commands, and why they are WRONG (kept as a warning)</summary>
+
+```bash
 npx expo export --platform web
 copy deploy\vercel.json dist\vercel.json
 cd dist
 npx vercel deploy --prod --yes
 ```
+
+These steps ship a build with NO ICONS. `expo export` emits every
+`@expo/vector-icons` font under `dist/assets/node_modules/@expo/...`, and
+**Vercel silently drops any path containing `node_modules`**. The fonts are
+never uploaded, the catch-all rewrite answers the font request with
+`index.html`, the browser cannot parse HTML as a font, and **every icon in the
+app renders as a tofu box**.
+
+Measured on the live deploy, 2026-08-18:
+
+    /favicon.ico                          -> image/vnd.microsoft.icon   OK
+    /_expo/static/css/web-....css         -> text/css                   OK
+    /assets/node_modules/.../Ionicons.ttf -> text/html                  BROKEN
+
+`deploy/vercel.json` cannot save you: a rewrite cannot serve a file that was
+never uploaded.
+
+</details>
+
+### What the script does that you would forget
+
+1. Moves `dist/assets/node_modules` to `dist/assets/vendor`, repoints every
+   reference inside the JS and CSS bundles, and **hard-fails** if one survives.
+2. Writes the SPA rewrite into `dist/` itself.
+3. Deploys `dist/` to production.
+
+The failure mode is invisible from the deploy output - it reports success, the
+page loads, the layout is perfect, and only the glyphs are missing. That is
+exactly why it shipped repeatedly.
 
 ⚠️ **The copy step is not optional.** `expo export` wipes and rewrites `dist/`,
 so a `vercel.json` living only in there disappears on every build — and this
