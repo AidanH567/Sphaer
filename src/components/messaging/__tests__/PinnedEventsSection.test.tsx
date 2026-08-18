@@ -1,8 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { PinnedEventsSection } from '@/components/messaging/PinnedEventsSection';
 import { getCircleUpcomingEvents } from '@/services/events.service';
-import { dayKey } from '@/utils/pinned-events';
 import type { EventWithRelations } from '@/types/event.types';
 
 const mockPush = jest.fn();
@@ -34,17 +33,37 @@ jest.mock('@/services/events.service', () => ({
 const fetchMock = getCircleUpcomingEvents as jest.MockedFunction<typeof getCircleUpcomingEvents>;
 
 const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
 
-/** Events are built relative to the real clock — the component reads
- *  `new Date()` for its "Today / Tomorrow" label, so anchoring to now keeps
- *  the assertions true whenever the suite runs. */
+/**
+ * A local Date at `hour` o'clock on the calendar day `dayOffset` days from
+ * today. Every fixture in this file is built with it.
+ *
+ * Fixtures are anchored to CALENDAR DAYS, never to millisecond offsets from
+ * `Date.now()`. The section buckets events by local calendar day (`dayKey`)
+ * and labels the soonest one relative to today, so a fixture written as
+ * `Date.now() + 5 * HOUR` lands on a different day depending on the hour the
+ * suite happens to run at. That is not a hypothetical: `now + 5 * HOUR`
+ * crossed midnight and broke the two-events-on-a-day assertion every evening
+ * from 19:00, and `now + 2 * HOUR` broke the summary assertion every evening
+ * from 22:00. Both were read as feature regressions before anyone noticed the
+ * clock. There is no offset that fixes the class — near midnight there is no
+ * "later today" for an offset to point at.
+ *
+ * The Date(y, m, d, h) constructor is also the DST-safe arithmetic
+ * `addDays`/`buildCalendarDays` use, so `dayAt(n, h)` is exactly `n` cells
+ * along the strip even across a clock change. `Date.now() + n * 86_400_000`
+ * is off by one cell on the two nights a year Berlin's offset moves.
+ */
+function dayAt(dayOffset: number, hour: number): Date {
+  const base = new Date();
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + dayOffset, hour, 0, 0, 0);
+}
+
 function makeEvent(
   id: string,
-  startsInMs: number,
+  starts: Date,
   overrides: Partial<EventWithRelations> = {}
 ): EventWithRelations {
-  const starts = new Date(Date.now() + startsInMs);
   return {
     id,
     creator_id: 'user-1',
@@ -72,16 +91,58 @@ function makeEvent(
 }
 
 /**
+ * Tonight's party: opens today at 19:00, runs until 04:00 tomorrow.
+ *
+ * The one fixture that must read "Today", and it reads "Today" at all 24
+ * hours. It starts on today's calendar day, so `relativeDayLabel` says
+ * "Today" whether the suite runs at 02:00 or 23:59; and its `ends_at` is
+ * tomorrow morning, so `selectUpcoming` keeps it after 19:00 when it is
+ * already running rather than dropping it and changing the count.
+ *
+ * That "still running" path is the documented behaviour of `relevantUntil` —
+ * "a party that started an hour ago and runs until 04:00 stays pinned" — so
+ * the fixture exercises real behaviour rather than dodging the clock.
+ */
+function tonight(id: string): EventWithRelations {
+  return makeEvent(id, dayAt(0, 19), { ends_at: dayAt(1, 4).toISOString() });
+}
+
+/** The mini-calendar cell label the strip renders for a given local day. */
+function cellLabel(day: Date, tail: string): string {
+  return `${day.toLocaleDateString('en-GB', { weekday: 'short' })} ${day.getDate()}, ${tail}`;
+}
+
+/**
  * Titles of the currently-rendered pinned rows, in render order.
  *
  * Matched on the row's accessibility label ("Event a, 17 Aug, 20:00-23:00")
  * rather than its title text, because the collapsed summary line also
  * contains the next event's title and would otherwise be counted as a row.
+ *
+ * The month is `\w+`, not `\w{3}`: en-GB abbreviates September as "Sept",
+ * four letters. With `\w{3}` this matcher silently returned [] for every
+ * fixture landing in September, which would have emptied four of these tests
+ * from around 26 August — a second clock-shaped failure hiding behind the
+ * first, and one that looks exactly like "the list stopped rendering".
  */
 function rowTitles(): string[] {
   return screen
-    .queryAllByLabelText(/^Event .+, \d+ \w{3}, /)
+    .queryAllByLabelText(/^Event .+, \d+ \w+, /)
     .map((node) => String(node.props.accessibilityLabel).split(',')[0]);
+}
+
+/**
+ * The count pill, scoped to the summary row.
+ *
+ * `getByText('2')` is not safe once the section is expanded: the strip
+ * renders a day-of-month in every cell, so any fortnight containing the 2nd
+ * of a month — roughly half the year — has a second element reading "2" and
+ * the query throws "found multiple elements". Scoping to the summary row is
+ * what the assertion always meant.
+ */
+function countPillText(): string {
+  const summary = screen.getByLabelText(/upcoming events?\. Next: /);
+  return String(within(summary).getByText(/^\d+$/).props.children);
 }
 
 beforeEach(() => {
@@ -109,9 +170,7 @@ describe('PinnedEventsSection — empty state', () => {
 
   it('treats a circle whose only events have finished as empty', async () => {
     fetchMock.mockResolvedValue([
-      makeEvent('past', -2 * DAY, {
-        ends_at: new Date(Date.now() - 2 * DAY + HOUR).toISOString(),
-      }),
+      makeEvent('past', dayAt(-2, 20), { ends_at: dayAt(-2, 23).toISOString() }),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
@@ -131,26 +190,46 @@ describe('PinnedEventsSection — empty state', () => {
 describe('PinnedEventsSection — populated', () => {
   it('collapses to a summary naming the soonest event and the total count', async () => {
     fetchMock.mockResolvedValue([
-      makeEvent('b', 5 * DAY),
-      makeEvent('a', 2 * HOUR),
-      makeEvent('c', 9 * DAY),
+      makeEvent('b', dayAt(5, 19)),
+      tonight('a'),
+      makeEvent('c', dayAt(9, 19)),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
 
     expect(await screen.findByText('Upcoming')).toBeTruthy();
-    expect(screen.getByText('3')).toBeTruthy();
-    // Soonest first — "Event a" wins even though it was returned second.
+    expect(countPillText()).toBe('3');
+    // Soonest first — "Event a" wins even though it was returned second — and
+    // it carries a day label. The Today/Tomorrow/short-date RULE is proved
+    // instant by instant in utils/__tests__/pinned-events.test.ts, including
+    // at 23:59 and 00:01; what belongs here is that the section names the
+    // right event and dates it.
     expect(screen.getByText('Event a · Today')).toBeTruthy();
     // Collapsed: the rows are not mounted.
     expect(screen.queryByText('Event b')).toBeNull();
   });
 
+  it('dates a soonest event further out by its weekday rather than "Today"', async () => {
+    const soonest = dayAt(4, 19);
+    fetchMock.mockResolvedValue([makeEvent('b', dayAt(6, 19)), makeEvent('a', soonest)]);
+
+    render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
+
+    // Built from the fixture's own date, not from relativeDayLabel — the
+    // assertion has to be able to disagree with the rule it is checking.
+    const expected = soonest.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+    expect(await screen.findByText(`Event a · ${expected}`)).toBeTruthy();
+  });
+
   it('lists events soonest-first once expanded', async () => {
     fetchMock.mockResolvedValue([
-      makeEvent('later', 5 * DAY),
-      makeEvent('soon', 2 * HOUR),
-      makeEvent('middle', 2 * DAY),
+      makeEvent('later', dayAt(5, 19)),
+      tonight('soon'),
+      makeEvent('middle', dayAt(2, 19)),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
@@ -161,12 +240,12 @@ describe('PinnedEventsSection — populated', () => {
 
   it('caps the list at four rows and offers the rest on the circle page', async () => {
     fetchMock.mockResolvedValue([
-      makeEvent('e1', 1 * DAY),
-      makeEvent('e2', 2 * DAY),
-      makeEvent('e3', 3 * DAY),
-      makeEvent('e4', 4 * DAY),
-      makeEvent('e5', 5 * DAY),
-      makeEvent('e6', 6 * DAY),
+      makeEvent('e1', dayAt(1, 19)),
+      makeEvent('e2', dayAt(2, 19)),
+      makeEvent('e3', dayAt(3, 19)),
+      makeEvent('e4', dayAt(4, 19)),
+      makeEvent('e5', dayAt(5, 19)),
+      makeEvent('e6', dayAt(6, 19)),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
@@ -177,7 +256,7 @@ describe('PinnedEventsSection — populated', () => {
   });
 
   it('routes to the event detail page when a row is tapped', async () => {
-    fetchMock.mockResolvedValue([makeEvent('a', 2 * HOUR)]);
+    fetchMock.mockResolvedValue([makeEvent('a', dayAt(1, 19))]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
     fireEvent.press(await screen.findByText('Upcoming'));
@@ -189,21 +268,17 @@ describe('PinnedEventsSection — populated', () => {
 
 describe('PinnedEventsSection — mini-calendar filtering', () => {
   it('narrows the list to the tapped day, then restores it on a second tap', async () => {
-    const inTwoDays = 2 * DAY;
-    const inFiveDays = 5 * DAY;
+    const nearDay = dayAt(2, 19);
     fetchMock.mockResolvedValue([
-      makeEvent('near', inTwoDays),
-      makeEvent('far', inFiveDays),
+      makeEvent('near', nearDay),
+      makeEvent('far', dayAt(5, 19)),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
     fireEvent.press(await screen.findByText('Upcoming'));
     expect(rowTitles()).toEqual(['Event near', 'Event far']);
 
-    const targetDay = new Date(Date.now() + inTwoDays);
-    const cell = screen.getByLabelText(
-      `${targetDay.toLocaleDateString('en-GB', { weekday: 'short' })} ${targetDay.getDate()}, 1 event`
-    );
+    const cell = screen.getByLabelText(cellLabel(nearDay, '1 event'));
 
     fireEvent.press(cell);
     expect(rowTitles()).toEqual(['Event near']);
@@ -213,41 +288,25 @@ describe('PinnedEventsSection — mini-calendar filtering', () => {
   });
 
   it('marks a day with two events as such and leaves bare days untappable', async () => {
-    // Anchored to a FIXED HOUR of a future day, not to a raw offset from now.
-    // The old fixture used `3 * DAY + HOUR` and `3 * DAY + 5 * HOUR` and then
-    // asked for the day label of `now + 3 * DAY`. `dayKey` is a LOCAL CALENDAR
-    // day, so from 19:00 local onwards the +5h event rolls past midnight onto
-    // the following day and the cell reads "1 event" (and from 23:00, "0").
-    // Measured across all 24 hours: the assertion is false between 19:00 and
-    // 23:59 every single day. Two agents lost time reading it as a regression
-    // in the pinned-events feature, which it never was.
-    const busy = new Date();
-    busy.setDate(busy.getDate() + 3);
-    busy.setHours(10, 0, 0, 0);
-    const toBusyDay = busy.getTime() - Date.now();
-
+    const busy = dayAt(3, 10);
     fetchMock.mockResolvedValue([
-      makeEvent('one', toBusyDay),
-      makeEvent('two', toBusyDay + 4 * HOUR),
+      makeEvent('one', busy),
+      makeEvent('two', dayAt(3, 14)),
     ]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
     fireEvent.press(await screen.findByText('Upcoming'));
 
-    const busyLabel = `${busy.toLocaleDateString('en-GB', { weekday: 'short' })} ${busy.getDate()}, 2 events`;
-    expect(screen.getByLabelText(busyLabel)).toBeTruthy();
+    expect(screen.getByLabelText(cellLabel(busy, '2 events'))).toBeTruthy();
 
     // A day with nothing on it still appears in the strip (so the shape of
     // the fortnight reads) but announces itself as empty and is disabled.
-    const quiet = new Date(Date.now() + 7 * DAY);
-    const quietCell = screen.getByLabelText(
-      `${quiet.toLocaleDateString('en-GB', { weekday: 'short' })} ${quiet.getDate()}, nothing on`
-    );
+    const quietCell = screen.getByLabelText(cellLabel(dayAt(7, 12), 'nothing on'));
     expect(quietCell.props.accessibilityState.disabled).toBe(true);
   });
 
   it('covers exactly two weeks of day cells', async () => {
-    fetchMock.mockResolvedValue([makeEvent('a', 2 * HOUR)]);
+    fetchMock.mockResolvedValue([makeEvent('a', dayAt(1, 19))]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
     fireEvent.press(await screen.findByText('Upcoming'));
@@ -264,19 +323,22 @@ describe('PinnedEventsSection — mini-calendar filtering', () => {
   it('marks the filtered day as selected and keeps the count pill on the total', async () => {
     // The pill answers "how much is coming up in this circle" — filtering the
     // list to one day must not make it read as though the rest vanished.
-    fetchMock.mockResolvedValue([makeEvent('near', 2 * DAY), makeEvent('far', 5 * DAY)]);
+    const nearDay = dayAt(2, 19);
+    const farDay = dayAt(5, 19);
+    fetchMock.mockResolvedValue([makeEvent('near', nearDay), makeEvent('far', farDay)]);
 
     render(<PinnedEventsSection circleId="circle-1" circleName="Sphaer Crew" />);
     fireEvent.press(await screen.findByText('Upcoming'));
 
-    const target = new Date(Date.now() + 2 * DAY);
-    const label = `${target.toLocaleDateString('en-GB', { weekday: 'short' })} ${target.getDate()}, 1 event`;
-    fireEvent.press(screen.getByLabelText(label));
+    fireEvent.press(screen.getByLabelText(cellLabel(nearDay, '1 event')));
 
     expect(rowTitles()).toEqual(['Event near']);
-    expect(screen.getByLabelText(label).props.accessibilityState.selected).toBe(true);
-    expect(screen.getByText('2')).toBeTruthy();
-    expect(dayKey(target)).toBe(dayKey(new Date(Date.now() + 2 * DAY)));
+    expect(screen.getByLabelText(cellLabel(nearDay, '1 event')).props.accessibilityState.selected)
+      .toBe(true);
+    // Selection is single: the other marked day must not stay lit.
+    expect(screen.getByLabelText(cellLabel(farDay, '1 event')).props.accessibilityState.selected)
+      .toBe(false);
+    expect(countPillText()).toBe('2');
   });
 });
 
@@ -291,7 +353,7 @@ describe('PinnedEventsSection — failure', () => {
     const retry = await screen.findByText("Couldn't load upcoming events. Tap to retry.");
     expect(retry).toBeTruthy();
 
-    fetchMock.mockResolvedValue([makeEvent('a', 2 * HOUR)]);
+    fetchMock.mockResolvedValue([makeEvent('a', dayAt(1, 19))]);
     fireEvent.press(retry);
 
     await waitFor(() => expect(screen.getByText('Upcoming')).toBeTruthy());

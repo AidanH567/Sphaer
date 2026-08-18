@@ -226,3 +226,79 @@ describe('relativeDayLabel', () => {
     expect(relativeDayLabel('nope', now)).toBe('');
   });
 });
+
+/**
+ * The label rule at hostile instants.
+ *
+ * This is where the Today/Tomorrow question is settled, deliberately and at
+ * chosen moments, instead of in the component test — which for weeks built
+ * its fixtures as millisecond offsets from the real `Date.now()` and so
+ * asserted a different thing depending on what time the suite ran.
+ * `PinnedEventsSection.test.tsx` was false between 19:00 and midnight for one
+ * assertion and after 22:00 for another; both were mistaken for feature
+ * regressions. `relativeDayLabel` already takes `now` as an argument, so the
+ * rigorous version of those assertions costs nothing but writing them here.
+ *
+ * The rule under test: the label is a LOCAL CALENDAR DAY comparison, never a
+ * duration. "Tomorrow" can be 31 minutes away and "Today" can be 22 hours
+ * away.
+ */
+describe('relativeDayLabel — hour-independence', () => {
+  it('says Today for the same calendar day at every hour of the clock', () => {
+    const labels = Array.from({ length: 24 }, (_, hour) =>
+      relativeDayLabel(localIso(2026, 8, 17, 20), new Date(2026, 7, 17, hour, 30))
+    );
+    expect(labels).toEqual(Array(24).fill('Today'));
+  });
+
+  it('says Tomorrow for the next calendar day at every hour of the clock', () => {
+    const labels = Array.from({ length: 24 }, (_, hour) =>
+      relativeDayLabel(localIso(2026, 8, 18, 2), new Date(2026, 7, 17, hour, 30))
+    );
+    expect(labels).toEqual(Array(24).fill('Tomorrow'));
+  });
+
+  it('labels by calendar day, not by how many hours away the event is', () => {
+    // 23:30 plus two hours is 01:30 the NEXT day. This exact shape — a
+    // fixture "two hours from now" asserted to read "Today" — is what broke
+    // the component test every night after 22:00.
+    expect(relativeDayLabel(localIso(2026, 8, 18, 1, 30), new Date(2026, 7, 17, 23, 30))).toBe(
+      'Tomorrow'
+    );
+    // Thirty-one minutes away, and already Tomorrow.
+    expect(relativeDayLabel(localIso(2026, 8, 18, 0, 30), new Date(2026, 7, 17, 23, 59))).toBe(
+      'Tomorrow'
+    );
+    // Twenty-two hours away, and still Today.
+    expect(relativeDayLabel(localIso(2026, 8, 18, 22, 0), new Date(2026, 7, 18, 0, 1))).toBe(
+      'Today'
+    );
+  });
+
+  it('never calls yesterday Today, however few minutes ago it ended', () => {
+    expect(relativeDayLabel(localIso(2026, 8, 16, 23, 30), new Date(2026, 7, 17, 0, 30))).toBe(
+      'Sun 16 Aug'
+    );
+  });
+
+  it('never calls the day after tomorrow Tomorrow', () => {
+    expect(relativeDayLabel(localIso(2026, 8, 19, 0, 30), new Date(2026, 7, 17, 23, 59))).toBe(
+      'Wed 19 Aug'
+    );
+  });
+
+  it('holds across both DST transitions, where the day is 23 or 25 hours long', () => {
+    // Europe/Berlin springs forward on 2026-03-29 (a 23-hour day) and falls
+    // back on 2026-10-25 (a 25-hour day). A rule that compared timestamps
+    // against a 24-hour constant would misread one of these; a calendar-day
+    // comparison reads both correctly, and does so in any timezone.
+    expect(relativeDayLabel(localIso(2026, 3, 29, 12), new Date(2026, 2, 28, 23, 30))).toBe(
+      'Tomorrow'
+    );
+    expect(relativeDayLabel(localIso(2026, 3, 29, 12), new Date(2026, 2, 29, 3, 30))).toBe('Today');
+    expect(relativeDayLabel(localIso(2026, 10, 25, 12), new Date(2026, 9, 24, 23, 30))).toBe(
+      'Tomorrow'
+    );
+    expect(relativeDayLabel(localIso(2026, 10, 25, 12), new Date(2026, 9, 25, 2, 30))).toBe('Today');
+  });
+});
