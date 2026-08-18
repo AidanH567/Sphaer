@@ -108,6 +108,28 @@ interface RowWithRoute {
   route: string;
 }
 
+/**
+ * Map a real conversation into the row shape.
+ *
+ * `avatar` passes through EXACTLY what the record holds — null included.
+ * These three lines used to invent an image when there wasn't one:
+ *
+ *     avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`
+ *     avatar: e.poster_url       ?? `https://picsum.photos/seed/${e.id}/150/150`
+ *     avatar: c.avatar_url       ?? `https://picsum.photos/seed/${c.id}/150/150`
+ *
+ * pravatar serves photographs of real human faces, keyed deterministically off
+ * `?u=`. So a new user who never uploaded anything got a stable, convincing
+ * photo of a stranger presented as their profile picture — reported by Lara as
+ * "an AI generated profile picture" (list item 8) and the reason this changed.
+ * The inbox was the only place it showed: the conversation screen already used
+ * the shared `Avatar`, so the same person had a face in the list and initials
+ * one tap deeper.
+ *
+ * The type is nullable now, so there is no longer a type error tempting anyone
+ * to fill the hole with a remote placeholder. `ConversationRow` renders
+ * initials instead.
+ */
 function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute {
   const lastMsg = conv.last_message;
   if (conv.kind === 'event') {
@@ -116,7 +138,7 @@ function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute 
       row: {
         id: e.id,
         name: e.title,
-        avatar: e.poster_url ?? `https://picsum.photos/seed/${e.id}/150/150`,
+        avatar: e.poster_url,
         type: 'circle', // closest existing semantic — group chat, not 1:1
         preview: lastMsg?.content ?? 'No messages yet',
         previewKind: 'text',
@@ -137,7 +159,7 @@ function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute 
       row: {
         id: c.id,
         name: c.name,
-        avatar: c.avatar_url ?? `https://picsum.photos/seed/${c.id}/150/150`,
+        avatar: c.avatar_url,
         type: 'circle',
         preview: lastMsg?.content ?? 'No messages yet',
         previewKind: 'text',
@@ -157,7 +179,7 @@ function toRow(conv: Conversation, ownUserId: string | undefined): RowWithRoute 
     row: {
       id: partner.id,
       name: partner.display_name ?? partner.username ?? 'Unknown',
-      avatar: partner.avatar_url ?? `https://i.pravatar.cc/150?u=${partner.id}`,
+      avatar: partner.avatar_url,
       type: 'user',
       preview: lastMsg?.content ?? '',
       previewKind: 'text',

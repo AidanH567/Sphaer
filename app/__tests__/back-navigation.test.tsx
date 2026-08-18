@@ -26,6 +26,9 @@
 import React from 'react';
 import { Text, TouchableOpacity } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import LocationOnboardingScreen from '../location';
+import { LegalScreen } from '@/components/legal/LegalScreen';
+import { useGoBack } from '@/hooks/useGoBack';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
@@ -85,10 +88,6 @@ jest.mock('@/lib/geocoding', () => ({
 jest.mock('@/services/profile.service', () => ({
   updateProfile: jest.fn(() => Promise.resolve({})),
 }));
-
-import LocationOnboardingScreen from '../location';
-import { LegalScreen } from '@/components/legal/LegalScreen';
-import { useGoBack } from '@/hooks/useGoBack';
 
 beforeEach(() => {
   mockBack.mockClear();

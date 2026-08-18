@@ -79,7 +79,14 @@ export type DeliveryStatus = 'delivered' | 'read';
 export interface ConversationRowDisplay {
   id: string;
   name: string;
-  avatar: string;
+  /**
+   * The real image, or null when there isn't one. Nullable on purpose: this
+   * field used to be a non-null `string`, which is exactly why the inbox
+   * mapper invented a remote placeholder to satisfy it (see the note in
+   * `messages/index.tsx`). "No picture" is a legitimate value — renderers
+   * must handle it, not paper over it.
+   */
+  avatar: string | null;
   type: ConversationType;
   preview: string;
   previewKind: PreviewKind;
