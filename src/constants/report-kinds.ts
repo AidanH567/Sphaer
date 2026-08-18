@@ -197,17 +197,45 @@ export const SEVERITY_OPTIONS: readonly { value: ReportSeverity; label: string }
  * triage and in auto-drafted fix prompts. Not auto-captured from the router:
  * the entry point lives on Profile, so the current route would always say
  * "Profile".
+ *
+ * ── Every screen must have a home ────────────────────────────────────────────
+ * Report 78e14c20: "it does not display options for all screens… we need to
+ * make sure every screen is accounted for". The list had ten entries against
+ * an app with roughly twice that many surfaces, so real reports were being
+ * filed under "Other" — the messaging bug (ce750054), the bug-report screen
+ * itself (e0d339c6) and the notifications one (3dfb4ca8) all landed there,
+ * which makes triage grep for the screen name in prose instead of filtering
+ * on the column.
+ *
+ * The rule this list now follows: every route a REPORTER can reach maps to
+ * exactly one entry. `screen` is a free-text column (migration
+ * 20260817000000, `screen TEXT`) with no CHECK constraint, so this list can
+ * grow without a migration — but old rows keep whatever string they were
+ * filed with, so entries are ADDED, never renamed.
+ *
+ * `bug-triage` is deliberately absent: it is designer-only, and a bug in the
+ * triage screen is reported by the person who is already in the code.
  */
 export const SCREEN_OPTIONS = [
   'Feed',
   'Map',
   'Mural',
+  'Event detail',
+  'Ticket',
   'Circles',
+  'Circle detail',
   'Create',
   'Messages',
+  'Chat',
+  'Notifications',
   'Profile',
-  'Event detail',
+  'Someone else’s profile',
+  'Edit profile',
+  'Sign in',
   'Onboarding',
+  'Location',
+  'Report a bug',
+  'Legal',
   'Other',
 ] as const;
 

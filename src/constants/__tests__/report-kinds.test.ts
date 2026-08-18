@@ -1,5 +1,6 @@
 import {
   REPORT_KIND_OPTIONS,
+  SCREEN_OPTIONS,
   buildReportDetails,
   detailEntriesForRow,
   fieldsForKind,
@@ -188,5 +189,73 @@ describe('type guards', () => {
     expect(isReportSeverity('cosmetic')).toBe(true);
     expect(isReportSeverity('urgent')).toBe(false);
     expect(isReportSeverity(undefined)).toBe(false);
+  });
+});
+
+/**
+ * Report 78e14c20: "it does not display options for all screens… we need to
+ * make sure every screen is accounted for."
+ *
+ * The list had ten entries for an app with roughly twice as many surfaces, so
+ * reports about the ones it omitted were filed under "Other" — which is where
+ * the messaging bug, the notifications bug and the bug-report screen's own bug
+ * all ended up. `screen` then stops being a filterable column and becomes
+ * something a human has to read out of the prose.
+ */
+describe('the screen list', () => {
+  it('covers every surface a reporter can actually reach', () => {
+    // Each of these is a route under app/. Named rather than derived from the
+    // filesystem on purpose: the mapping from route to human name is a
+    // judgement (e.g. four message routes collapse to Messages + Chat), and a
+    // derived list would either encode that judgement twice or drop it.
+    const mustExist = [
+      'Feed', // app/(tabs)/feed/index
+      'Map', // app/(tabs)/feed/map
+      'Mural', // app/(tabs)/feed/mural
+      'Event detail', // app/event/[id]
+      'Ticket', // app/ticket/[id]
+      'Circles', // app/(tabs)/circles/index
+      'Circle detail', // app/(tabs)/circles/[id]
+      'Create', // app/(tabs)/create/*
+      'Messages', // app/(tabs)/messages/index
+      'Chat', // app/(tabs)/messages/[id] + circle/ + event/
+      'Notifications', // app/notifications
+      'Profile', // app/(tabs)/profile/index
+      'Someone else’s profile', // app/user/[id]
+      'Edit profile', // app/profile/edit
+      'Sign in', // app/(auth)/login + signup + reset
+      'Onboarding', // app/(auth)/onboarding
+      'Location', // app/location
+      'Report a bug', // app/bug-report
+      'Legal', // app/legal/*
+    ];
+    for (const screen of mustExist) {
+      expect(SCREEN_OPTIONS).toContain(screen);
+    }
+  });
+
+  it('still offers Other, and offers it last', () => {
+    // The escape hatch has to exist — but it should be the last resort on the
+    // list, not the second option a reporter's thumb reaches.
+    expect(SCREEN_OPTIONS[SCREEN_OPTIONS.length - 1]).toBe('Other');
+  });
+
+  it('lists Messages, which reports were being filed as "Other" without', () => {
+    // Called out by name in the report. Kept as its own case so a future
+    // tidy-up of the list cannot quietly drop it again.
+    expect(SCREEN_OPTIONS).toContain('Messages');
+  });
+
+  it('has no duplicates', () => {
+    expect(new Set(SCREEN_OPTIONS).size).toBe(SCREEN_OPTIONS.length);
+  });
+
+  it('names surfaces in human words, never route paths', () => {
+    // These strings are read by a designer in triage and pasted into fix
+    // prompts. "(tabs)/feed/mural" helps nobody.
+    for (const screen of SCREEN_OPTIONS) {
+      expect(screen).not.toMatch(/[/()[\]]/);
+      expect(screen[0]).toBe(screen[0].toUpperCase());
+    }
   });
 });
