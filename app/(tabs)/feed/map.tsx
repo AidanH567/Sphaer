@@ -81,6 +81,7 @@ export default function MapScreen() {
       tonight: feedFilters.tonight,
       thisWeekend: feedFilters.thisWeekend,
       isFree: feedFilters.isFree,
+      origin: feedFilters.origin,
     });
   }, [
     events,
@@ -89,6 +90,7 @@ export default function MapScreen() {
     feedFilters.tonight,
     feedFilters.thisWeekend,
     feedFilters.isFree,
+    feedFilters.origin,
   ]);
 
   // Only mappable events

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateShort, formatEventTimeRange } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
+import { sourceCreditLabel } from '@/utils/event-source';
 import type { EventWithRelations } from '@/types/event.types';
 import type { MockEvent } from '@/data/mockEvents';
 
@@ -52,6 +53,13 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
   // defensively. `going_count` is populated by the feed query (getEvents).
   const subtitle = (event as { subtitle?: string | null }).subtitle ?? null;
   const goingCount = event.going_count ?? 0;
+  // Aggregated listings credit where they were read from — "via
+  // privatclub-berlin.de". Null (and so no line, no layout shift) for
+  // everything a person posted, which is every card today unless the
+  // aggregator wrote the row. The tappable link out lives on the detail
+  // page: the whole card is already one press surface, and a link inside a
+  // button is invalid on web and one merged stop for screen readers.
+  const credit = sourceCreditLabel(event as { source?: string | null; source_url?: string | null; location_name?: string | null });
 
   // The bookmark is a SIBLING of the card press surface, absolutely
   // positioned over it — a button may not contain another button (invalid
@@ -89,6 +97,11 @@ function EventCardImpl({ event, onSave, isSaved = false }: EventCardProps) {
             <Text style={styles.metaLine} numberOfLines={1}>
               {locationLabel}
             </Text>
+            {!!credit && (
+              <Text style={styles.credit} numberOfLines={1}>
+                {credit}
+              </Text>
+            )}
             {goingCount > 0 && (
               <Text style={styles.going}>{goingCount} going</Text>
             )}
@@ -193,6 +206,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: typography.fontWeight.medium,
     color: colors.neutral.body,
+  },
+  // Provenance credit — deliberately one step quieter than metaLine (12 vs
+  // 14, neutral-400 vs neutral-600). It is manners, not information the
+  // reader came for; it should be legible without competing with the date.
+  credit: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 12,
+    fontWeight: typography.fontWeight.regular,
+    color: colors.neutral.neutral400,
   },
   price: {
     fontFamily: typography.fontFamily.ui,

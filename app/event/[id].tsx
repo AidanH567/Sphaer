@@ -13,6 +13,7 @@ import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { colors, typography, spacing, radius } from '@/constants/theme';
 import { formatEventDateCompact } from '@/utils/date';
 import { formatPrice } from '@/utils/format';
+import { isAggregated, sourceHost } from '@/utils/event-source';
 import { useEvent } from '@/hooks/useEvents';
 import { EventMapPreview } from '@/components/events/EventMapPreview';
 import { EventDetailSkeleton } from '@/components/ui/skeletons/EventDetailSkeleton';
@@ -249,6 +250,12 @@ export default function EventDetailScreen() {
   const mediaUrls = (event as { media_urls?: string[] | null }).media_urls ?? [];
   const isCreator = user?.id === event.creator_id;
 
+  // The venue an aggregated listing was read from, e.g. "privatclub-berlin.de".
+  // Null for every event a person posted, and null when `source_url` is
+  // missing or unparseable — the credit row renders only when this names
+  // something.
+  const listedOnHost = isAggregated(event) ? sourceHost(event.source_url) : null;
+
   async function handleShare() {
     if (!event) return;
     try {
@@ -406,6 +413,28 @@ export default function EventDetailScreen() {
               {event.location_name ?? event.neighbourhood ?? event.borough ?? 'Berlin'}
             </Text>
           </View>
+
+          {/* Aggregated listings say where they came from and link back to
+              it. Two reasons, in order: a listing lifted off a venue's own
+              website with no credit is bad manners, and the original page is
+              the authority on a door time we may have read wrong.
+
+              `source_url`, not `ticket_url` — this is where we READ it, not
+              where you buy. Rendered only when we can name a host, so a
+              "Listed on" with nothing after it can never appear, and only
+              for imported rows, so a person's own event is untouched. */}
+          {listedOnHost && (
+            <TouchableOpacity
+              style={styles.sourceRow}
+              onPress={() => Linking.openURL(event.source_url as string)}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel={`Open the original listing on ${listedOnHost}`}
+            >
+              <Ionicons name="open-outline" size={13} color={colors.text.tertiary} />
+              <Text style={styles.sourceText}>Listed on {listedOnHost}</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.divider} />
 
@@ -697,6 +726,20 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.ui,
     fontSize: 15,
     color: colors.text.tertiary,
+  },
+  // Provenance credit — mirrors locationRow's shape one size down, so it
+  // reads as a footnote to the header block rather than a second heading.
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  sourceText: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: 13,
+    color: colors.text.tertiary,
+    textDecorationLine: 'underline',
   },
 
   divider: {
