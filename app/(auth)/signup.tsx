@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SphaerIcon } from '@/components/SphaerLogo';
@@ -33,6 +34,7 @@ const LINK_BLUE = '#367AFF';
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(auth)');
   const { signUp, isLoading } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
@@ -154,7 +156,7 @@ export default function SignUpScreen() {
       {/* Close (X) — top right */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.closeButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"

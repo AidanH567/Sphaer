@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useGoBack } from '@/hooks/useGoBack';
 import {
   View,
   Text,
@@ -10,7 +11,6 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileForm, type ProfileFormValues } from '@/components/profile/ProfileForm';
@@ -27,7 +27,7 @@ const INK = colors.neutral.ink;
  * hides while editing. Routes back to /(tabs)/profile on save or cancel.
  */
 export default function EditProfileScreen() {
-  const router = useRouter();
+  const goBack = useGoBack('/(tabs)/profile');
   const { user, profile, setProfile } = useAuthContext();
 
   const [gallery, setGallery] = useState<ProfileImage[]>([]);
@@ -82,7 +82,7 @@ export default function EditProfileScreen() {
         experiences: values.experiences,
       });
       setProfile(updated);
-      router.back();
+      goBack();
     } catch (e: unknown) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Try again.');
     }
@@ -93,7 +93,7 @@ export default function EditProfileScreen() {
       {/* Header — Cancel / title / spacer for symmetry */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"

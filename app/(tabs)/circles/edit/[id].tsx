@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -44,7 +45,7 @@ import {
  */
 export default function EditCircleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const goBack = useGoBack(`/circles/${id}`);
   const { user } = useAuthContext();
   const { circle, isLoading, error, refetch } = useCircle(id);
 
@@ -188,7 +189,7 @@ export default function EditCircleScreen() {
       }
 
       await updateCircle(circle.id, updates);
-      router.back();
+      goBack();
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save changes.');
     } finally {
@@ -199,7 +200,7 @@ export default function EditCircleScreen() {
   const navBar = (
     <View style={styles.navBar}>
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         accessibilityRole="button"
         accessibilityLabel="Go back"
       >
@@ -219,7 +220,7 @@ export default function EditCircleScreen() {
           title="Couldn't load this circle"
           body={error}
           onRetry={refetch}
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );
@@ -244,7 +245,7 @@ export default function EditCircleScreen() {
           icon="people-outline"
           title="Circle not found"
           body="This circle may have been removed."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );
@@ -260,7 +261,7 @@ export default function EditCircleScreen() {
           icon="lock-closed-outline"
           title="Not your circle"
           body="You can only edit circles you created."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );

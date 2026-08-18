@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,6 +47,7 @@ interface DisplayMessage extends OptimisticMessage {
 export default function ConversationScreen() {
   const { id: partnerId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/messages');
   const { user } = useAuthContext();
   const { blockedIds, refreshBlocked } = useAppContext();
   const { profile: partner } = useProfile(partnerId);
@@ -146,7 +148,7 @@ export default function ConversationScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.backButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -201,7 +203,7 @@ export default function ConversationScreen() {
             title="Couldn't load chat"
             body={error}
             onRetry={refetch}
-            onBack={() => router.back()}
+            onBack={() => goBack()}
           />
         ) : (
           <FlatList

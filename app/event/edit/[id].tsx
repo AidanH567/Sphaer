@@ -9,7 +9,8 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +36,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function EditEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const goBack = useGoBack(`/event/${id}`);
   const { user } = useAuthContext();
   const { event, isLoading, error, refetch } = useEvent(id);
 
@@ -177,7 +178,7 @@ export default function EditEventScreen() {
       }
 
       await updateEvent(event.id, updates);
-      router.back();
+      goBack();
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save changes.');
     } finally {
@@ -188,7 +189,7 @@ export default function EditEventScreen() {
   const navBar = (
     <View style={styles.navBar}>
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         accessibilityRole="button"
         accessibilityLabel="Go back"
       >
@@ -208,7 +209,7 @@ export default function EditEventScreen() {
           title="Couldn't load this activity"
           body={error}
           onRetry={refetch}
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );
@@ -233,7 +234,7 @@ export default function EditEventScreen() {
           icon="calendar-outline"
           title="Activity not found"
           body="This activity may have been cancelled or removed."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );
@@ -249,7 +250,7 @@ export default function EditEventScreen() {
           icon="lock-closed-outline"
           title="Not your activity"
           body="You can only edit your own activities."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );

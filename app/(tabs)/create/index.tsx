@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -110,6 +111,7 @@ function PosterRequirement({
 
 export default function CreateScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/feed');
   const { user } = useAuthContext();
 
   const [title, setTitle] = useState('');
@@ -491,7 +493,7 @@ export default function CreateScreen() {
           white bar with 0 2 6 @8% shadow — no border. */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           accessibilityRole="button"
           accessibilityLabel="Close"
         >

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/Avatar';
@@ -48,6 +49,7 @@ import {
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/feed');
   const insets = useSafeAreaInsets();
 
   const { event, isLoading, error, refetch } = useEvent(id);
@@ -92,7 +94,7 @@ export default function EventDetailScreen() {
   const followBusyRef = useRef(false);
 
   // Refetch on re-focus (not on the initial mount — useEvent already fetched)
-  // so changes saved on the edit screen show immediately after router.back().
+  // so changes saved on the edit screen show immediately after goBack().
   const hasFocusedOnce = useRef(false);
   useFocusEffect(
     useCallback(() => {
@@ -191,7 +193,7 @@ export default function EventDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -210,7 +212,7 @@ export default function EventDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -223,7 +225,7 @@ export default function EventDetailScreen() {
           title="Couldn't load this event"
           body={error}
           onRetry={refetch}
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );
@@ -235,7 +237,7 @@ export default function EventDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -247,7 +249,7 @@ export default function EventDetailScreen() {
           icon="calendar-outline"
           title="Event not found"
           body="This event may have been cancelled or removed. Head back to the feed to discover what's on."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
           backLabel="Back to feed"
         />
       </SafeAreaView>
@@ -316,7 +318,7 @@ export default function EventDetailScreen() {
       {/* Header — back / share / bookmark */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
