@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase';
-import { validateImageUpload } from '@/utils/upload-validation';
+import {
+  MAX_UPLOAD_BYTES,
+  UploadValidationError,
+  validateImageUpload,
+} from '@/utils/upload-validation';
+import { assertPngIsPlausible, base64ToBytes } from '@/utils/poster-guard';
+import { COVER_HEIGHT, COVER_WIDTH } from '@/utils/cover-template';
 import type { CircleInsert, CircleUpdate, CircleWithCounts } from '@/types/circle.types';
 import type { CircleRole } from '@/types/enums';
 
@@ -303,4 +309,62 @@ export async function uploadCircleCover(
   uri: string
 ): Promise<string> {
   return uploadCircleImage(userId, circleId, uri, 'cover');
+}
+
+/**
+ * Upload a cover the app GENERATED (`src/utils/cover-template.ts`) rather than
+ * one the user picked from their photo library.
+ *
+ * Same bucket and same owner-folder RLS scheme as `uploadCircleCover`, and PNG
+ * is already inside the bucket's `allowed_mime_types` allowlist
+ * (20260612050000_storage_image_mime_limits.sql), so no schema change was
+ * needed. The path deliberately keeps the `-cover` name so a generated cover
+ * and a later hand-picked one occupy the same slot — a circle has exactly one
+ * cover, and leaving an orphan behind would just be a second file nobody reads.
+ *
+ * ── Why this cannot go through `uploadCircleImage` ───────────────────────────
+ * That function does `fetch(uri) → blob → upload(blob)`, and a generated cover
+ * is a `data:` URI. React Native's `fetch` does not reliably resolve `data:`
+ * URIs, and `Blob` on RN cannot be constructed from a typed array — the same
+ * wall `uploadGeneratedEventPoster` documents at length. The path that works on
+ * iOS, Android and web alike is base64 → ArrayBuffer → `upload(arrayBuffer,
+ * { contentType })`.
+ *
+ * Decoding here rather than in the caller is deliberate, for the same reason it
+ * is on the event side: the guard below then runs on the EXACT bytes that go
+ * over the wire, not on a copy that was checked earlier and re-encoded since.
+ *
+ * Note `assertPngIsPlausible` takes the expected dimensions as arguments, so
+ * the landscape canvas needed no change to it — it is the portrait/landscape
+ * difference being passed as data rather than branched on.
+ */
+export async function uploadGeneratedCircleCover(
+  userId: string,
+  circleId: string,
+  base64Png: string
+): Promise<string> {
+  const bytes = base64ToBytes(base64Png);
+  assertPngIsPlausible(bytes, COVER_WIDTH, COVER_HEIGHT);
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    const mb = (bytes.byteLength / 1024 / 1024).toFixed(1);
+    throw new UploadValidationError(
+      `The generated cover came out at ${mb} MB, over the ${
+        MAX_UPLOAD_BYTES / 1024 / 1024
+      } MB limit. Please try again.`
+    );
+  }
+
+  const path = `${userId}/${circleId}-cover.png`;
+  const { error } = await supabase.storage
+    .from('circle-images')
+    // `bytes.buffer` is exact-length — base64ToBytes slices rather than
+    // subarrays for precisely this reason.
+    .upload(path, bytes.buffer as ArrayBuffer, {
+      upsert: true,
+      contentType: 'image/png',
+    });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from('circle-images').getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
 }

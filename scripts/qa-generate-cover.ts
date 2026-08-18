@@ -60,7 +60,12 @@ import {
   type CoverLayout,
 } from '../src/utils/cover-template';
 import { posterLayoutToSvgString } from '../src/utils/poster-template';
-import { assertLayoutIsPaintable, assertPngIsPlausible } from '../src/utils/poster-guard';
+import {
+  assertLayoutIsPaintable,
+  assertPngIsPlausible,
+  base64ToBytes,
+} from '../src/utils/poster-guard';
+import { MAX_UPLOAD_BYTES } from '../src/utils/upload-validation';
 import { photoDataUri, QA_PHOTO_CROPS } from './poster-qa-photos';
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -487,6 +492,61 @@ async function composeDisplaySheet(tiles: Tile[]): Promise<Buffer> {
     .toBuffer();
 }
 
+// ─── The upload guard, against real bytes ────────────────────────────────────
+/**
+ * Push a REAL rendered cover through the exact guard `uploadGeneratedCircleCover`
+ * runs, and confirm it is accepted — then confirm the same guard rejects the
+ * same bytes when told to expect poster dimensions.
+ *
+ * The Jest test for the upload path builds its PNGs from a hand-written IHDR,
+ * which proves the branching but not that the guard agrees with what the
+ * generator actually emits. This does: same base64 decode, same
+ * `assertPngIsPlausible`, same size ceiling, on bytes sharp produced from a
+ * solved layout. If the canvas constants and the upload constants ever drift
+ * apart, this is what says so.
+ */
+function verifyUploadGuard(tiles: Tile[]): void {
+  const sample = tiles.find((t) => t.label.includes('photo')) ?? tiles[0];
+  if (!sample) return;
+
+  const base64 = sample.png.toString('base64');
+  const bytes = base64ToBytes(base64);
+
+  // 1. The bytes survive the base64 round-trip the upload does.
+  const exact = Buffer.from(bytes).equals(sample.png);
+  // 2. The guard accepts a real cover at cover dimensions.
+  let acceptedAsCover = false;
+  try {
+    assertPngIsPlausible(bytes, COVER_WIDTH, COVER_HEIGHT);
+    acceptedAsCover = true;
+  } catch {
+    acceptedAsCover = false;
+  }
+  // 3. The guard REJECTS the same bytes if the dimensions are crossed over.
+  //    This is the assertion that would fire if a cover uploader were ever
+  //    pointed at POSTER_WIDTH/POSTER_HEIGHT by mistake.
+  let rejectedAsPoster = false;
+  try {
+    assertPngIsPlausible(bytes, 1080, 1528);
+  } catch {
+    rejectedAsPoster = true;
+  }
+  // 4. A real cover fits under the bucket's 10 MB ceiling.
+  const underCap = bytes.byteLength <= MAX_UPLOAD_BYTES;
+
+  const ok = exact && acceptedAsCover && rejectedAsPoster && underCap;
+  console.log(
+    `\nUpload guard, against real rendered bytes (${sample.slug}, ${(
+      bytes.byteLength / 1024
+    ).toFixed(0)} KB):\n` +
+      `  ${exact ? 'OK' : '!!'} base64 round-trip is byte-exact\n` +
+      `  ${acceptedAsCover ? 'OK' : '!!'} accepted at ${COVER_WIDTH}x${COVER_HEIGHT}\n` +
+      `  ${rejectedAsPoster ? 'OK' : '!!'} rejected at poster dimensions (1080x1528)\n` +
+      `  ${underCap ? 'OK' : '!!'} under the ${MAX_UPLOAD_BYTES / 1024 / 1024} MB bucket cap`
+  );
+  if (!ok) process.exitCode = 1;
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -550,6 +610,8 @@ async function main() {
 
   const displaySheet = await composeDisplaySheet(tiles);
   fs.writeFileSync(path.join(OUT_DIR, '_covers-as-displayed.jpg'), displaySheet);
+
+  verifyUploadGuard(tiles);
 
   const failed = tiles.filter((t) => !t.ok);
   console.log(
