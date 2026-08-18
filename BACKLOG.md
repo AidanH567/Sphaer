@@ -150,6 +150,32 @@ it, and one hard new rule at the end.
    README section says "Never commit directly to `main`". Both predate
    `push: false`. Branch and stop.)*
 
+**Effort markers (read by Tina Board).** Any item in this file may open with
+one or more square-bracket markers, before the bold lead:
+
+```
+| A8 | [2 min] **Restrict the Google Maps API key** in Google Cloud Console … |
+| A6 | [verify] **Verify the `delete-account` edge function is deployed** … |
+#### [do first] [30 min] Fix `CLAUDE.md`'s `db push` instructions
+```
+
+Tina Board renders each one as a small solid chip, so a phone shows *what to do
+about a line* and not only which file it came from. The vocabulary is small on
+purpose:
+
+- a duration — `[2 min]`, `[30 min]`, `[2 h]`, `[1 d]`
+- `[do first]` · `[verify]` · `[decide]` · `[waiting]` · `[quick]`
+
+Two rules. **Only put one on an item whose effort you actually know** — an
+invented estimate is worse than no chip, and the board deliberately refuses to
+guess one for you. **Anything unrecognised is left alone**, shown as plain text
+rather than silently swallowed, so a typo is visible instead of disappearing.
+
+A row cleared by Aidan gets a trailing `| ✅ **DONE <date>** — what happened`
+cell; the board reads that as ticked and counts it as progress rather than
+still counting it against him. That is the only thing that marks a blocked row
+finished, so add it in the same session you clear one.
+
 **Token budget guardrail (Aidan's request).** Stop work around ~90% of the daily
 Claude usage. Prefer one solid shipped item to two half-shipped ones. Past ~3
 hours, stop and hand back.
@@ -211,19 +237,19 @@ One line each, phone-actionable. Nothing in here is a code problem.
 
 | # | What to do | Why it's blocking |
 |---|---|---|
-| A1 | **Start Apple Developer enrolment ($99/yr)** — identity verification runs 24–48h, so start it before anything else. | Gates Sign in with Apple, signing certs, App Store Connect, TestFlight. The longest clock on the project. |
-| A2 | **Run `eas init`** in the repo once. | `app.config.js:41` deliberately leaves `extra.eas.projectId` unset with a comment explaining why — inventing one produces a config that looks complete and fails at the build server. EAS cannot build without it. |
+| A1 | [do first] **Start Apple Developer enrolment ($99/yr)** — identity verification runs 24–48h, so start it before anything else. | Gates Sign in with Apple, signing certs, App Store Connect, TestFlight. The longest clock on the project. |
+| A2 | [2 min] **Run `eas init`** in the repo once. | `app.config.js:41` deliberately leaves `extra.eas.projectId` unset with a comment explaining why — inventing one produces a config that looks complete and fails at the build server. EAS cannot build without it. |
 | A3 | **Put a real Google Maps key in `.env.local`** — the value there is literally `placeholder_maps_key`. | The map is one of the three headline feed modes and it cannot work until a real key exists. `app.config.js` will now correctly interpolate it; the key itself is the only missing piece. | ✅ **DONE 2026-08-18** — key `AIza…MPc7Q` created in a dedicated `Sphaer` Google Cloud project, verified against Geocoding + Places(New) + Maps JS with real Berlin data, written to `.env.local`, and shipped in the deployed web build. Aidan confirmed tiles render. ⚠️ STILL OPEN: the key is UNRESTRICTED — restrict it to `com.sphaer.app` and the Vercel domain.
 | A4 | **Replace the blank seeded posters in Supabase Storage.** Run `npx tsx scripts/audit-posters.ts` to get the exact filenames — it measures visible pixels against production. | These files return HTTP 200, decode fine and paint nothing, so they reach the Mural as holes. Count is recorded as **7 in `scripts/audit-posters.ts`'s header and 8 in `docs/poster-qa/README.md`** — the repo contradicts itself; the script settles it. |
 | A5 | **Apply `supabase/migrations/20260817200000_events_aggregated_source.sql`** with `npx supabase db query --linked --file <path>`. | Its header says **NOT APPLIED**. It is the schema half of the event scraper (Lara #2) and it is already written — see the DECIDED BUT UNBUILT entry. One command unblocks the whole feature. | ✅ **DONE 2026-08-18** — applied with `db query --linked --file`; `source`, `external_id`, `source_url` + 2 indexes verified live, both triggers intact, 56 events and 41 profiles unchanged. 96 aggregated events then imported (see SHIPPED).
-| A6 | **Verify the `delete-account` edge function is deployed** (needs an authorised Supabase session). | Apple hard-requires in-app account deletion. The UI and `supabase/functions/delete-account` both exist in the repo; if the function isn't deployed, tapping Delete Account errors — a guaranteed rejection. |
-| A7 | **Flip two Supabase dashboard toggles**: enable leaked-password protection; allowlist the password-reset redirect URLs. | Reset emails dead-end without the allowlist. |
-| A8 | **Restrict the Google Maps API key** in Google Cloud Console to bundle IDs `com.sphaer.app` (iOS + Android). | The key is bundled into the APK/IPA — unavoidable on Expo. Unrestricted, anyone can spend your quota. |
+| A6 | [verify] **Verify the `delete-account` edge function is deployed** (needs an authorised Supabase session). | Apple hard-requires in-app account deletion. The UI and `supabase/functions/delete-account` both exist in the repo; if the function isn't deployed, tapping Delete Account errors — a guaranteed rejection. |
+| A7 | [5 min] **Flip two Supabase dashboard toggles**: enable leaked-password protection; allowlist the password-reset redirect URLs. | Reset emails dead-end without the allowlist. |
+| A8 | [2 min] **Restrict the Google Maps API key** in Google Cloud Console to bundle IDs `com.sphaer.app` (iOS + Android). | The key is bundled into the APK/IPA — unavoidable on Expo. Unrestricted, anyone can spend your quota. |
 | A9 | **Serve `sphaer.app`** (it 404s) — a privacy-policy URL and a not-installed fallback page at minimum. | Both stores require a *public* privacy URL; the in-app pages don't satisfy it. Also the precondition for universal links. |
 | A10 | **Supply the Test Martina Plantijn font files** into `assets/fonts/` (the directory does not exist). | Every serif heading falls back to Georgia, and generated posters set their titles in the system face. See the code half in P1. |
-| A11 | **Give Rabon's answers** — Master Flow node id (icons), developer-page component (inbox type), and calls on R6 / R7 / R9. | Four design items are stalled with nothing an agent can act on. See UNDECIDED. |
-| A12 | **Push `prep/2026-08-17-buildable`** (20 commits, still local). | `push: false`. Every push is yours. |
-| A13 | **Pin the Mural supply plan (Lara #1 + #10)** with Lara — poster swapping cadence, circle images, how the wall stays fed. | The one point on Lara's list that has never had specifics. Code cannot proceed without them. |
+| A11 | [decide] **Give Rabon's answers** — Master Flow node id (icons), developer-page component (inbox type), and calls on R6 / R7 / R9. | Four design items are stalled with nothing an agent can act on. See UNDECIDED. |
+| A12 | [2 min] **Push `prep/2026-08-17-buildable`** (20 commits, still local). | `push: false`. Every push is yours. |
+| A13 | [decide] **Pin the Mural supply plan (Lara #1 + #10)** with Lara — poster swapping cadence, circle images, how the wall stays fed. | The one point on Lara's list that has never had specifics. Code cannot proceed without them. |
 
 ---
 
