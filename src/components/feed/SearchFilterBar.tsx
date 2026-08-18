@@ -46,6 +46,12 @@ interface SearchFilterBarProps {
    * always-on input pill. Tapping the button expands into the standard
    * search input + Cancel; Cancel collapses back to the greeting.
    * Circles (and any caller that omits this) keeps the input pill.
+   *
+   * `rest` is concatenated onto `city` VERBATIM — no separator is inserted
+   * here. Punctuation is copy, and copy belongs to the caller: the greeting
+   * reads "Berlin, what’s on today?", and a space hard-coded in this
+   * component made the comma impossible to place without underlining it
+   * along with the city name.
    */
   greeting?: { city: string; rest: string };
 
@@ -170,7 +176,7 @@ export function SearchFilterBar({
                 <Ionicons name="location-outline" size={20} color={colors.neutral.ink} />
                 <Text style={styles.greetingText} numberOfLines={1}>
                   <Text style={styles.greetingCity}>{greeting.city}</Text>
-                  {` ${greeting.rest}`}
+                  {greeting.rest}
                 </Text>
               </View>
               <TouchableOpacity

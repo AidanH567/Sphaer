@@ -43,7 +43,7 @@ const MURAL_MAX_EVENTS = 200;
 
 export default function MuralScreen() {
   const router = useRouter();
-  const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
+  const { feedFilters, setFeedFilters } = useAppContext();
 
   const searchText = feedFilters.search ?? '';
   const neighborhood = feedFilters.neighborhood ?? '';
@@ -239,7 +239,6 @@ export default function MuralScreen() {
         <FeedHeader
           activeView="mural"
           onViewChange={(v) => {
-            setFeedView(v);
             if (v === 'list') router.push('/(tabs)/feed');
             else if (v === 'map') router.push('/(tabs)/feed/map');
           }}

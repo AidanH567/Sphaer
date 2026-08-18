@@ -5,8 +5,6 @@ import { useAuthContext } from '@/context/AuthContext';
 import { getBlockedIds } from '@/services/moderation.service';
 import type { EventFilters } from '@/types/event.types';
 
-type FeedView = 'list' | 'map' | 'mural';
-
 export interface PosterSize {
   width: number;
   height: number;
@@ -18,8 +16,6 @@ export interface UserCoords {
 }
 
 interface AppContextValue {
-  feedView: FeedView;
-  setFeedView: (view: FeedView) => void;
   feedFilters: EventFilters;
   setFeedFilters: (filters: EventFilters) => void;
   /**
@@ -61,8 +57,6 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue>({
-  feedView: 'list',
-  setFeedView: () => {},
   feedFilters: {},
   setFeedFilters: () => {},
   userCoords: null,
@@ -76,7 +70,6 @@ const AppContext = createContext<AppContextValue>({
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthContext();
-  const [feedView, setFeedView] = useState<FeedView>('list');
   const [feedFilters, setFeedFilters] = useState<EventFilters>({});
   const [userCoords, setUserCoords] = useState<UserCoords | null>(null);
 
@@ -147,8 +140,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        feedView,
-        setFeedView,
         feedFilters,
         setFeedFilters,
         userCoords,

@@ -45,10 +45,18 @@ export function FeedHeader({
     <SearchFilterBar
       searchText={searchText}
       onSearchChange={handleSearchChange}
-      searchPlaceholder="Berlin, what’s on today?!"
-      // Figma 4045:8204 resting header: pin + "Berlin what's on Today?!"
-      // (city underlined) + circular search button. Exact frame copy.
-      greeting={{ city: 'Berlin', rest: 'what’s on Today?!' }}
+      searchPlaceholder="Berlin, what’s on today?"
+      // Figma 4045:8204 resting header: pin + greeting (city underlined) +
+      // circular search button.
+      //
+      // The copy deviates from the Figma frame ON PURPOSE. The frame reads
+      // "Berlin what's on Today?!" — no comma, capitalised "Today", and an
+      // interrobang-ish "?!" on what is a plain question. Reported and
+      // approved as a UX-writing fix (report c57579ab): "Berlin, what's on
+      // today? (Grammatically correct, replace old version)". The comma
+      // lives here rather than in SearchFilterBar so it is not swept into
+      // the city's underline.
+      greeting={{ city: 'Berlin', rest: ', what’s on today?' }}
       selectedCategories={selectedCategories ?? []}
       onToggleCategory={onToggleCategory}
       selectedNeighborhood={selectedNeighborhood}

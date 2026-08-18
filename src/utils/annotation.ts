@@ -295,3 +295,104 @@ export function fitContain(
   const scale = Math.min(boxWidth / sourceWidth, boxHeight / sourceHeight);
   return { width: sourceWidth * scale, height: sourceHeight * scale };
 }
+
+// ─── Did the capture actually capture the screenshot? ────────────────────────
+
+/**
+ * Sampled comparison of the flattened capture against its source screenshot.
+ *
+ * `sourceOpaqueCells` — grid cells where the SOURCE has visible pixels.
+ * `matchedCells`      — of those, how many the CAPTURE also has pixels in.
+ *
+ * Expressed as counts rather than a ratio so the assertion below can tell
+ * "nothing to compare" (a fully transparent source) apart from "compared, and
+ * it failed" — those deserve different behaviour, and a bare ratio loses the
+ * distinction.
+ */
+export interface CaptureFidelity {
+  sourceOpaqueCells: number;
+  matchedCells: number;
+}
+
+/**
+ * How much of the screenshot has to survive into the capture.
+ *
+ * Not 1.0: the strokes themselves are drawn over the image, sampling is on a
+ * coarse grid, and a stroke laid across a sampled cell can legitimately change
+ * it. 0.9 is far above what a real annotation removes (a marker circle covers
+ * a percent or two of the frame) and far below the failure being guarded
+ * against, which scores ~0.
+ */
+export const CAPTURE_FIDELITY_MIN = 0.9;
+
+/**
+ * Grid resolution for the fidelity sample. 32×32 = 1024 probes — plenty to
+ * tell "the screenshot is there" from "the screenshot is not", at the cost of
+ * one tiny draw of each image.
+ */
+export const FIDELITY_GRID = 32;
+
+/** Alpha at or below this counts as "nothing here". */
+export const FIDELITY_TRANSPARENT_ALPHA = 8;
+
+/**
+ * Compare two RGBA buffers by PRESENCE, not colour.
+ *
+ * Colour matching would flag the strokes (which are supposed to differ) and
+ * every antialiasing difference between two rasterisers. Presence isolates
+ * the single failure that matters: the background going missing entirely.
+ *
+ * Pure and buffer-shaped so the browser path and the offline QA harness run
+ * THIS function rather than two lookalikes that can drift — the drift being
+ * how a verifier ends up certifying something it never actually checked.
+ */
+export function compareAlphaGrids(
+  source: ArrayLike<number>,
+  capture: ArrayLike<number>
+): CaptureFidelity {
+  let sourceOpaqueCells = 0;
+  let matchedCells = 0;
+  for (let i = 3; i < source.length; i += 4) {
+    if (source[i] <= FIDELITY_TRANSPARENT_ALPHA) continue;
+    sourceOpaqueCells += 1;
+    if (capture[i] > FIDELITY_TRANSPARENT_ALPHA) matchedCells += 1;
+  }
+  return { sourceOpaqueCells, matchedCells };
+}
+
+/**
+ * Refuse a capture whose background is missing.
+ *
+ * ── The failure this exists for ──────────────────────────────────────────────
+ * `Svg.toDataURL()` returns a perfectly valid PNG, of exactly the requested
+ * dimensions, whether or not the screenshot underneath the strokes rendered.
+ * When it did not, the output is a circle drawn round nothing — and every
+ * check short of looking at the pixels passes it. That shipped (report
+ * 97398534: "the photo is blank and you can only see what users draw on a
+ * blank page"), and it is the fourth time in this codebase that a file was
+ * valid and its contents were wrong — after the blank posters, the mural, and
+ * the icons.
+ *
+ * So: compare the output against the input and refuse the ones that lost it.
+ * A file being well-formed is not evidence that it contains anything.
+ *
+ * `null` means the platform could not sample the pixels (see
+ * `measureCaptureFidelity`) — the caller has already enforced the readiness
+ * invariant that makes the failure impossible there, so this is not a
+ * silent pass on the path where the bug lives.
+ */
+export function assertCaptureFidelity(fidelity: CaptureFidelity | null): void {
+  if (fidelity === null) return;
+  // A source with nothing opaque in it gives nothing to verify against.
+  // Vacuous rather than failing: the user picked that image on purpose.
+  if (fidelity.sourceOpaqueCells === 0) return;
+
+  const ratio = fidelity.matchedCells / fidelity.sourceOpaqueCells;
+  if (ratio < CAPTURE_FIDELITY_MIN) {
+    throw new AnnotationError(
+      "Your marks saved but the screenshot behind them didn't, so the report " +
+        'would have shown drawings on a blank page. Nothing was sent — please ' +
+        'try attaching the screenshot again.'
+    );
+  }
+}

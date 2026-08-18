@@ -39,6 +39,11 @@ import {
 } from '@/services/profile.service';
 import type { Profile } from '@/types/user.types';
 import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
+import {
+  ABOUT_LINE_HEIGHT,
+  aboutClampFor,
+  isAboutTruncated,
+} from '@/utils/about-clamp';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -62,6 +67,13 @@ export default function EventDetailScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
+  /**
+   * Natural (unclamped) height of each About paragraph, in px, filled in by
+   * the offscreen probe below. Empty until layout has run — which is why
+   * `aboutIsTruncated` is false on the first paint and the toggle appears
+   * only once we KNOW there is something behind it.
+   */
+  const [aboutNaturalHeights, setAboutNaturalHeights] = useState<number[]>([]);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
@@ -246,6 +258,21 @@ export default function EventDetailScreen() {
   const displayPrice = priceLabel === 'FREE' ? 'Free' : priceLabel;
   const dateLabel = formatEventDateCompact(event.starts_at);
   const aboutParagraphs = (event.description ?? '').split('\n\n').filter(Boolean);
+  /**
+   * Is any About paragraph actually longer than the collapsed view shows?
+   *
+   * The bug this answers (report 410169cc, "the read more button and the read
+   * less button does nothing"): the toggle used to render unconditionally.
+   * Most descriptions are shorter than the clamp, so for most events pressing
+   * it flipped `numberOfLines` between 6 and undefined with NOTHING hidden in
+   * between — a button that visibly did nothing, on every event Lara opened.
+   *
+   * `aboutText` sets an explicit lineHeight, so a paragraph's natural height
+   * divided by that lineHeight IS its line count — no guessing from character
+   * counts. The offscreen probe below measures those natural heights; here we
+   * compare each against the same clamp the visible copy uses.
+   */
+  const aboutIsTruncated = isAboutTruncated(aboutNaturalHeights);
   // media_urls is a v3 column not yet in the generated Event type — read via cast.
   const mediaUrls = (event as { media_urls?: string[] | null }).media_urls ?? [];
   const isCreator = user?.id === event.creator_id;
@@ -513,22 +540,60 @@ export default function EventDetailScreen() {
               <Text
                 key={i}
                 style={styles.aboutText}
-                numberOfLines={aboutExpanded ? undefined : i === 0 ? 6 : 4}
+                numberOfLines={aboutExpanded ? undefined : aboutClampFor(i)}
               >
                 {para}
               </Text>
             ))}
+
+            {/* Measurement probe — the same paragraphs, same style, same
+                width, but never clamped and never visible. Its onLayout
+                heights are the ONLY way to know whether the clamp is
+                actually hiding anything: `numberOfLines` truncates silently
+                and reports nothing back.
+
+                Absolutely positioned so it contributes no layout, zero
+                opacity so it paints nothing, and hidden from screen readers
+                so the description is not announced twice. */}
+            <View
+              style={styles.aboutProbe}
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              {aboutParagraphs.map((para, i) => (
+                <Text
+                  key={`probe-${i}`}
+                  style={styles.aboutText}
+                  onLayout={(e) => {
+                    const height = e.nativeEvent.layout.height;
+                    setAboutNaturalHeights((prev) => {
+                      if (prev[i] === height) return prev;
+                      const next = [...prev];
+                      next[i] = height;
+                      return next;
+                    });
+                  }}
+                >
+                  {para}
+                </Text>
+              ))}
+            </View>
           </View>
-          <TouchableOpacity
-            onPress={() => setAboutExpanded((v) => !v)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: aboutExpanded }}
-          >
-            <Text style={styles.readMore}>
-              {aboutExpanded ? 'Read less' : 'Read more >'}
-            </Text>
-          </TouchableOpacity>
+
+          {/* Only offered when there is genuinely more to read. */}
+          {aboutIsTruncated && (
+            <TouchableOpacity
+              onPress={() => setAboutExpanded((v) => !v)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: aboutExpanded }}
+            >
+              <Text style={styles.readMore}>
+                {aboutExpanded ? 'Read less' : 'Read more >'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Media — extra photos/flyers the host uploaded (the Figma media
               section, and what the Create-form media button feeds). Hidden when
@@ -819,8 +884,19 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.ui,
     fontSize: 15,
     color: colors.text.secondary,
-    lineHeight: 22,
+    // Keep in step with ABOUT_LINE_HEIGHT — see its comment.
+    lineHeight: ABOUT_LINE_HEIGHT,
     marginBottom: spacing.md,
+  },
+  // The unclamped measurement copy. Absolute + transparent: it must occupy no
+  // space and paint nothing, while still being laid out at the real text
+  // width so its height is the height the visible copy WOULD have.
+  aboutProbe: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    opacity: 0,
   },
   readMore: {
     fontFamily: typography.fontFamily.ui,

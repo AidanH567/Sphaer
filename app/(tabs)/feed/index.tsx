@@ -39,8 +39,6 @@ import type { EventFilters } from '@/types/event.types';
 export default function FeedScreen() {
   const router = useRouter();
   const {
-    feedView,
-    setFeedView,
     feedFilters,
     setFeedFilters,
     userCoords,
@@ -357,9 +355,18 @@ export default function FeedScreen() {
   return (
     <View style={styles.container}>
       <FeedHeader
-        activeView={feedView}
+        // LITERAL, not context state. This screen IS the list view — that is
+        // not a fact it needs to look up, and looking it up is what broke.
+        //
+        // The toggle used to read a `feedView` value carried in AppContext.
+        // Leaving Mural for the Profile tab and coming back re-mounted THIS
+        // screen (the feed stack's initial route) while the context still
+        // said "mural", so the pill highlighted Mural over a list of events
+        // (report fdaa344a). map.tsx and mural.tsx always passed their own
+        // literal and were never affected; this screen was the only one
+        // trusting mutable global state to tell it what it already knew.
+        activeView="list"
         onViewChange={(v) => {
-          setFeedView(v);
           if (v === 'map') router.push('/(tabs)/feed/map');
           else if (v === 'mural') router.push('/(tabs)/feed/mural');
         }}

@@ -31,7 +31,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
  */
 export default function MapScreenWeb() {
   const router = useRouter();
-  const { setFeedView, feedFilters, setFeedFilters } = useAppContext();
+  const { feedFilters, setFeedFilters } = useAppContext();
   const { events, error, refetch } = useEvents({ categories: feedFilters.categories });
   const [openInfoEventId, setOpenInfoEventId] = useState<string | null>(null);
 
@@ -95,7 +95,6 @@ export default function MapScreenWeb() {
       <FeedHeader
         activeView="map"
         onViewChange={(v) => {
-          setFeedView(v);
           if (v === 'list') router.push('/(tabs)/feed');
           else if (v === 'mural') router.push('/(tabs)/feed/mural');
         }}
