@@ -1,4 +1,5 @@
 import React from 'react';
+import { useGoBack } from '@/hooks/useGoBack';
 import {
   View,
   Text,
@@ -9,7 +10,6 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '@/context/AuthContext';
@@ -44,7 +44,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
  */
 
 export default function BugTriageScreen() {
-  const router = useRouter();
+  const goBack = useGoBack('/(tabs)/profile');
   const { user } = useAuthContext();
   const isDesigner = useIsDesigner(user?.id);
   const {
@@ -68,7 +68,7 @@ export default function BugTriageScreen() {
   if (!isDesigner) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={() => router.back()} />
+        <Header onBack={() => goBack()} />
         <View style={styles.center}>
           <Ionicons name="lock-closed-outline" size={32} color={colors.text.tertiary} />
           <Text style={styles.deadEndText}>Nothing here.</Text>
@@ -79,7 +79,7 @@ export default function BugTriageScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header onBack={() => router.back()} />
+      <Header onBack={() => goBack()} />
 
       <View style={styles.filters}>
         <ScrollView

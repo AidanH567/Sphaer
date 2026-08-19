@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -34,6 +35,7 @@ const QR_SIZE = 200;
 export default function TicketDetailScreen() {
   const { id: eventId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/profile');
   const insets = useSafeAreaInsets();
   const { user } = useAuthContext();
   const {
@@ -99,7 +101,7 @@ export default function TicketDetailScreen() {
       <SafeAreaView style={styles.backdrop} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -118,7 +120,7 @@ export default function TicketDetailScreen() {
               refetchEvent();
               setRegTick((t) => t + 1);
             }}
-            onBack={() => router.back()}
+            onBack={() => goBack()}
           />
         </View>
       </SafeAreaView>
@@ -130,7 +132,7 @@ export default function TicketDetailScreen() {
       <SafeAreaView style={styles.backdrop} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -159,7 +161,7 @@ export default function TicketDetailScreen() {
     <SafeAreaView style={styles.backdrop} edges={['top']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -223,7 +225,7 @@ export default function TicketDetailScreen() {
 
           <TouchableOpacity
             style={[styles.actionButton, styles.actionOutline]}
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             activeOpacity={0.85}
             accessibilityRole="button"
           >

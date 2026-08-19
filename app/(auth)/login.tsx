@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SphaerIcon } from '@/components/SphaerLogo';
@@ -32,6 +33,7 @@ const LINK_BLUE = '#367AFF';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(auth)');
   const { signIn, isLoading } = useAuth();
   // Carried over from signup's "Log in instead →" recovery affordance: when
   // a user tries to sign up with an existing email, we route here with it
@@ -85,7 +87,7 @@ export default function LoginScreen() {
       {/* Close (X) — top right */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.closeButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"

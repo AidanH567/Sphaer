@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, FlatList, StyleSheet, Text, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,7 @@ interface DisplayMessage extends OptimisticMessage {
 export default function EventChatScreen() {
   const { id: eventId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/messages');
   const { user } = useAuthContext();
   const { markRead, conversations } = useMessagesContext();
   const isFocused = useIsFocused();
@@ -96,7 +98,7 @@ export default function EventChatScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.backButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -138,7 +140,7 @@ export default function EventChatScreen() {
             title="Couldn't load chat"
             body={error}
             onRetry={refetch}
-            onBack={() => router.back()}
+            onBack={() => goBack()}
           />
         ) : (
           <FlatList

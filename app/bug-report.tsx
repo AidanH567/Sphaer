@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { useGoBack } from '@/hooks/useGoBack';
 import {
   View,
   Text,
@@ -10,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -66,7 +66,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
  */
 
 export default function BugReportScreen() {
-  const router = useRouter();
+  const goBack = useGoBack('/(tabs)/profile');
   const { user } = useAuthContext();
   const canReport = useCanReportBug(user?.id);
   const { state, errorMessage, submit } = useBugReportSubmit(user?.id);
@@ -173,7 +173,7 @@ export default function BugReportScreen() {
   if (!canReport) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={() => router.back()} />
+        <Header onBack={() => goBack()} />
         <View style={styles.center}>
           <Ionicons name="construct-outline" size={32} color={colors.text.tertiary} />
           <Text style={styles.deadEndText}>Nothing here.</Text>
@@ -186,14 +186,14 @@ export default function BugReportScreen() {
   if (state === 'success') {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header onBack={() => router.back()} />
+        <Header onBack={() => goBack()} />
         <View style={styles.center}>
           <Ionicons name="checkmark-circle" size={48} color={colors.black} />
           <Text style={styles.successTitle}>Filed.</Text>
           <Text style={styles.successBody}>
             Thanks — it&apos;s in the queue. You can send another anytime.
           </Text>
-          <Button label="Done" onPress={() => router.back()} style={styles.doneButton} />
+          <Button label="Done" onPress={() => goBack()} style={styles.doneButton} />
         </View>
       </SafeAreaView>
     );
@@ -202,7 +202,7 @@ export default function BugReportScreen() {
   // ── Form ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header onBack={() => router.back()} />
+      <Header onBack={() => goBack()} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

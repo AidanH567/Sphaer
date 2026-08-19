@@ -1,8 +1,8 @@
 import React from 'react';
+import { useGoBack } from '@/hooks/useGoBack';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { colors, spacing, typography } from '@/constants/theme';
 
 /**
@@ -31,13 +31,13 @@ interface LegalScreenProps {
 }
 
 export function LegalScreen({ title, lastUpdated, intro, sections }: LegalScreenProps) {
-  const router = useRouter();
+  const goBack = useGoBack('/');
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           accessibilityRole="button"
           accessibilityLabel="Back"

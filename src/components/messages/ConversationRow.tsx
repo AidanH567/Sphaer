@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
+import { getInitials } from '@/utils/format';
 import type { ConversationRowDisplay } from '@/types/message.types';
 
 interface ConversationRowProps {
@@ -61,9 +62,20 @@ function ConversationRowImpl({ conversation, onPress }: ConversationRowProps) {
       accessibilityRole="button"
       accessibilityLabel={`Open conversation with ${name}`}
     >
-      {/* Avatar */}
+      {/* Avatar — initials when there is no picture, never an invented one.
+          Matches the shared `Avatar` component's placeholder (same
+          `getInitials` helper, same surface + secondary-text treatment); the
+          circle, border and clipping already come from `avatarWrap`, so this
+          renders flat inside it rather than nesting a second bordered
+          circle. */}
       <View style={[styles.avatarWrap, hasStoryRing && styles.avatarRing]}>
-        <Image source={{ uri: avatar }} style={styles.avatar} />
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarInitials}>{getInitials(name) || '?'}</Text>
+          </View>
+        )}
       </View>
 
       {/* Body — name + preview + right column */}
@@ -152,6 +164,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: colors.surface,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontFamily: typography.fontFamily.ui,
+    fontSize: AVATAR_SIZE * 0.35,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
   },
 
   // Body — flex 1, bottom border separator

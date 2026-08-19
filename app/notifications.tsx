@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '@/context/AuthContext';
@@ -36,6 +37,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
  */
 export default function NotificationsScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/feed');
   const { user } = useAuthContext();
   const { notifications, unreadCount, isLoading, error, refetch, markAllRead } =
     useNotifications(user?.id);
@@ -82,7 +84,7 @@ export default function NotificationsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           accessibilityRole="button"
           accessibilityLabel="Back"
@@ -109,7 +111,7 @@ export default function NotificationsScreen() {
           icon="notifications-off-outline"
           title="Sign in to see notifications"
           body="Notifications about follows, messages, and event activity show up here once you log in."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
           backLabel="Back"
         />
       ) : isLoading && notifications.length === 0 && !refreshing ? (
@@ -125,7 +127,7 @@ export default function NotificationsScreen() {
           title="Couldn't load notifications"
           body={error}
           onRetry={refetch}
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       ) : notifications.length === 0 ? (
         <View style={styles.empty}>

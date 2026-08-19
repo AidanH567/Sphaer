@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CircleActivityCard } from '@/components/circles/CircleActivityCard';
@@ -38,6 +39,7 @@ const MEMBERS_PREVIEW_LIMIT = 6;
 export default function CircleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/circles');
   const { user } = useAuthContext();
 
   const { circle, isLoading, error, refetch } = useCircle(id);
@@ -64,7 +66,7 @@ export default function CircleDetailScreen() {
 
   // Refetch on re-focus (not on the initial mount — useCircle already
   // fetched) so changes saved on the edit screen show immediately after
-  // router.back(). Mirrors the event detail pattern.
+  // goBack(). Mirrors the event detail pattern.
   const hasFocusedOnce = useRef(false);
   useFocusEffect(
     useCallback(() => {
@@ -222,7 +224,7 @@ export default function CircleDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -242,7 +244,7 @@ export default function CircleDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -255,7 +257,7 @@ export default function CircleDetailScreen() {
           title="Couldn't load this circle"
           body={error}
           onRetry={refetch}
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       </SafeAreaView>
     );
@@ -266,7 +268,7 @@ export default function CircleDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.navButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -279,7 +281,7 @@ export default function CircleDetailScreen() {
             icon="people-outline"
             title="Circle not found"
             body="This circle may have been removed. Head back to browse other communities."
-            onBack={() => router.back()}
+            onBack={() => goBack()}
             backLabel="Back to circles"
           />
         </View>
@@ -295,7 +297,7 @@ export default function CircleDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"

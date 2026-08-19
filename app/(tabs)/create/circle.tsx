@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -41,6 +42,7 @@ const DASHED_TILE = '#9FA7B3';
 
 export default function CreateCircleScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/circles');
   const { user } = useAuthContext();
 
   const [name, setName] = useState('');
@@ -215,7 +217,7 @@ export default function CreateCircleScreen() {
           drop shadow instead of a border. */}
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           accessibilityRole="button"
           accessibilityLabel="Close"
         >

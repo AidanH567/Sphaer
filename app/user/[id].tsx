@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileView } from '@/components/profile/ProfileView';
@@ -59,6 +60,7 @@ import { makeRouteErrorBoundary } from '@/components/ui/ErrorBoundary';
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useGoBack('/(tabs)/feed');
   const { user } = useAuthContext();
   const { blockedIds, refreshBlocked } = useAppContext();
   const isOwnProfile = Boolean(user?.id && id && user.id === id);
@@ -269,7 +271,7 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={styles.navButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -318,7 +320,7 @@ export default function UserProfileScreen() {
           icon="person-circle-outline"
           title="Profile not found"
           body="This account doesn't exist or may have been removed. Head back to find someone else."
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       )}
 
@@ -328,7 +330,7 @@ export default function UserProfileScreen() {
           title="Couldn't load this profile"
           body="Check your connection and try again."
           onRetry={() => setRetryTick((t) => t + 1)}
-          onBack={() => router.back()}
+          onBack={() => goBack()}
         />
       )}
 

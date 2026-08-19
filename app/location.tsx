@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useGoBack } from '@/hooks/useGoBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -43,6 +44,7 @@ function storageKey(userId: string) {
 
 export default function LocationOnboardingScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(auth)/onboarding');
   const { user, profile, setProfile } = useAuthContext();
   const { feedFilters, setFeedFilters } = useAppContext();
 
@@ -187,7 +189,7 @@ export default function LocationOnboardingScreen() {
       {(phase === 'prompt' || phase === 'reveal') && (
         <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={styles.backButton}
             accessibilityRole="button"
             accessibilityLabel="Go back"
