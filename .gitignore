@@ -26,3 +26,12 @@ docs/poster-qa/families/
 # sheets ARE committed; these regenerate with:
 #   npx tsx scripts/qa-generate-cover.ts
 docs/poster-qa/covers/
+
+# Agent worktrees. One of these lived here for weeks and made jest collect
+# every test twice (1610 instead of 805); a `git add -A` on 2026-08-19 then
+# tried to commit it as an embedded git repository. Worktrees belong OUTSIDE
+# the repo — see the note in HANDOFF-adjacent docs.
+.claude/worktrees/
+
+# Supabase CLI scratch — machine-local project linkage, not source.
+supabase/.temp/
