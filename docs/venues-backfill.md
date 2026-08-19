@@ -283,3 +283,74 @@ sets a column that is NULL everywhere today. To undo:
 `UPDATE public.events SET venue_id = NULL; DELETE FROM public.venues;` — but
 only while `saved_venues` is still empty, because deleting a venue cascades
 its hearts away.
+
+---
+
+# APPLIED — 2026-08-19
+
+Steps 1–3 ran against production as
+`supabase/migrations/20260819120000_venues_backfill_and_merges.sql`.
+Measured after, not predicted:
+
+| | |
+|---|---|
+| venues | **62** (67 created, 5 folded) |
+| mappable | **45** |
+| no coordinates | **17** |
+| events linked | **159** of 172 (13 correctly unlinked) |
+| `saved_venues` | 0 — so the merges cost nobody a favourite |
+
+## Aidan's ruling, and the one to revisit
+
+The first name in each family survived: **Kraftwerk Berlin**, **Babylon
+Berlin**, **silent green**, **Arena Halle**.
+
+⚠️ **Arena is the uncertain one.** His words: *"im pretty sure all of these are
+one except for the last one."* Arena Berlin is in Treptow and `Arena Neukoelln`
+may be a different place. The undo is at the foot of the migration file and is
+trivial while `saved_venues` stays empty — it stops being trivial the moment
+anyone hearts a venue.
+
+## ⚠️ The 17 venues that need a double-check
+
+They have a name, sometimes an address, and no coordinates — so they exist,
+their events show in the feed, and they **never appear on the venues map**.
+Sorted by how many events they hold, so the top ones are worth the most.
+
+| Venue | Events | Address to geocode from |
+|---|---|---|
+| Kraftwerk Berlin | 3 | — none |
+| silent green | 2 | Gerichtstrasse 35, 13347 Berlin |
+| Eislicht Kino | 1 | — none |
+| Haus der Statistik | 1 | Karl-Marx-Allee 1, 10178 Berlin |
+| Haus der Stillen Wolken | 1 | — none |
+| Kino Neue Sicht | 1 | Luckenwalder Str. 3, 10963 Berlin |
+| Kulturfabrik Westend | 1 | — none |
+| Kunsthaus Kreuzberg | 1 | — none |
+| Berlin Painting Studio | 1 | — none |
+| Preussenpark | 1 | — none |
+| Spreelounge Rooftop | 1 | — none |
+| Studio Orbit | 1 | — none |
+| Studio Yard Berlin | 1 | — none |
+| Tattoo Pop-Up Showroom | 1 | — none |
+| Tempelhofer Feld | 1 | — none |
+| The Spree-Sphere Virtual Stage | 1 | — none |
+| Toepferei Kreuzberg | 1 | Oranienstrasse 142, 10969 Berlin |
+
+**Only 4 of the 17 carry an address**, so geocoding fixes a quarter of the
+problem at best. The other 13 need a human to say where the place is — and two
+of them (`The Spree-Sphere Virtual Stage`, and arguably `Preussenpark` and
+`Tempelhofer Feld`) may not want a pin at all.
+
+**The real fix is upstream:** the in-app create flow accepts a location name
+without geocoding it, which is also why 27 community events have no coordinates.
+Wiring geocoding into the create path stops the list growing; this table is the
+backlog it already produced.
+
+## Still open, deliberately
+
+`created_by` is NULL on all 62 — they were derived from data, not typed by a
+person, and NULL is the honest record. RLS consequence: **no app user can edit
+or delete them**, only the service role. Correct default for machine-derived
+reference data, but venue editing in the app will do nothing for these until an
+owner or a curation policy is decided.
