@@ -212,6 +212,15 @@ export default function MuralScreen() {
   // refetch runs in the background and the canvas re-clamps if the wall
   // reshapes, so the shuffle target always stays valid.
   const [shuffleToken, setShuffleToken] = useState(0);
+
+  // Lara, report 32f690c5: "a button which makes the mural screen full screen
+  // on the phone." Fullscreen here means hiding the FeedHeader — the filter
+  // row, search and view switcher — so the wall gets the whole viewport. It is
+  // deliberately not a native fullscreen API: on the web build that needs a
+  // user-gesture-bound requestFullscreen and it does not exist on iOS Safari
+  // at all, which is precisely where she is. Hiding our own chrome works
+  // identically on every platform.
+  const [immersive, setImmersive] = useState(false);
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
     setShuffleToken((t) => t + 1);
@@ -235,6 +244,7 @@ export default function MuralScreen() {
 
   return (
     <View style={styles.container}>
+      {!immersive && (
       <View style={styles.header}>
         <FeedHeader
           activeView="mural"
@@ -249,6 +259,25 @@ export default function MuralScreen() {
           onNeighborhoodChange={setNeighborhood}
         />
       </View>
+      )}
+
+      {/* Always rendered, in both states — it is the only way BACK out of
+          immersive mode, so hiding it with the rest of the chrome would trap
+          the user on a wall with no exit. */}
+      <TouchableOpacity
+        onPress={() => setImmersive((v) => !v)}
+        style={[styles.immersiveToggle, immersive && styles.immersiveToggleOn]}
+        accessibilityRole="button"
+        accessibilityLabel={immersive ? 'Exit full screen' : 'View mural full screen'}
+        testID="mural-fullscreen-toggle"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons
+          name={immersive ? 'contract-outline' : 'expand-outline'}
+          size={20}
+          color={immersive ? '#FFFFFF' : colors.text.secondary}
+        />
+      </TouchableOpacity>
 
       <View style={styles.canvasSlot} onLayout={onViewportLayout}>
         {viewportReady && !showSkeleton && !showEmpty && !showError && (
@@ -384,6 +413,21 @@ const styles = StyleSheet.create({
   // A small margin on three sides sits the wall inside the screen as a
   // bounded panel (MuralCanvas draws the hairline frame), so hitting a pan
   // limit reads as "the wall ends here" rather than "the content ran out".
+  // Floating, so it costs the wall no layout in either state. Top-right, which
+  // is the corner the header does not use.
+  immersiveToggle: {
+    position: 'absolute',
+    top: 56,
+    right: 16,
+    zIndex: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  immersiveToggleOn: { backgroundColor: 'rgba(0,0,0,0.55)' },
   canvasSlot: {
     flex: 1,
     marginHorizontal: spacing.sm,
