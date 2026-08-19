@@ -66,31 +66,71 @@ export function coverFamilyById(id: string): CoverFamily | undefined {
  * is the whole identity.
  */
 const TAG_FAMILIES: Record<string, readonly string[]> = {
-  music: ['ribbon', 'plate'],
-  concert: ['ribbon', 'marquee'],
-  film: ['plate', 'ribbon'],
-  photography: ['plate', 'marquee'],
+  // ── Lara's vocabulary (2026-08-18) ──
   art: ['plate', 'marquee'],
+  film: ['plate', 'ribbon'],
+  music: ['ribbon', 'plate'],
+  wellbeing: ['marquee', 'plate'],
+  'performing arts': ['plate', 'ribbon'],
+  craft: ['plate', 'ribbon'],
+  'design, illustration, animation': ['ribbon', 'marquee'],
+  photography: ['plate', 'marquee'],
+  festivals: ['ribbon', 'plate'],
+  'street art': ['plate', 'ribbon'],
+  fashion: ['plate', 'ribbon'],
+  exhibitions: ['plate', 'marquee'],
+  academic: ['marquee', 'ribbon'],
+  tech: ['marquee', 'ribbon'],
+  tattoo: ['plate', 'marquee'],
+  gaming: ['ribbon', 'marquee'],
+  'jam session': ['ribbon', 'plate'],
+  spiritual: ['marquee', 'plate'],
+  talk: ['marquee', 'ribbon'],
+  workshops: ['ribbon', 'marquee'],
+  'social movements': ['ribbon', 'marquee'],
+  coaching: ['marquee', 'ribbon'],
+  learning: ['marquee', 'ribbon'],
+  'meet ups': ['marquee', 'plate'],
+  'food & drinks': ['plate', 'ribbon'],
+  markets: ['plate', 'marquee'],
+  'pop-ups': ['ribbon', 'plate'],
+  literature: ['marquee', 'ribbon'],
+  language: ['marquee', 'ribbon'],
+  sports: ['ribbon', 'plate'],
+  outdoors: ['plate', 'ribbon'],
+  volunteering: ['marquee', 'ribbon'],
+  neighbourhood: ['marquee', 'plate'],
+  'family & kids': ['marquee', 'plate'],
+  clubbing: ['ribbon', 'marquee'],
+  'queer life': ['ribbon', 'plate'],
+
+  // ── `CIRCLE_TAGS` values not in `EVENT_CATEGORIES` ──
+  // A circle can carry either vocabulary; `CIRCLE_TAGS` is unchanged.
   design: ['ribbon', 'marquee'],
   architecture: ['ribbon', 'plate'],
-  fashion: ['plate', 'ribbon'],
   dance: ['plate', 'ribbon'],
   theater: ['marquee', 'plate'],
-  literature: ['marquee', 'ribbon'],
   food: ['plate', 'ribbon'],
-  tech: ['marquee', 'ribbon'],
   activism: ['ribbon', 'marquee'],
   community: ['marquee', 'plate'],
+
+  // ── Retired names, kept on purpose ──
+  // Same rule as `poster-families`: each mirrors the shortlist of the name it
+  // maps to in `LEGACY_CATEGORY_ALIASES`, so applying the rename migration
+  // cannot change an existing circle's cover. `therapy` and `concert` moved to
+  // honour that.
   workshop: ['ribbon', 'marquee'],
   wellness: ['marquee', 'plate'],
-  therapy: ['marquee', 'ribbon'],
+  therapy: ['marquee', 'plate'],
   coach: ['marquee', 'ribbon'],
-  talk: ['marquee', 'ribbon'],
   education: ['marquee', 'ribbon'],
   meet: ['marquee', 'plate'],
+  concert: ['ribbon', 'plate'],
   job: ['marquee', 'ribbon'],
   service: ['marquee', 'ribbon'],
-  'social movements': ['ribbon', 'marquee'],
+  technology: ['marquee', 'ribbon'],
+  nightlife: ['ribbon', 'marquee'],
+  exhibition: ['plate', 'marquee'],
 };
 
 const ALL_IDS = COVER_FAMILIES.map((f) => f.id);

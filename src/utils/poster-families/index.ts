@@ -91,26 +91,91 @@ export function posterFamilyById(id: string): PosterFamily | undefined {
  * point is to persist the chosen family with the event, not to freeze the list.
  */
 const CATEGORY_FAMILIES: Record<string, readonly string[]> = {
-  music: ['spine', 'panel'],
-  concert: ['spine', 'block'],
+  // ── Lara's vocabulary (2026-08-18) ──
+  //
+  // ⚠️ MERGE NOTE 2026-08-19. Two branches met here: the 36-category rename,
+  // and two new families (`axial`, `technical`). Their side won on structure —
+  // the vocabulary and the retired-name aliases are the load-bearing work — and
+  // the new families were placed INTO it, subject to the invariant that side
+  // already carries: A RETIRED KEY MUST MIRROR THE SHORTLIST OF THE NAME IT
+  // ALIASES TO, exactly and in order, so applying the rename migration cannot
+  // change a single poster. Every placement below is mirrored accordingly, and
+  // `poster-families.test.ts` asserts it for every alias.
+  art: ['panel', 'block'],
   film: ['panel', 'spine'],
-  art: ['panel', 'block', 'axial'],
-  workshop: ['block', 'classic', 'axial'],
-  wellness: ['axial', 'block', 'panel'],
-  therapy: ['axial', 'block', 'classic'],
-  coach: ['block', 'classic', 'axial'],
+  music: ['spine', 'panel'],
+  wellbeing: ['axial', 'block', 'panel'],
+  'performing arts': ['spine', 'panel'],
+  craft: ['block', 'panel', 'axial'],
+  'design, illustration, animation': ['panel', 'block'],
+  photography: ['panel', 'classic'],
+  festivals: ['spine', 'block'],
+  'street art': ['panel', 'spine'],
+  fashion: ['panel', 'spine'],
+  exhibitions: ['panel', 'block', 'axial'],
+  academic: ['classic', 'block', 'technical'],
+  tech: ['technical', 'classic', 'block'],
+  tattoo: ['panel', 'block'],
+  gaming: ['technical', 'block', 'spine'],
+  'jam session': ['spine', 'panel'],
+  spiritual: ['axial', 'block', 'classic'],
   // ⚠️ `talk` must share NO family with `music`. A club night and a talk
   // landing on the same geometry is the failure the shortlists exist to
-  // prevent, and it is not enough to check that today's hash separates them:
-  // the index is `hash % length`, so two lists that merely differ in ORDER
-  // still collide for some seeds. Disjoint is the only version of this that
-  // holds for every event. A test asserts it structurally.
-  talk: ['classic', 'technical', 'axial'],
+  // prevent, and it is not enough that today's hash separates them: the index
+  // is `hash % length`, so lists that merely differ in ORDER still collide for
+  // some seeds and a reorder or a new entry silently changes which. Disjoint
+  // holds for every event; a test asserts it structurally. This is why `talk`
+  // does not carry `spine`, which it did before the merge.
+  talk: ['classic', 'technical'],
+  workshops: ['block', 'classic', 'axial'],
+  'social movements': ['spine', 'classic'],
+  coaching: ['block', 'classic'],
+  learning: ['classic', 'block', 'axial'],
+  'meet ups': ['classic', 'panel', 'technical'],
+  'food & drinks': ['panel', 'block'],
+  markets: ['panel', 'classic'],
+  'pop-ups': ['block', 'spine'],
+  literature: ['classic', 'spine'],
+  language: ['classic', 'block'],
+  sports: ['spine', 'block'],
+  outdoors: ['panel', 'spine'],
+  volunteering: ['classic', 'block'],
+  neighbourhood: ['classic', 'panel'],
+  'family & kids': ['block', 'panel'],
+  clubbing: ['spine', 'block'],
+  'queer life': ['spine', 'panel'],
+
+  // ── Retired names, kept on purpose ──
+  // `events.categories` is unvalidated `text[]`, so an old value survives in
+  // the database until the rename migration is applied — and posters are
+  // regenerated on demand, so dropping these keys would send those events to
+  // the full family set and change their composition for no reason.
+  //
+  // Every key here mirrors the shortlist of the name it maps to in
+  // `LEGACY_CATEGORY_ALIASES`, which buys one invariant worth having: applying
+  // the migration cannot change a single poster. `poster-families.test.ts`
+  // asserts it holds for every alias.
+  //
+  // Two keys therefore moved to honour that: `therapy` (was `block, classic`)
+  // now follows Wellbeing, and `concert` (was `spine, block`) now follows
+  // Music. A regenerated poster for those events — 1 and 9 rows in production
+  // — can land on a different composition than it would have yesterday. That
+  // is a one-time cost paid here rather than an unexplained shift later.
+  workshop: ['block', 'classic', 'axial'],
+  wellness: ['axial', 'block', 'panel'],
+  therapy: ['axial', 'block', 'panel'],
+  coach: ['block', 'classic'],
   education: ['classic', 'block', 'axial'],
   meet: ['classic', 'panel', 'technical'],
-  job: ['technical', 'classic', 'block'],
-  service: ['classic', 'block', 'technical'],
-  'social movements': ['spine', 'classic', 'technical'],
+  concert: ['spine', 'panel'],
+  job: ['classic', 'block'],
+  service: ['classic', 'block'],
+  // Aggregator-written values that were never in `EVENT_CATEGORIES`.
+  community: ['classic', 'panel'],
+  technology: ['technical', 'classic', 'block'],
+  nightlife: ['spine', 'block'],
+  dance: ['spine', 'panel'],
+  exhibition: ['panel', 'block', 'axial'],
 };
 
 const ALL_IDS = POSTER_FAMILIES.map((f) => f.id);
