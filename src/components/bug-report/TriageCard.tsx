@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/ui/Input';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { useScreenshotUrl } from '@/hooks/useBugTriage';
 import {
   KIND_LABEL,
@@ -48,6 +49,7 @@ export function TriageCard({
   onSetStatus: (status: BugReportStatus) => void;
   onSaveNote: (note: string) => void;
 }) {
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -107,14 +109,36 @@ export function TriageCard({
         </View>
       ))}
 
+      {/* Lara, report e0d339c6: the thumbnail is unreadable at card size, and
+          the annotations she drew are the whole point of attaching it. The
+          strokes need nothing special here — they are burned into the stored
+          PNG at capture time, so showing the stored image IS showing the
+          edits. */}
+      {screenshotUrl && (
+        <ImageLightbox
+          images={[screenshotUrl]}
+          visible={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          label={report.screen ? `Reported on ${report.screen}` : undefined}
+        />
+      )}
+
       {report.screenshot_path && (
         <View style={styles.screenshotWrap}>
           {screenshotUrl ? (
-            <Image
-              source={{ uri: screenshotUrl }}
-              style={styles.screenshot}
-              accessibilityLabel="Attached screenshot"
-            />
+            <TouchableOpacity
+              onPress={() => setViewerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open screenshot full screen"
+              testID="triage-screenshot"
+              activeOpacity={0.85}
+            >
+              <Image
+                source={{ uri: screenshotUrl }}
+                style={styles.screenshot}
+                accessibilityLabel="Attached screenshot"
+              />
+            </TouchableOpacity>
           ) : (
             <View style={[styles.screenshot, styles.screenshotPlaceholder]}>
               <ActivityIndicator color={colors.text.tertiary} />

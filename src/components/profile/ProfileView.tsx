@@ -6,6 +6,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '@/constants/theme';
 import { ProfileActivityCard } from './ProfileActivityCard';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import type { MockProfile } from '@/data/mockProfiles';
 
 // Figma design tokens (node 3637:4767)
@@ -108,6 +109,10 @@ export function ProfileView({
   const hasActivities = profile.activities.length > 0;
   const hasExperience = profile.experience.length > 0;
   const hasImages = profile.images.length > 0;
+  // Lara, report c02664cd: "there is no way to preview a users pictures".
+  // `null` means closed — not a separate boolean, so the open index and the
+  // open state cannot disagree.
+  const [lightboxAt, setLightboxAt] = useState<number | null>(null);
 
   return (
     <ScrollView
@@ -373,18 +378,32 @@ export function ProfileView({
         )}
       </View>
 
+      {/* The viewer is handed EVERY image, while the grid shows six. Swiping
+          past the sixth is the natural way to reach the rest, and paging a
+          six-item copy would strand the others with no route to them. */}
+      <ImageLightbox
+        images={profile.images}
+        startIndex={lightboxAt ?? 0}
+        visible={lightboxAt !== null}
+        onClose={() => setLightboxAt(null)}
+      />
+
       {/* ── Images ───────────────────────────────────────── */}
       {hasImages ? (
         <View style={styles.section}>
           <SectionHeader title="Images" />
           <View style={styles.imageGrid}>
             {profile.images.slice(0, 6).map((src, i) => (
-              <Image
+              <TouchableOpacity
                 key={`${src}-${i}`}
-                source={{ uri: src }}
-                style={styles.imageTile}
-                contentFit="cover"
-              />
+                onPress={() => setLightboxAt(i)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open image ${i + 1} full screen`}
+                testID={`profile-image-${i}`}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri: src }} style={styles.imageTile} contentFit="cover" />
+              </TouchableOpacity>
             ))}
           </View>
         </View>
