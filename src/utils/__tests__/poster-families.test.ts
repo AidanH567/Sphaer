@@ -72,11 +72,13 @@ function layoutForFamily(familyId: string, overrides: Partial<PosterInput> = {})
 }
 
 describe('the family registry', () => {
-  it('exposes four families, each with a unique id and at least one palette', () => {
-    expect(POSTER_FAMILIES.length).toBe(4);
+  it('exposes six families, each with a unique id and at least one palette', () => {
+    expect(POSTER_FAMILIES.length).toBe(6);
     const ids = POSTER_FAMILIES.map((f) => f.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(expect.arrayContaining(['classic', 'block', 'spine', 'panel']));
+    expect(ids).toEqual(
+      expect.arrayContaining(['classic', 'block', 'spine', 'panel', 'axial', 'technical'])
+    );
     for (const family of POSTER_FAMILIES) {
       expect(family.palettes.length).toBeGreaterThan(0);
       expect(family.label.length).toBeGreaterThan(0);
@@ -248,6 +250,18 @@ describe('selection — category first, then hash', () => {
     expect(music.family).not.toBe(talk.family);
   });
 
+  it('keeps the music and talk shortlists disjoint, not merely different', () => {
+    // Why this is structural and the one above is not enough. The index is
+    // `hash % shortlist.length`, so two lists that share a family can still
+    // collide — and whether they DO depends on the event's title and date. On
+    // 2026-08-19 adding `technical` to both put a Music poster and a Talk
+    // poster on the same geometry for the fixture seed; a different seed would
+    // have hidden it and shipped the bug. Disjoint holds for every event.
+    const music = new Set(familyShortlist(['Music']));
+    const talk = familyShortlist(['Talk']);
+    expect(talk.filter((f) => music.has(f))).toEqual([]);
+  });
+
   it('keeps a category inside its shortlist across every variant', () => {
     const shortlist = familyShortlist(['Music']);
     for (let variant = 0; variant < 32; variant++) {
@@ -274,7 +288,7 @@ describe('selection — category first, then hash', () => {
     expect(familyShortlist(['Unicycling'])).toEqual(all);
   });
 
-  it('spreads uncategorised events across all four families', () => {
+  it('spreads uncategorised events across every family', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 200; i++) {
       seen.add(buildPosterLayout({ ...base, title: `Berlin Night ${i}` }).family);
