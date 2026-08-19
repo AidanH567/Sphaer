@@ -271,10 +271,25 @@ export async function getSavedEventIds(userId: string): Promise<string[]> {
   return ((data ?? []) as { event_id: string }[]).map((r) => r.event_id);
 }
 
+/**
+ * Bookmark an event. IDEMPOTENT: saving something already saved is a no-op,
+ * not an error.
+ *
+ * This was `.insert()`, and `saved_events` is `PRIMARY KEY (user_id, event_id)`
+ * — so a second tap raised a duplicate-key error, the caller threw, and the
+ * optimistic bookmark VISIBLY un-filled. To the user the app un-saved their
+ * event because they tapped it twice, which is the opposite of what they asked
+ * for and looks exactly like a bug in saving.
+ *
+ * `onConflict` names the composite primary key explicitly rather than letting
+ * PostgREST infer it: an inferred target silently picks a different constraint
+ * if one is ever added, and the failure mode would be this same bug again with
+ * no diff to point at.
+ */
 export async function saveEvent(userId: string, eventId: string) {
   const { error } = await supabase
     .from('saved_events')
-    .insert({ user_id: userId, event_id: eventId });
+    .upsert({ user_id: userId, event_id: eventId }, { onConflict: 'user_id,event_id' });
   if (error) throw error;
 }
 
