@@ -120,11 +120,28 @@ function DefaultFallback({
       <Text style={styles.body} numberOfLines={3}>
         We hit an unexpected error. You can try again — if it keeps happening, let us know.
       </Text>
-      {__DEV__ && (
-        <Text style={styles.errorDetail} numberOfLines={3}>
-          {error.message}
-        </Text>
-      )}
+      {/* SHOWN IN PRODUCTION TOO, deliberately — this was `__DEV__ &&` until
+          2026-08-19 and that single condition cost a full day.
+
+          Aidan reported "the notification button goes nowhere" (3dfb4ca8). It
+          was not the button: the notifications screen throws, and this boundary
+          catches it. But the build he uses is production, so he saw
+          "Something went wrong" and nothing else — and with no message, the
+          report could only describe the symptom. Three people then looked at
+          the bell, the route registration and the router call, all of which are
+          fine, while the actual exception sat one `__DEV__` away.
+
+          The usual reason to hide this is that a stack trace frightens or leaks
+          to strangers. There are no strangers: the userbase is Aidan, Lara and
+          Rabon testing a pre-launch app, and every one of them files reports.
+          Hiding the one line that identifies the fault protects nobody here and
+          costs a day per incident.
+
+          Revisit this before public launch — at that point the right shape is
+          to keep it out of the UI and attach it to the bug report instead. */}
+      <Text style={styles.errorDetail} numberOfLines={4}>
+        {error.message || 'No error message was provided.'}
+      </Text>
       <TouchableOpacity
         style={styles.cta}
         onPress={reset}
