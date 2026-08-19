@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import * as eventsService from '@/services/events.service';
 import { useAppContext } from '@/context/AppContext';
+import { useAuthContext } from '@/context/AuthContext';
 import type { EventWithRelations, EventFilters } from '@/types/event.types';
 
 export function useEvents(filters?: EventFilters) {
@@ -69,4 +70,40 @@ export function useEvent(id: string) {
   }, [fetchEvent]);
 
   return { event, isLoading, error, refetch: fetchEvent };
+}
+
+/**
+ * The signed-in user's bookmarked event ids.
+ *
+ * The feed screen hydrates this set itself (app/(tabs)/feed/index.tsx) and
+ * predates this hook; the map needs the same set for its `favourites` mode,
+ * so rather than copy that block a third time it lives here. Returns an
+ * empty set when nobody is signed in — favourites of a logged-out user is
+ * legitimately nothing, not an error.
+ */
+export function useSavedEventIds() {
+  const { user } = useAuthContext();
+  const userId = user?.id ?? null;
+
+  const [savedEventIds, setSavedEventIds] = useState<Set<string>>(new Set());
+
+  const refetch = useCallback(async () => {
+    if (!userId) {
+      setSavedEventIds(new Set());
+      return;
+    }
+    try {
+      setSavedEventIds(new Set(await eventsService.getSavedEventIds(userId)));
+    } catch {
+      // Non-fatal: an un-hydrated bookmark set means the favourites map is
+      // short a few pins, which is far better than taking the map down.
+      setSavedEventIds(new Set());
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return { savedEventIds, refetch };
 }
